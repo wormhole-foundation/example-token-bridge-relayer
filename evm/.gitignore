@@ -1,0 +1,10 @@
+anvil_avax.log
+anvil_eth.log
+cache
+lib
+node_modules
+out
+out.log
+broadcast
+forge-scripts/deploy.out
+ts-test/src/
