@@ -2,13 +2,18 @@
 pragma solidity ^0.8.13;
 
 contract TokenBridgeRelayerStructs {
-    struct TokenBridgeRelayerMessage {
-        // unique identifier for this message type
-        uint8 payloadID;
-        /**
-         * The recipient's wallet address on the target chain, in bytes32
-         * format (zero-left-padded if less than 20 bytes).
-         */
+    struct TransferWithRelay {
+        uint8 payloadId; // == 1
+        uint256 targetRelayerFee;
+        uint256 toNativeTokenAmount;
+        bytes32 targetRecipient;
+    }
+
+    struct TokenTransferParams {
+        address token;
+        uint256 amount;
+        uint256 toNativeTokenAmount;
+        uint16 targetChain;
         bytes32 targetRecipient;
     }
 }

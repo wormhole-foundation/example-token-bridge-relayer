@@ -5,8 +5,14 @@ import {IWormhole} from "../interfaces/IWormhole.sol";
 
 contract TokenBridgeRelayerStorage {
     struct State {
+        // Wormhole chain ID of this contract
+        uint16 chainId;
+
         // owner of this contract
         address owner;
+
+        // intermediate state when transfering contract ownership
+        address pendingOwner;
 
         // address of the Wormhole contract on this chain
         address wormhole;
@@ -14,25 +20,32 @@ contract TokenBridgeRelayerStorage {
         // address of the Wormhole TokenBridge contract on this chain
         address tokenBridge;
 
-        // Wormhole chain ID of this contract
-        uint16 chainId;
+        // precision of the nativeSwapRates, this value should NEVER be set to zero
+        uint256 nativeSwapRatePrecision;
 
-        // The number of block confirmations needed before the wormhole network
-        // will attest a message.
-        uint8 wormholeFinality;
+        // mapping of initialized implementation (logic) contracts
+        mapping(address => bool) initializedImplementations;
 
-        // precision of relayer fee percentage
-        uint32 feePrecision;
+        // Wormhole chain ID to known relayer contract address mapping
+        mapping(uint16 => bytes32) registeredContracts;
 
-        // relayer fee in percentage terms
-        uint32 relayerFeePercentage;
+        // allowed list of tokens
+        mapping(address => bool) acceptedTokens;
 
         /**
-         * Wormhole chain ID to known emitter address mapping. Xdapps using
-         * Wormhole should register all deployed contracts on each chain to
-         * verify that messages being consumed are from trusted contracts.
+         * Mapping of source token address to native asset swap rate
+         * (nativePriceUSD/tokenPriceUSD).
          */
-        mapping(uint16 => bytes32) registeredEmitters;
+        mapping(address => uint256) nativeSwapRates;
+
+        /**
+         * Mapping of source token address to maximum native asset swap amount
+         * allowed.
+         */
+        mapping(address => uint256) maxNativeSwapAmount;
+
+        // mapping of chainId to token address to relayerFee
+        mapping(uint16 => mapping(address => uint256)) relayerFees;
     }
 }
 

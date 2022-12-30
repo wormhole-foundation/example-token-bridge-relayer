@@ -7,8 +7,16 @@ import {ITokenBridge} from "../interfaces/ITokenBridge.sol";
 import "./TokenBridgeRelayerSetters.sol";
 
 contract TokenBridgeRelayerGetters is TokenBridgeRelayerSetters {
+    function isInitialized(address impl) public view returns (bool) {
+        return _state.initializedImplementations[impl];
+    }
+
     function owner() public view returns (address) {
         return _state.owner;
+    }
+
+    function pendingOwner() public view returns (address) {
+        return _state.pendingOwner;
     }
 
     function wormhole() public view returns (IWormhole) {
@@ -23,19 +31,27 @@ contract TokenBridgeRelayerGetters is TokenBridgeRelayerSetters {
         return _state.chainId;
     }
 
-    function wormholeFinality() public view returns (uint8) {
-        return _state.wormholeFinality;
+    function getRegisteredContract(uint16 emitterChainId) public view returns (bytes32) {
+        return _state.registeredContracts[emitterChainId];
     }
 
-    function getRegisteredEmitter(uint16 emitterChainId) public view returns (bytes32) {
-        return _state.registeredEmitters[emitterChainId];
+    function nativeSwapRatePrecision() public view returns (uint256) {
+        return _state.nativeSwapRatePrecision;
     }
 
-    function feePrecision() public view returns (uint32) {
-        return _state.feePrecision;
+    function isAcceptedToken(address token) public view returns (bool) {
+        return _state.acceptedTokens[token];
     }
 
-    function relayerFeePercentage() public view returns (uint32) {
-        return _state.relayerFeePercentage;
+    function relayerFee(uint16 chainId_, address token) public view returns (uint256) {
+        return _state.relayerFees[chainId_][token];
+    }
+
+    function nativeSwapRate(address token) public view returns (uint256) {
+        return _state.nativeSwapRates[token];
+    }
+
+    function maxNativeSwapAmount(address token) public view returns (uint256) {
+        return _state.maxNativeSwapAmount[token];
     }
 }

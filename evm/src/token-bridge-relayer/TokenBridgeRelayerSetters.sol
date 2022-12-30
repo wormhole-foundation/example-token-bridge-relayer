@@ -4,8 +4,16 @@ pragma solidity ^0.8.13;
 import "./TokenBridgeRelayerState.sol";
 
 contract TokenBridgeRelayerSetters is TokenBridgeRelayerState {
+    function setInitialized(address implementatiom) internal {
+        _state.initializedImplementations[implementatiom] = true;
+    }
+
     function setOwner(address owner_) internal {
         _state.owner = owner_;
+    }
+
+    function setPendingOwner(address pendingOwner_) internal {
+        _state.pendingOwner = pendingOwner_;
     }
 
     function setWormhole(address wormhole_) internal {
@@ -20,19 +28,27 @@ contract TokenBridgeRelayerSetters is TokenBridgeRelayerState {
         _state.chainId = chainId_;
     }
 
-    function setWormholeFinality(uint8 finality) internal {
-        _state.wormholeFinality = finality;
+    function _registerContract(uint16 chainId_, bytes32 contract_) internal {
+        _state.registeredContracts[chainId_] = contract_;
     }
 
-    function setEmitter(uint16 chainId, bytes32 emitter) internal {
-        _state.registeredEmitters[chainId] = emitter;
+    function setNativeSwapRatePrecision(uint256 precision) internal {
+        _state.nativeSwapRatePrecision = precision;
     }
 
-    function setFeePrecision(uint32 feePrecision_) internal {
-        _state.feePrecision = feePrecision_;
+    function addAcceptedToken(address token) internal {
+        _state.acceptedTokens[token] = true;
     }
 
-    function setRelayerFeePercentage(uint32 relayerFeePercentage_) internal {
-        _state.relayerFeePercentage = relayerFeePercentage_;
+    function setRelayerFee(uint16 chainId_, address token, uint256 fee) internal {
+        _state.relayerFees[chainId_][token] = fee;
+    }
+
+    function setNativeSwapRate(address token, uint256 swapRate) internal {
+        _state.nativeSwapRates[token] = swapRate;
+    }
+
+    function setMaxNativeSwapAmount(address token, uint256 maximum) internal {
+        _state.maxNativeSwapAmount[token] = maximum;
     }
 }

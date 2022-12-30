@@ -12,80 +12,23 @@ import "./TokenBridgeRelayerGovernance.sol";
 import "./TokenBridgeRelayerMessages.sol";
 
 /**
- * @title A Cross-Chain TokenBridgeRelayer Application
- * @notice This contract uses Wormhole's token bridge contract to send tokens
- * cross chain with an aribtrary message payload.
+ * @title Wormhole Token Bridge Relayer
+ * @notice This contract composes on Wormhole's Token Bridge contracts to faciliate
+ * one-click transfers of Token Bridge supported assets cross chain.
  */
+
 contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerMessages, ReentrancyGuard {
     using BytesLib for bytes;
 
-    /**
-     * @notice Deploys the smart contract and sanity checks initial deployment values
-     * @dev Sets the owner, wormhole, tokenBridge, chainId, wormholeFinality,
-     * feePrecision and relayerFeePercentage state variables. See TokenBridgeRelayerState.sol
-     * for descriptions of each state variable.
-     */
-    constructor(
-        address wormhole_,
-        address tokenBridge_,
-        uint16 chainId_,
-        uint8 wormholeFinality_,
-        uint32 feePrecision,
-        uint32 relayerFeePercentage
-    ) {
-        // sanity check input values
-        require(wormhole_ != address(0), "invalid Wormhole address");
-        require(tokenBridge_ != address(0), "invalid TokenBridge address");
-        require(chainId_ > 0, "invalid chainId");
-        require(wormholeFinality_ > 0, "invalid wormholeFinality");
-        require(feePrecision > 0, "invalid fee precision");
-
-        // set constructor state variables
-        setOwner(msg.sender);
-        setWormhole(wormhole_);
-        setTokenBridge(tokenBridge_);
-        setChainId(chainId_);
-        setWormholeFinality(wormholeFinality_);
-        setFeePrecision(feePrecision);
-        setRelayerFeePercentage(relayerFeePercentage);
-    }
-
-    /**
-     * @notice Transfers specified tokens to any registered TokenBridgeRelayer contract
-     * by invoking the `transferTokensWithPayload` method on the Wormhole token
-     * bridge contract. `transferTokensWithPayload` allows the caller to send
-     * an arbitrary message payload along with a token transfer. In this case,
-     * the arbitrary message includes the transfer recipient's target-chain
-     * wallet address.
-     * @dev reverts if:
-     * - `token` is address(0)
-     * - `amount` is zero
-     * - `targetRecipient` is bytes32(0)
-     * - a registered TokenBridgeRelayer contract does not exist for the `targetChain`
-     * - caller doesn't pass enough value to pay the Wormhole network fee
-     * - normalized `amount` is zero
-     * @param token Address of `token` to be transferred
-     * @param amount Amount of `token` to be transferred
-     * @param targetChain Wormhole chain ID of the target blockchain
-     * @param batchId Wormhole message ID
-     * @param targetRecipient Address in bytes32 format (zero-left-padded if
-     * less than 20 bytes) of the recipient's wallet on the target blockchain.
-     * @return messageSequence Wormhole message sequence for the Wormhole token
-     * bridge contract. This sequence is incremented (per message) for each
-     * message emitter.
-     */
-    function sendTokensWithPayload(
-        address token,
-        uint256 amount,
-        uint16 targetChain,
-        uint32 batchId,
-        bytes32 targetRecipient
+    function transferTokensWithRelay(
+        TokenTransferParams calldata params,
+        uint32 batchId
     ) public payable nonReentrant returns (uint64 messageSequence) {
         // sanity check function arguments
-        require(token != address(0), "token cannot be address(0)");
-        require(amount > 0, "amount must be greater than 0");
+        require(isAcceptedToken(params.token), "invalid token");
+        require(params.amount != 0, "amount must be greater than 0");
         require(
-            targetRecipient != bytes32(0),
+            params.targetRecipient != bytes32(0),
             "targetRecipient cannot be bytes32(0)"
         );
 
@@ -94,14 +37,15 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
          * The token bridge peforms the same operation before encoding
          * the amount in the `TransferWithPayload` message.
          */
+        uint8 tokenDecimals = getDecimals(params.token);
         require(
-            normalizeAmount(amount, getDecimals(token)) > 0,
+            normalizeAmount(params.amount, tokenDecimals) > 0,
             "normalized amount must be > 0"
         );
 
         // Cache the target contract address and verify that there
         // is a registered emitter for the specified targetChain.
-        bytes32 targetContract = getRegisteredEmitter(targetChain);
+        bytes32 targetContract = getRegisteredContract(params.targetChain);
         require(targetContract != bytes32(0), "emitter not registered");
 
         // Cache Wormhole fee value, and confirm that the caller has sent
@@ -110,18 +54,34 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         require(msg.value == wormholeFee, "insufficient value");
 
         // transfer tokens from user to the this contract
-        uint256 amountReceived = custodyTokens(token, amount);
+        uint256 amountReceived = custodyTokens(params.token, params.amount);
+        uint256 targetRelayerFee = relayerFee(params.targetChain, params.token);
+        require(
+            amountReceived > targetRelayerFee + params.toNativeTokenAmount,
+            "insufficient amountReceived"
+        );
 
         /**
-         * Encode instructions (TokenBridgeRelayerMessage) to send with the token transfer.
+         * Encode instructions (TransferWithRelay) to send with the token transfer.
          * The `targetRecipient` address is in bytes32 format (zero-left-padded) to
          * support non-evm smart contracts that have addresses that are longer
          * than 20 bytes.
+         *
+         * We normalize the targetRelayerFee and toNativeTokenAmount to support
+         * non-evm smart contracts that can only handle uint64.max values.
          */
-        bytes memory messagePayload = encodePayload(
-            TokenBridgeRelayerMessage({
-                payloadID: 1,
-                targetRecipient: targetRecipient
+        bytes memory messagePayload = encodeTransferWithRelay(
+            TransferWithRelay({
+                payloadId: 1,
+                targetRelayerFee: normalizeAmount(
+                    targetRelayerFee,
+                    tokenDecimals
+                ),
+                toNativeTokenAmount: normalizeAmount(
+                    params.toNativeTokenAmount,
+                    tokenDecimals
+                ),
+                targetRecipient: params.targetRecipient
             })
         );
 
@@ -130,7 +90,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
 
         // approve the token bridge to spend the specified tokens
         SafeERC20.safeApprove(
-            IERC20(token),
+            IERC20(params.token),
             address(bridge),
             amountReceived
         );
@@ -142,29 +102,147 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
          * ITokenBridge.sol interface file in this repo).
          */
         messageSequence = bridge.transferTokensWithPayload{value: wormholeFee}(
-            token,
+            params.token,
             amountReceived,
-            targetChain,
+            params.targetChain,
             targetContract,
             batchId,
             messagePayload
         );
     }
 
-    /**
-     * @notice Consumes `TransferWithPayload` message which includes the additional
-     * `TokenBridgeRelayerMessage` payload with additional transfer instructions.
-     * @dev The token bridge contract calls the Wormhole core endpoint to verify
-     * the `TransferWithPayload` message. The token bridge contract saves the message
-     * hash in storage to prevent `TransferWithPayload` messages from being replayed.
-     * @dev reverts if:
-     * - The token being transferred has not been attested yet. This means that a
-     * wrapped contract for the token does not exist.
-     * - The caller of the token bridge on the source chain is not a registered
-     * TokenBridgeRelayer contract.
-     * @param encodedTransferMessage Encoded `TransferWithPayload` message
-     */
-    function redeemTransferWithPayload(bytes memory encodedTransferMessage) public {
+    function completeTransferWithRelay(bytes calldata encodedTransferMessage) public payable {
+        // complete the transfer by calling the token bridge
+        (bytes memory payload, uint256 amount, address token) =
+             _completeTransfer(encodedTransferMessage);
+
+        // parse the payload from the `TransferWithRelay` struct
+        TransferWithRelay memory transferWithRelay = decodeTransferWithRelay(
+            payload
+        );
+
+        // cache token decimals
+        uint8 tokenDecimals = getDecimals(token);
+
+        // denormalize the encoded relayerFee and toNativeTokenAmount
+        transferWithRelay.toNativeTokenAmount = denormalizeAmount(
+            transferWithRelay.toNativeTokenAmount,
+            tokenDecimals
+        );
+        transferWithRelay.targetRelayerFee = denormalizeAmount(
+            transferWithRelay.targetRelayerFee,
+            tokenDecimals
+        );
+
+        // cache the recipient address
+        address recipient = bytes32ToAddress(transferWithRelay.targetRecipient);
+
+        // If the recipient is self redeeming, send the full token amount to
+        // the recipient. Revert if they attempt to send ether to this contract.
+        if (msg.sender == recipient) {
+            require(msg.value == 0, "recipient cannot swap native assets");
+
+            // transfer the full token amount to the recipient
+            SafeERC20.safeTransfer(
+                IERC20(token),
+                recipient,
+                amount
+            );
+
+            // bail out
+            return;
+        }
+
+        // handle native asset payments and refunds
+        if (transferWithRelay.toNativeTokenAmount > 0) {
+            /**
+             * Compute the maximum amount of tokens that the user is allowed
+             * to swap for native assets.
+             *
+             * Override the toNativeTokenAmount in transferWithRelay if the
+             * toNativeTokenAmount is greater than the maxToNativeAllowed.
+             *
+             * Compute the amount of native assets to send the recipient.
+             */
+            uint256 nativeAmountForRecipient;
+            uint256 maxToNativeAllowed = calculateMaxSwapAmountIn(token);
+            if (transferWithRelay.toNativeTokenAmount > maxToNativeAllowed) {
+                transferWithRelay.toNativeTokenAmount = maxToNativeAllowed;
+                nativeAmountForRecipient = maxNativeSwapAmount(token);
+            } else {
+                // compute amount of native asset to pay the recipient
+                nativeAmountForRecipient = calculateNativeSwapAmountOut(
+                    token,
+                    transferWithRelay.toNativeTokenAmount
+                );
+            }
+
+            /**
+             * The nativeAmountForRecipient can be zero if the user specifed
+             * a toNativeTokenAmount that is too little to convert to native
+             * asset. We need to override the toNativeTokenAmount to be zero
+             * if that is the case, that way the user receives the full amount
+             * of transfered tokens.
+             */
+            if (nativeAmountForRecipient > 0) {
+                // check to see if the relayer sent enough value
+                require(
+                    msg.value >= nativeAmountForRecipient,
+                    "insufficient native asset amount"
+                );
+
+                // refund excess native asset to relayer if applicable
+                uint256 relayerRefund = msg.value - nativeAmountForRecipient;
+                if (relayerRefund > 0) {
+                    payable(msg.sender).transfer(relayerRefund);
+                }
+
+                // send requested native asset to target recipient
+                payable(recipient).transfer(nativeAmountForRecipient);
+            } else {
+                // override the toNativeTokenAmount in transferWithRelay
+                transferWithRelay.toNativeTokenAmount = 0;
+
+                // refund the relayer any native asset sent to this contract
+                if (msg.value > 0) {
+                    payable(msg.sender).transfer(msg.value);
+                }
+            }
+        }
+
+        /**
+         * Override the relayerFee if the encoded targetRelayerFee is less
+         * than the relayer fee set on this chain. This should only happen
+         * if relayer fees are not synchronized across all chains.
+         */
+        uint256 relayerFee = relayerFee(chainId(), token);
+        if (relayerFee > transferWithRelay.targetRelayerFee) {
+            relayerFee = transferWithRelay.targetRelayerFee;
+        }
+
+        // add the token swap amount to the relayer fee
+        relayerFee = relayerFee + transferWithRelay.toNativeTokenAmount;
+
+        // pay the relayer if relayerFee > 0 and the caller is not the recipient
+        if (relayerFee > 0) {
+            SafeERC20.safeTransfer(
+                IERC20(token),
+                msg.sender,
+                relayerFee
+            );
+        }
+
+        // pay the target recipient the remaining tokens
+        SafeERC20.safeTransfer(
+            IERC20(token),
+            recipient,
+            amount - relayerFee
+        );
+    }
+
+    function _completeTransfer(
+        bytes memory encodedTransferMessage
+    ) internal returns (bytes memory, uint256, address) {
         /**
          * parse the encoded Wormhole message
          *
@@ -178,10 +256,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         );
 
         /**
-         * Since this contract allows transfers for any token, it needs
-         * to find the token address (on this chain) before redeeming the transfer
-         * so that it can compute the balance change before and after redeeming
-         * the transfer. The amount encoded in the payload could be incorrect,
+         * The amount encoded in the payload could be incorrect,
          * since fee-on-transfer tokens are supported by the token bridge.
          *
          * NOTE: The token bridge truncates the encoded amount for any token
@@ -191,6 +266,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         address localTokenAddress = fetchLocalAddressFromTransferMessage(
             parsedMessage.payload
         );
+        require(isAcceptedToken(localTokenAddress), "token not registered");
 
         // check balance before completing the transfer
         uint256 balanceBefore = getBalance(localTokenAddress);
@@ -208,7 +284,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         );
 
         // compute and save the balance difference after completing the transfer
-        uint256 amountTransferred = getBalance(localTokenAddress) - balanceBefore;
+        uint256 amountReceived = getBalance(localTokenAddress) - balanceBefore;
 
         // parse the wormhole message payload into the `TransferWithPayload` struct
         ITokenBridge.TransferWithPayload memory transfer =
@@ -216,59 +292,15 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
 
         // confirm that the message sender is a registered TokenBridgeRelayer contract
         require(
-            transfer.fromAddress == getRegisteredEmitter(parsedMessage.emitterChainId),
+            transfer.fromAddress == getRegisteredContract(parsedMessage.emitterChainId),
             "emitter not registered"
         );
 
-        // parse the TokenBridgeRelayer payload from the `TransferWithPayload` struct
-        TokenBridgeRelayerMessage memory helloTokenPayload = decodePayload(
-            transfer.payload
+        return (
+            transfer.payload,
+            amountReceived,
+            localTokenAddress
         );
-
-        // compute the relayer fee in terms of the transferred token
-        uint256 relayerFee = calculateRelayerFee(amountTransferred);
-
-        // cache the recipient address
-        address recipient = bytes32ToAddress(helloTokenPayload.targetRecipient);
-
-        /**
-         * If the caller is the `transferRecipient` (self redeem) or the relayer fee
-         * is set to zero, send the full token amount to the recipient. Otherwise,
-         * send the relayer the calculated fee and the recipient the remainder.
-         */
-        if (relayerFee == 0 || msg.sender == recipient) {
-            // send the full amount to the recipient
-            SafeERC20.safeTransfer(
-                IERC20(localTokenAddress),
-                recipient,
-                amountTransferred
-            );
-        } else {
-            // pay the relayer
-            SafeERC20.safeTransfer(
-                IERC20(localTokenAddress),
-                msg.sender,
-                relayerFee
-            );
-
-            // send the tokens (less relayer fees) to the recipient
-            SafeERC20.safeTransfer(
-                IERC20(localTokenAddress),
-                recipient,
-                amountTransferred - relayerFee
-            );
-        }
-    }
-
-    /**
-     * @notice Calculates the amount of tokens to send the redeemer (relayer)
-     * in terms of the transferred token based on the set `relayerFeePercentage`
-     * on this chain.
-     * @param amount The number of tokens being transferred
-     * @return Fee Uint256 amount of tokens to send the relayer
-     */
-    function calculateRelayerFee(uint256 amount) public view returns (uint256) {
-        return amount * relayerFeePercentage() / feePrecision();
     }
 
     /**
@@ -296,6 +328,47 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
             // return the encoded address if the token is native to this chain
             localAddress = bytes32ToAddress(sourceAddress);
         }
+    }
+
+    /**
+     * @notice Calculates the max amount of tokens the user can convert to
+     * native assets on this chain.
+     * @dev The max amount of native assets the contract will swap with the user
+     * is governed by the `maxNativeSwapAmount` state variable.
+     * @param token Address of token being transferred.
+     * @return maxAllowed The maximum number of tokens the user is allowed to
+     * swap for native assets.
+     */
+    function calculateMaxSwapAmountIn(
+        address token
+    ) public view returns (uint256 maxAllowed) {
+        // cache swap rate
+        uint256 swapRate = nativeSwapRate(token);
+        require(swapRate > 0, "swap rate not set");
+        maxAllowed =
+            (maxNativeSwapAmount(token) * swapRate) /
+            (10 ** (18 - getDecimals(token)) * nativeSwapRatePrecision());
+    }
+
+    /**
+     * @notice Calculates the amount of native assets that a user will receive
+     * when swapping transferred tokens for native assets.
+     * @dev The swap rate is governed by the `nativeSwapRate` state variable.
+     * @param token Address of token being transferred.
+     * @param toNativeAmount Quantity of tokens to be converted to native assets.
+     * @return nativeAmount The exchange rate between native assets and the `toNativeAmount`
+     * of transferred tokens.
+     */
+    function calculateNativeSwapAmountOut(
+        address token,
+        uint256 toNativeAmount
+    ) public view returns (uint256 nativeAmount) {
+        // cache swap rate
+        uint256 swapRate = nativeSwapRate(token);
+        require(swapRate > 0, "swap rate not set");
+        nativeAmount =
+            nativeSwapRatePrecision() * toNativeAmount /
+            swapRate * 10 ** (18 - getDecimals(token));
     }
 
     function custodyTokens(
@@ -326,10 +399,6 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         balance = abi.decode(queriedBalance, (uint256));
     }
 
-    function addressToBytes32(address address_) internal pure returns (bytes32) {
-        return bytes32(uint256(uint160(address_)));
-    }
-
     function bytes32ToAddress(bytes32 address_) internal pure returns (address) {
         require(bytes12(address_) == 0, "invalid EVM address");
         return address(uint160(uint256(address_)));
@@ -347,9 +416,19 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
     function normalizeAmount(
         uint256 amount,
         uint8 decimals
-    ) internal pure returns(uint256) {
+    ) public pure returns(uint256) {
         if (decimals > 8) {
             amount /= 10 ** (decimals - 8);
+        }
+        return amount;
+    }
+
+    function denormalizeAmount(
+        uint256 amount,
+        uint8 decimals
+    ) public pure returns(uint256){
+        if (decimals > 8) {
+            amount *= 10 ** (decimals - 8);
         }
         return amount;
     }
