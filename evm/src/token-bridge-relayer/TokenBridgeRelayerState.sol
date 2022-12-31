@@ -8,6 +8,9 @@ contract TokenBridgeRelayerStorage {
         // Wormhole chain ID of this contract
         uint16 chainId;
 
+        // address of WETH on this chain
+        address wethAddress;
+
         // owner of this contract
         address owner;
 

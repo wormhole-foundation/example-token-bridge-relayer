@@ -21,14 +21,86 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
     using BytesLib for bytes;
 
     function transferTokensWithRelay(
-        TokenTransferParams calldata params,
+        address token,
+        uint256 amount,
+        uint256 toNativeTokenAmount,
+        uint16 targetChain,
+        bytes32 targetRecipient,
         uint32 batchId
     ) public payable nonReentrant returns (uint64 messageSequence) {
+        // Cache Wormhole fee value, and confirm that the caller has sent
+        // enough value to pay for the Wormhole message fee.
+        uint256 wormholeFee = wormhole().messageFee();
+        require(msg.value == wormholeFee, "insufficient value");
+
+        // Transfer tokens from user to the this contract, and
+        // override amount with actual amount received.
+        amount = custodyTokens(token, amount);
+
+        // call the internal transferTokensWithRelay function
+        messageSequence = _transferTokensWithRelay(
+            token,
+            amount,
+            toNativeTokenAmount,
+            targetChain,
+            targetRecipient,
+            batchId,
+            wormholeFee
+        );
+    }
+
+    function wrapAndTransferEthWithRelay(
+        uint256 toNativeTokenAmount,
+        uint16 targetChain,
+        bytes32 targetRecipient,
+        uint32 batchId
+    ) public payable returns (uint64 messageSequence) {
+        uint256 wormholeFee = wormhole().messageFee();
+        require(msg.value > wormholeFee, "insufficient value");
+
+        // remove the wormhole protocol fee from the amount
+        uint256 amount = msg.value - wormholeFee;
+
+        // refund dust
+        uint256 dust = amount - denormalizeAmount(normalizeAmount(amount, 18), 18);
+        if (dust > 0) {
+            payable(msg.sender).transfer(dust);
+        }
+
+        // remove dust from amount and cache WETH
+        uint256 amountLessDust = amount - dust;
+        IWETH weth = WETH();
+
+        // deposit into the WETH contract
+        weth.deposit{
+            value : amountLessDust
+        }();
+
+        // call the internal transferTokensWithRelay function
+        messageSequence = _transferTokensWithRelay(
+            address(weth),
+            amountLessDust,
+            toNativeTokenAmount,
+            targetChain,
+            targetRecipient,
+            batchId,
+            wormholeFee
+        );
+    }
+
+    function _transferTokensWithRelay(
+        address token,
+        uint256 amount,
+        uint256 toNativeTokenAmount,
+        uint16 targetChain,
+        bytes32 targetRecipient,
+        uint32 batchId,
+        uint256 wormholeFee
+    ) internal returns (uint64 messageSequence) {
         // sanity check function arguments
-        require(isAcceptedToken(params.token), "invalid token");
-        require(params.amount != 0, "amount must be greater than 0");
+        require(isAcceptedToken(token), "invalid token");
         require(
-            params.targetRecipient != bytes32(0),
+            targetRecipient != bytes32(0),
             "targetRecipient cannot be bytes32(0)"
         );
 
@@ -37,28 +109,22 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
          * The token bridge peforms the same operation before encoding
          * the amount in the `TransferWithPayload` message.
          */
-        uint8 tokenDecimals = getDecimals(params.token);
+        uint8 tokenDecimals = getDecimals(token);
         require(
-            normalizeAmount(params.amount, tokenDecimals) > 0,
+            normalizeAmount(amount, tokenDecimals) > 0,
             "normalized amount must be > 0"
         );
 
         // Cache the target contract address and verify that there
         // is a registered emitter for the specified targetChain.
-        bytes32 targetContract = getRegisteredContract(params.targetChain);
+        bytes32 targetContract = getRegisteredContract(targetChain);
         require(targetContract != bytes32(0), "emitter not registered");
 
-        // Cache Wormhole fee value, and confirm that the caller has sent
-        // enough value to pay for the Wormhole message fee.
-        uint256 wormholeFee = wormhole().messageFee();
-        require(msg.value == wormholeFee, "insufficient value");
-
-        // transfer tokens from user to the this contract
-        uint256 amountReceived = custodyTokens(params.token, params.amount);
-        uint256 targetRelayerFee = relayerFee(params.targetChain, params.token);
+        // confirm that the user has sent enough tokens
+        uint256 targetRelayerFee = relayerFee(targetChain, token);
         require(
-            amountReceived > targetRelayerFee + params.toNativeTokenAmount,
-            "insufficient amountReceived"
+            amount > targetRelayerFee + toNativeTokenAmount,
+            "insufficient amount"
         );
 
         /**
@@ -78,10 +144,10 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
                     tokenDecimals
                 ),
                 toNativeTokenAmount: normalizeAmount(
-                    params.toNativeTokenAmount,
+                    toNativeTokenAmount,
                     tokenDecimals
                 ),
-                targetRecipient: params.targetRecipient
+                targetRecipient: targetRecipient
             })
         );
 
@@ -90,9 +156,9 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
 
         // approve the token bridge to spend the specified tokens
         SafeERC20.safeApprove(
-            IERC20(params.token),
+            IERC20(token),
             address(bridge),
-            amountReceived
+            amount
         );
 
         /**
@@ -102,13 +168,13 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
          * ITokenBridge.sol interface file in this repo).
          */
         messageSequence = bridge.transferTokensWithPayload{value: wormholeFee}(
-            params.token,
-            amountReceived,
-            params.targetChain,
-            targetContract,
-            batchId,
-            messagePayload
-        );
+                token,
+                amount,
+                targetChain,
+                targetContract,
+                batchId,
+                messagePayload
+            );
     }
 
     function completeTransferWithRelay(bytes calldata encodedTransferMessage) public payable {
@@ -119,19 +185,6 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         // parse the payload from the `TransferWithRelay` struct
         TransferWithRelay memory transferWithRelay = decodeTransferWithRelay(
             payload
-        );
-
-        // cache token decimals
-        uint8 tokenDecimals = getDecimals(token);
-
-        // denormalize the encoded relayerFee and toNativeTokenAmount
-        transferWithRelay.toNativeTokenAmount = denormalizeAmount(
-            transferWithRelay.toNativeTokenAmount,
-            tokenDecimals
-        );
-        transferWithRelay.targetRelayerFee = denormalizeAmount(
-            transferWithRelay.targetRelayerFee,
-            tokenDecimals
         );
 
         // cache the recipient address
@@ -152,6 +205,19 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
             // bail out
             return;
         }
+
+        // cache token decimals
+        uint8 tokenDecimals = getDecimals(token);
+
+        // denormalize the encoded relayerFee and toNativeTokenAmount
+        transferWithRelay.toNativeTokenAmount = denormalizeAmount(
+            transferWithRelay.toNativeTokenAmount,
+            tokenDecimals
+        );
+        transferWithRelay.targetRelayerFee = denormalizeAmount(
+            transferWithRelay.targetRelayerFee,
+            tokenDecimals
+        );
 
         // handle native asset payments and refunds
         if (transferWithRelay.toNativeTokenAmount > 0) {

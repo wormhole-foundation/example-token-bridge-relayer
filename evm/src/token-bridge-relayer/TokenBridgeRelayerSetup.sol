@@ -4,9 +4,9 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Upgrade.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 
-import "./TokenBridgeRelayerSetters.sol";
+import "./TokenBridgeRelayerGetters.sol";
 
-contract TokenBridgeRelayerSetup is TokenBridgeRelayerSetters, ERC1967Upgrade, Context {
+contract TokenBridgeRelayerSetup is TokenBridgeRelayerGetters, ERC1967Upgrade, Context {
     function setup(
         address implementation,
         uint16 chainId,
@@ -25,6 +25,9 @@ contract TokenBridgeRelayerSetup is TokenBridgeRelayerSetters, ERC1967Upgrade, C
         setWormhole(wormhole);
         setTokenBridge(tokenBridge_);
         setNativeSwapRatePrecision(swapRatePrecision);
+
+        // set the wethAddress based on the token bridges WETH getter
+        setWethAddress(address(tokenBridge().WETH()));
 
         // set the implementation
         _upgradeTo(implementation);

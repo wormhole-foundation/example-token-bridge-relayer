@@ -24,6 +24,10 @@ contract TokenBridgeRelayerSetters is TokenBridgeRelayerState {
         _state.tokenBridge = payable(tokenBridge_);
     }
 
+    function setWethAddress(address weth_) internal {
+        _state.wethAddress = weth_;
+    }
+
     function setChainId(uint16 chainId_) internal {
         _state.chainId = chainId_;
     }

@@ -3,6 +3,7 @@ pragma solidity ^0.8.13;
 
 import {IWormhole} from "../interfaces/IWormhole.sol";
 import {ITokenBridge} from "../interfaces/ITokenBridge.sol";
+import {IWETH} from "../interfaces/IWETH.sol";
 
 import "./TokenBridgeRelayerSetters.sol";
 
@@ -25,6 +26,10 @@ contract TokenBridgeRelayerGetters is TokenBridgeRelayerSetters {
 
     function tokenBridge() public view returns (ITokenBridge) {
         return ITokenBridge(payable(_state.tokenBridge));
+    }
+
+    function WETH() public view returns (IWETH){
+        return IWETH(_state.wethAddress);
     }
 
     function chainId() public view returns (uint16) {
