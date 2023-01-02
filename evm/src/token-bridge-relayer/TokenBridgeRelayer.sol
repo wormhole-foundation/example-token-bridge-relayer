@@ -37,13 +37,15 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         // override amount with actual amount received.
         amount = custodyTokens(token, amount);
 
-        // call the internal transferTokensWithRelay function
+        // call the internal _transferTokensWithRelay function
         messageSequence = _transferTokensWithRelay(
-            token,
-            amount,
-            toNativeTokenAmount,
-            targetChain,
-            targetRecipient,
+            InternalTransferParams({
+                token: token,
+                amount: amount,
+                toNativeTokenAmount: toNativeTokenAmount,
+                targetChain: targetChain,
+                targetRecipient: targetRecipient
+            }),
             batchId,
             wormholeFee
         );
@@ -76,31 +78,29 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
             value : amountLessDust
         }();
 
-        // call the internal transferTokensWithRelay function
+        // call the internal _transferTokensWithRelay function
         messageSequence = _transferTokensWithRelay(
-            address(weth),
-            amountLessDust,
-            toNativeTokenAmount,
-            targetChain,
-            targetRecipient,
+            InternalTransferParams({
+                token: address(weth),
+                amount: amountLessDust,
+                toNativeTokenAmount: toNativeTokenAmount,
+                targetChain: targetChain,
+                targetRecipient: targetRecipient
+            }),
             batchId,
             wormholeFee
         );
     }
 
     function _transferTokensWithRelay(
-        address token,
-        uint256 amount,
-        uint256 toNativeTokenAmount,
-        uint16 targetChain,
-        bytes32 targetRecipient,
+        InternalTransferParams memory params,
         uint32 batchId,
         uint256 wormholeFee
     ) internal returns (uint64 messageSequence) {
         // sanity check function arguments
-        require(isAcceptedToken(token), "invalid token");
+        require(isAcceptedToken(params.token), "token not accepted");
         require(
-            targetRecipient != bytes32(0),
+            params.targetRecipient != bytes32(0),
             "targetRecipient cannot be bytes32(0)"
         );
 
@@ -109,21 +109,31 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
          * The token bridge peforms the same operation before encoding
          * the amount in the `TransferWithPayload` message.
          */
-        uint8 tokenDecimals = getDecimals(token);
+        uint8 tokenDecimals = getDecimals(params.token);
         require(
-            normalizeAmount(amount, tokenDecimals) > 0,
+            normalizeAmount(params.amount, tokenDecimals) > 0,
             "normalized amount must be > 0"
+        );
+
+        // normalized toNativeTokenAmount should be nonzero
+        uint256 normalizedToNativeTokenAmount = normalizeAmount(
+            params.toNativeTokenAmount,
+            tokenDecimals
+        );
+        require(
+            params.toNativeTokenAmount == 0 || normalizedToNativeTokenAmount > 0,
+            "normalized toNativeTokenAmount must be > 0"
         );
 
         // Cache the target contract address and verify that there
         // is a registered emitter for the specified targetChain.
-        bytes32 targetContract = getRegisteredContract(targetChain);
-        require(targetContract != bytes32(0), "emitter not registered");
+        bytes32 targetContract = getRegisteredContract(params.targetChain);
+        require(targetContract != bytes32(0), "target not registered");
 
         // confirm that the user has sent enough tokens
-        uint256 targetRelayerFee = relayerFee(targetChain, token);
+        uint256 targetRelayerFee = relayerFee(params.targetChain, params.token);
         require(
-            amount > targetRelayerFee + toNativeTokenAmount,
+            params.amount > targetRelayerFee + params.toNativeTokenAmount,
             "insufficient amount"
         );
 
@@ -143,11 +153,8 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
                     targetRelayerFee,
                     tokenDecimals
                 ),
-                toNativeTokenAmount: normalizeAmount(
-                    toNativeTokenAmount,
-                    tokenDecimals
-                ),
-                targetRecipient: targetRecipient
+                toNativeTokenAmount: normalizedToNativeTokenAmount,
+                targetRecipient: params.targetRecipient
             })
         );
 
@@ -156,9 +163,9 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
 
         // approve the token bridge to spend the specified tokens
         SafeERC20.safeApprove(
-            IERC20(token),
+            IERC20(params.token),
             address(bridge),
-            amount
+            params.amount
         );
 
         /**
@@ -168,9 +175,9 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
          * ITokenBridge.sol interface file in this repo).
          */
         messageSequence = bridge.transferTokensWithPayload{value: wormholeFee}(
-                token,
-                amount,
-                targetChain,
+                params.token,
+                params.amount,
+                params.targetChain,
                 targetContract,
                 batchId,
                 messagePayload
@@ -359,7 +366,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         // confirm that the message sender is a registered TokenBridgeRelayer contract
         require(
             transfer.fromAddress == getRegisteredContract(parsedMessage.emitterChainId),
-            "emitter not registered"
+            "contract not registered"
         );
 
         return (
@@ -456,46 +463,8 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         return getBalance(token) - balanceBefore;
     }
 
-    function getBalance(address token) internal view returns (uint256 balance) {
-        // fetch the specified token balance for this contract
-        (, bytes memory queriedBalance) =
-            token.staticcall(
-                abi.encodeWithSelector(IERC20.balanceOf.selector, address(this))
-            );
-        balance = abi.decode(queriedBalance, (uint256));
-    }
-
     function bytes32ToAddress(bytes32 address_) internal pure returns (address) {
         require(bytes12(address_) == 0, "invalid EVM address");
         return address(uint160(uint256(address_)));
-    }
-
-    function getDecimals(
-        address token
-    ) internal view returns (uint8) {
-        (,bytes memory queriedDecimals) = token.staticcall(
-            abi.encodeWithSignature("decimals()")
-        );
-        return abi.decode(queriedDecimals, (uint8));
-    }
-
-    function normalizeAmount(
-        uint256 amount,
-        uint8 decimals
-    ) public pure returns(uint256) {
-        if (decimals > 8) {
-            amount /= 10 ** (decimals - 8);
-        }
-        return amount;
-    }
-
-    function denormalizeAmount(
-        uint256 amount,
-        uint8 decimals
-    ) public pure returns(uint256){
-        if (decimals > 8) {
-            amount *= 10 ** (decimals - 8);
-        }
-        return amount;
     }
 }

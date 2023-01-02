@@ -9,7 +9,6 @@ import {ERC1967Upgrade} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Upgra
 
 import "./TokenBridgeRelayerGetters.sol";
 
-// TODO: force the caller to explicitly set relayer fees to 0 if they want zero
 contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgrade {
     event ContractUpgraded(address indexed oldContract, address indexed newContract);
     event WormholeFinalityUpdated(uint8 indexed oldLevel, uint8 indexed newFinality);
@@ -107,7 +106,7 @@ contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgra
      * @param chainId_ Wormhole chain ID
      * @param token Address of the token
      */
-    function registerAcceptedToken(
+    function registerToken(
         uint16 chainId_,
         address token
     ) public onlyOwner checkChain(chainId_) {
@@ -135,10 +134,15 @@ contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgra
             getRegisteredContract(chainId_) != bytes32(0),
             "contract doesn't exist"
         );
+        require(isAcceptedToken(token), "token not accepted");
+
+        // make sure the normalized relayer fee is nonzero
+        uint8 decimals = getDecimals(token);
         require(
-            isAcceptedToken(token),
-            "token not accepted"
+            amount == 0 || normalizeAmount(amount, decimals) > 0,
+            "invalid relayer fee"
         );
+
         setRelayerFee(chainId_, token, amount);
     }
 

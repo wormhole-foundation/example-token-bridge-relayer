@@ -5,6 +5,8 @@ import {IWormhole} from "../interfaces/IWormhole.sol";
 import {ITokenBridge} from "../interfaces/ITokenBridge.sol";
 import {IWETH} from "../interfaces/IWETH.sol";
 
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 import "./TokenBridgeRelayerSetters.sol";
 
 contract TokenBridgeRelayerGetters is TokenBridgeRelayerSetters {
@@ -58,5 +60,41 @@ contract TokenBridgeRelayerGetters is TokenBridgeRelayerSetters {
 
     function maxNativeSwapAmount(address token) public view returns (uint256) {
         return _state.maxNativeSwapAmount[token];
+    }
+
+    function getDecimals(address token) internal view returns (uint8) {
+        (,bytes memory queriedDecimals) = token.staticcall(
+            abi.encodeWithSignature("decimals()")
+        );
+        return abi.decode(queriedDecimals, (uint8));
+    }
+
+    function getBalance(address token) internal view returns (uint256 balance) {
+        // fetch the specified token balance for this contract
+        (, bytes memory queriedBalance) =
+            token.staticcall(
+                abi.encodeWithSelector(IERC20.balanceOf.selector, address(this))
+            );
+        balance = abi.decode(queriedBalance, (uint256));
+    }
+
+    function normalizeAmount(
+        uint256 amount,
+        uint8 decimals
+    ) public pure returns(uint256) {
+        if (decimals > 8) {
+            amount /= 10 ** (decimals - 8);
+        }
+        return amount;
+    }
+
+    function denormalizeAmount(
+        uint256 amount,
+        uint8 decimals
+    ) public pure returns(uint256){
+        if (decimals > 8) {
+            amount *= 10 ** (decimals - 8);
+        }
+        return amount;
     }
 }

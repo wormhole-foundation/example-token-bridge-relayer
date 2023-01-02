@@ -2,6 +2,7 @@
 
 pragma solidity ^0.8.13;
 
+import {IWETH} from "./IWETH.sol";
 import {IWormhole} from "./IWormhole.sol";
 import {ITokenBridge} from "./ITokenBridge.sol";
 
@@ -51,7 +52,7 @@ interface ITokenBridgeRelayer {
 
     function registerContract(uint16 chainId_, bytes32 contractAddress) external;
 
-    function registerAcceptedToken(uint16 chainId_, address token) external;
+    function registerToken(uint16 chainId_, address token) external;
 
     function updateRelayerFee(uint16 chainId_, address token, uint256 amount) external;
 
@@ -70,6 +71,8 @@ interface ITokenBridgeRelayer {
     function tokenBridge() external view returns (ITokenBridge);
 
     function wormhole() external view returns (IWormhole);
+
+    function WETH() external view returns (IWETH);
 
     function chainId() external view returns (uint16);
 

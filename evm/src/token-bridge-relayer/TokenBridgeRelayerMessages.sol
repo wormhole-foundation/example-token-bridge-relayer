@@ -42,7 +42,7 @@ contract TokenBridgeRelayerMessages is TokenBridgeRelayerStructs {
         transfer.payloadId = encoded.toUint8(index);
         index += 1;
 
-        require(transfer.payloadId == 1, "invalid message payloadId");
+        require(transfer.payloadId == 1, "invalid payloadId");
 
         // target relayer fee
         transfer.targetRelayerFee = encoded.toUint256(index);

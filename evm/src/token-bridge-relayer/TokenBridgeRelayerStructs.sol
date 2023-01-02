@@ -8,4 +8,12 @@ contract TokenBridgeRelayerStructs {
         uint256 toNativeTokenAmount;
         bytes32 targetRecipient;
     }
+
+    struct InternalTransferParams {
+        address token;
+        uint256 amount;
+        uint256 toNativeTokenAmount;
+        uint16 targetChain;
+        bytes32 targetRecipient;
+    }
 }
