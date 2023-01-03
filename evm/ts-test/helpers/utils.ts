@@ -3,28 +3,19 @@ import {ChainId, tryNativeToHexString} from "@certusone/wormhole-sdk";
 import {WORMHOLE_MESSAGE_EVENT_ABI, WORMHOLE_TOPIC} from "./consts";
 import * as fs from "fs";
 
-export function readHelloWorldContractAddress(chain: number): string {
+export function readTokenBridgeRelayerContractAddress(chain: number): string {
   return JSON.parse(
     fs.readFileSync(
-      `${__dirname}/../../broadcast/deploy_01_hello_world.sol/${chain}/run-latest.json`,
+      `${__dirname}/../../broadcast-test/deploy_contracts.sol/${chain}/run-latest.json`,
       "utf-8"
     )
-  ).transactions[0].contractAddress;
-}
-
-export function readHelloTokenContractAddress(chain: number): string {
-  return JSON.parse(
-    fs.readFileSync(
-      `${__dirname}/../../broadcast/deploy_02_hello_token.sol/${chain}/run-latest.json`,
-      "utf-8"
-    )
-  ).transactions[0].contractAddress;
+  ).transactions[2].contractAddress;
 }
 
 export function readWormUSDContractAddress(chain: number): string {
   return JSON.parse(
     fs.readFileSync(
-      `${__dirname}/../../broadcast/deploy_wormUSD.sol/${chain}/run-latest.json`,
+      `${__dirname}/../../broadcast-test/deploy_wormUSD.sol/${chain}/run-latest.json`,
       "utf-8"
     )
   ).transactions[0].contractAddress;

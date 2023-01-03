@@ -34,7 +34,7 @@ contract TestTokenBridgeRelayer is Helpers, ForgeHelpers, Test {
     uint16 ethereumChainId = uint16(vm.envUint("TESTING_ETH_WORMHOLE_CHAINID"));
     address ethereumTokenBridge = vm.envAddress("TESTING_ETH_BRIDGE_ADDRESS");
     address weth = vm.envAddress("TESTING_WRAPPED_ETH_ADDRESS");
-    address ethereumRecipient = vm.envAddress("TESTING_ETHEREUM_RECIPIENT");
+    address ethereumRecipient = vm.envAddress("TESTING_ETH_RECIPIENT");
     address ethUsdc = vm.envAddress("TESTING_ETH_USDC_ADDRESS");
 
     // avax contract and test info
