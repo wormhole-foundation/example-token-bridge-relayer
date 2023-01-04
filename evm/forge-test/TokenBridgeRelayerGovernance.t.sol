@@ -33,6 +33,10 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
     // random wallet for pranks
     address wallet = vm.envAddress("TESTING_AVAX_RELAYER");
 
+    // tokens
+    address wavax = vm.envAddress("TESTING_WRAPPED_AVAX_ADDRESS");
+    address ethUsdc = vm.envAddress("TESTING_ETH_USDC_ADDRESS");
+
     function setupTokenBridgeRelayer() internal {
         // deploy Setup
         TokenBridgeRelayerSetup setup = new TokenBridgeRelayerSetup();
@@ -393,6 +397,115 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
         // expect the registerContract call to revert
         vm.expectRevert("caller not the owner");
         avaxRelayer.registerContract(chainId_, tokenBridgeRelayerContract);
+
+        vm.stopPrank();
+    }
+
+    /**
+     * @notice This test confirms that the owner can correctly register a token.
+     */
+    function testRegisterToken() public {
+        // test variables
+        address token = wavax;
+
+        assertEq(avaxRelayer.isAcceptedToken(token), false);
+
+        // register the contract
+        avaxRelayer.registerToken(avaxRelayer.chainId(), token);
+
+        // verify that the state was updated correctly
+        assertEq(avaxRelayer.isAcceptedToken(token), true);
+    }
+
+    /// @notice This test confirms that the contract cannot register address(0).
+    function testRegisterTokenZeroAddress() public {
+        // test variables
+        address token = address(0);
+
+        // expect the registerToken call to fail
+        bytes memory encodedSignature = abi.encodeWithSignature(
+            "registerToken(uint16,address)",
+            avaxRelayer.chainId(),
+            token
+        );
+        expectRevert(
+            address(avaxRelayer),
+            encodedSignature,
+            "invalid token"
+        );
+    }
+
+    /**
+     * @notice This test confirms that the owner cannot register a token
+     * with the same chainId.
+     */
+    function testRegisterContractWrongChainId(uint16 chainId_) public {
+        vm.assume(chainId_ != avaxRelayer.chainId());
+
+        // test variables
+        address token = address(0);
+
+        // expect the registerToken call to fail
+        bytes memory encodedSignature = abi.encodeWithSignature(
+            "registerToken(uint16,address)",
+            chainId_,
+            token
+        );
+        expectRevert(
+            address(avaxRelayer),
+            encodedSignature,
+            "wrong chain"
+        );
+    }
+
+    /**
+     * @notice This test confirms that the owner cannot register the same
+     * token twice.
+     */
+    function testRegisterTokenAlreadyRegistered() public {
+        // test variables
+        address token = wavax;
+
+        assertEq(avaxRelayer.isAcceptedToken(token), false);
+
+        // register the contract
+        avaxRelayer.registerToken(avaxRelayer.chainId(), token);
+
+        // verify that the state was updated correctly
+        assertEq(avaxRelayer.isAcceptedToken(token), true);
+
+        // expect the registerToken call to fail
+        bytes memory encodedSignature = abi.encodeWithSignature(
+            "registerToken(uint16,address)",
+            avaxRelayer.chainId(),
+            token
+        );
+        expectRevert(
+            address(avaxRelayer),
+            encodedSignature,
+            "token already registered"
+        );
+    }
+
+    ///@notice This test confirms that ONLY the owner can register a token.
+    function testRegisterTokenOwnerOnly() public {
+        // test variables
+        address token = wavax;
+
+        // prank the caller address to something different than the owner's
+        vm.startPrank(wallet);
+
+        // expect the registerToken call to fail
+        bytes memory encodedSignature = abi.encodeWithSignature(
+            "registerToken(uint16,address)",
+            avaxRelayer.chainId(),
+            token
+        );
+        expectRevert(
+            address(avaxRelayer),
+            encodedSignature,
+            "caller not the owner"
+        );
 
         vm.stopPrank();
     }

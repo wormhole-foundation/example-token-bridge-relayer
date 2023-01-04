@@ -93,7 +93,8 @@ contract TestTokenBridgeRelayerMessages is Helpers, ForgeHelpers, Test {
                 payloadId: invalidPayloadId,
                 targetRelayerFee: 1e10,
                 toNativeTokenAmount: 1e1,
-                targetRecipient: addressToBytes32(address(this))
+                targetRecipient: addressToBytes32(address(this)),
+                unwrap: false
             });
 
         // expet the encodeTransferWithRelay call to revert
@@ -108,7 +109,8 @@ contract TestTokenBridgeRelayerMessages is Helpers, ForgeHelpers, Test {
     function testMessages(
         uint256 targetRelayerFee,
         uint256 toNativeAmount,
-        bytes32 targetRecipientWallet
+        bytes32 targetRecipientWallet,
+        bool unwrapEth
         ) public {
         vm.assume(targetRecipientWallet != bytes32(0));
         vm.assume(toNativeAmount < targetRelayerFee);
@@ -119,7 +121,8 @@ contract TestTokenBridgeRelayerMessages is Helpers, ForgeHelpers, Test {
                 payloadId: 1,
                 targetRelayerFee: targetRelayerFee,
                 toNativeTokenAmount: toNativeAmount,
-                targetRecipient: targetRecipientWallet
+                targetRecipient: targetRecipientWallet,
+                unwrap: unwrapEth
             })
         );
 
@@ -132,6 +135,7 @@ contract TestTokenBridgeRelayerMessages is Helpers, ForgeHelpers, Test {
         assertEq(parsed.targetRelayerFee, targetRelayerFee);
         assertEq(parsed.toNativeTokenAmount, toNativeAmount);
         assertEq(parsed.targetRecipient, targetRecipientWallet);
+        assertEq(parsed.unwrap, unwrapEth);
     }
 
     /**
@@ -152,7 +156,8 @@ contract TestTokenBridgeRelayerMessages is Helpers, ForgeHelpers, Test {
                 payloadId: 1,
                 targetRelayerFee: targetRelayerFee,
                 toNativeTokenAmount: toNativeAmount,
-                targetRecipient: targetRecipientWallet
+                targetRecipient: targetRecipientWallet,
+                unwrap: false
             })
         );
 
@@ -185,7 +190,8 @@ contract TestTokenBridgeRelayerMessages is Helpers, ForgeHelpers, Test {
                 payloadId: 1,
                 targetRelayerFee: targetRelayerFee,
                 toNativeTokenAmount: toNativeAmount,
-                targetRecipient: targetRecipientWallet
+                targetRecipient: targetRecipientWallet,
+                unwrap: false
             })
         );
 

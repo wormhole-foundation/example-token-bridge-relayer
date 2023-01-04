@@ -81,7 +81,7 @@ contract TokenBridgeRelayerGetters is TokenBridgeRelayerSetters {
     function normalizeAmount(
         uint256 amount,
         uint8 decimals
-    ) public pure returns(uint256) {
+    ) public pure returns (uint256) {
         if (decimals > 8) {
             amount /= 10 ** (decimals - 8);
         }
@@ -91,7 +91,7 @@ contract TokenBridgeRelayerGetters is TokenBridgeRelayerSetters {
     function denormalizeAmount(
         uint256 amount,
         uint8 decimals
-    ) public pure returns(uint256){
+    ) public pure returns (uint256) {
         if (decimals > 8) {
             amount *= 10 ** (decimals - 8);
         }

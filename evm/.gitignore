@@ -6,5 +6,6 @@ node_modules
 out
 out.log
 broadcast
+broadcast-test
 forge-scripts/deploy.out
 ts-test/src/
