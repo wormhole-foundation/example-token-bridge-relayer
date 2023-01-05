@@ -20,6 +20,18 @@ import "./TokenBridgeRelayerMessages.sol";
 contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerMessages, ReentrancyGuard {
     using BytesLib for bytes;
 
+    /**
+     * @notice Emitted when the transfer is completed by the Wormhole token bridge
+     * @param emitterChainId Wormhole chain ID of emitter contract on source chain
+     * @param emitterAddress Address (bytes32 zero-left-padded) of emitter on source chain
+     * @param sequence Sequence of Wormhole message
+     */
+    event TransferCompleted(
+        uint16 indexed emitterChainId,
+        bytes32 indexed emitterAddress,
+        uint64 indexed sequence
+    );
+
     function transferTokensWithRelay(
         address token,
         uint256 amount,
@@ -390,6 +402,14 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         require(
             transfer.fromAddress == getRegisteredContract(parsedMessage.emitterChainId),
             "contract not registered"
+        );
+
+
+        // Emit event with information about the TransferWithPayload message
+        emit TransferCompleted(
+            parsedMessage.emitterChainId,
+            parsedMessage.emitterAddress,
+            parsedMessage.sequence
         );
 
         return (

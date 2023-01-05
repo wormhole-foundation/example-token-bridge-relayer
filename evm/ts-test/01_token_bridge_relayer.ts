@@ -1,5 +1,5 @@
 import {expect} from "chai";
-import {ethers} from "ethers";
+import {ethers, Wallet} from "ethers";
 import {MockGuardians} from "@certusone/wormhole-sdk/lib/cjs/mock";
 import {
   CHAIN_ID_ETH,
@@ -28,6 +28,7 @@ import {
   readWormUSDContractAddress,
   tokenBridgeDenormalizeAmount,
   tokenBridgeNormalizeAmount,
+  tokenBridgeTransform,
 } from "./helpers/utils";
 import {
   ITokenBridgeRelayer__factory,
@@ -111,7 +112,7 @@ describe("Token Bridge Relayer", () => {
 
   // swap rates and relayer fees for WormUSD
   const wormUsdSwapRate = ethers.BigNumber.from("1");
-  const wormUsdRelayerFee = ethers.utils.parseUnits("0.42", 6);
+  const wormUsdRelayerFee = ethers.utils.parseUnits("4.2", 6);
 
   // max native swap amounts
   const ethMaxNativeSwapAmount = ethers.utils.parseEther("6.9");
@@ -764,4 +765,201 @@ describe("Token Bridge Relayer", () => {
       }
     });
   });
+
+  describe("Test Token Bridge Relayer Business Logic", () => {
+    // simulated guardian that signs wormhole messages
+    const guardians = new MockGuardians(AVAX_WORMHOLE_GUARDIAN_SET_INDEX, [
+      GUARDIAN_PRIVATE_KEY,
+    ]);
+
+    let local: any = {};
+
+    it("Transfer wormUSD Tokens From AVAX to ETH", async () => {
+      // define the transfer amounts
+      local.tokenDecimals = await ethWormUsd.decimals();
+      local.transferAmount = ethers.utils.parseUnits(
+        "42069",
+        local.tokenDecimals
+      );
+      local.toNativeTokenAmount = ethers.utils.parseUnits(
+        "69",
+        local.tokenDecimals
+      );
+
+      // validate amounts before the test
+      expect(
+        local.transferAmount.gt(
+          local.toNativeTokenAmount.add(wormUsdRelayerFee)
+        )
+      );
+
+      // increase allowance of the wrapped wormUsd token for the avax wallet
+      {
+        const receipt = await avaxWormUsd
+          .approve(avaxRelayer.address, local.transferAmount)
+          .then((tx: ethers.ContractTransaction) => tx.wait())
+          .catch((msg: any) => {
+            // should not happen
+            console.log(msg);
+            return null;
+          });
+        expect(receipt).is.not.null;
+      }
+
+      // grab token balance before performing the transfer
+      const balanceBefore = await avaxWormUsd.balanceOf(avaxWallet.address);
+
+      // call sendTokensWithPayload
+      const receipt = await avaxRelayer
+        .transferTokensWithRelay(
+          avaxWormUsd.address,
+          local.transferAmount,
+          local.toNativeTokenAmount,
+          CHAIN_ID_ETH,
+          "0x" + tryNativeToHexString(ethWallet.address, CHAIN_ID_ETH),
+          false, // unwrap eth
+          0 // batchId
+        )
+        .then(async (tx: ethers.ContractTransaction) => {
+          const receipt = await tx.wait();
+          return receipt;
+        })
+        .catch((msg) => {
+          // should not happen
+          console.log(msg);
+          return null;
+        });
+      expect(receipt).is.not.null;
+
+      // check token balance after to confirm the transfer worked
+      const balanceAfter = await avaxWormUsd.balanceOf(avaxWallet.address);
+      expect(balanceBefore.sub(balanceAfter).eq(local.transferAmount)).is.true;
+
+      // now grab the Wormhole message
+      const unsignedMessages = await formatWormholeMessageFromReceipt(
+        receipt!,
+        CHAIN_ID_AVAX
+      );
+      expect(unsignedMessages.length).to.equal(1);
+
+      // sign the TransferWithPayload message
+      local.signedTransferMessage = Uint8Array.from(
+        guardians.addSignatures(unsignedMessages[0], [0])
+      );
+      expect(local.signedTransferMessage).is.not.null;
+    });
+
+    it("Should Redeem Wrapped wormUSD tokens on ETH", async () => {
+      // fetch the token bridge wrapper for the transferred token
+      const wrappedTokenOnEth = await ethBridge.wrappedAsset(
+        CHAIN_ID_AVAX,
+        "0x" + tryNativeToHexString(avaxWormUsd.address, CHAIN_ID_AVAX)
+      );
+
+      // create token contract for the wrapped asset
+      const wrappedTokenContract = makeContract(
+        ethWallet,
+        wrappedTokenOnEth,
+        wormUsdAbi
+      );
+
+      // Check the balance of the recipient and relayer wallet before
+      // redeeming the token transfer.
+      const relayerBalanceBefore = await wrappedTokenContract.balanceOf(
+        ethRelayerWallet.address
+      );
+      const recipientBalanceBefore = await wrappedTokenContract.balanceOf(
+        ethWallet.address
+      );
+      const relayerEthBalanceBefore = await ethRelayerWallet.getBalance();
+      const recipientEthBalanceBefore = await ethWallet.getBalance();
+
+      // fetch the native asset swap quote
+      const nativeSwapQuote = await ethRelayer.calculateNativeSwapAmountOut(
+        wrappedTokenContract.address,
+        local.toNativeTokenAmount
+      );
+
+      // Invoke the relayer contract to redeem the transfer, passing the
+      // encoded Wormhole message. Invoke this method using the ethRelayerWallet
+      // to confirm that the contract handles relayer payouts correctly.
+      const receipt = await ethRelayer
+        .connect(ethRelayerWallet) // change signer
+        .completeTransferWithRelay(local.signedTransferMessage, {
+          value: nativeSwapQuote,
+        })
+        .then(async (tx: ethers.ContractTransaction) => {
+          const receipt = await tx.wait();
+          return receipt;
+        })
+        .catch((msg) => {
+          // should not happen
+          console.log(msg);
+          return null;
+        });
+      expect(receipt).is.not.null;
+
+      // fetch the balances after redeeming the token transfer
+      const relayerBalanceAfter = await wrappedTokenContract.balanceOf(
+        avaxRelayerWallet.address
+      );
+      const recipientBalanceAfter = await wrappedTokenContract.balanceOf(
+        avaxWallet.address
+      );
+      const relayerEthBalanceAfter = await ethRelayerWallet.getBalance();
+      const recipientEthBalanceAfter = await ethWallet.getBalance();
+
+      // validate balance changes
+      {
+        const maxToNative = await ethRelayer.calculateMaxSwapAmountIn(
+          wrappedTokenContract.address
+        );
+        if (local.toNativeTokenAmount > maxToNative) {
+          local.toNativeTokenAmount = maxToNative;
+        }
+        if (nativeSwapQuote.eq(0)) {
+          local.toNativeTokenAmount = 0;
+        }
+
+        // fetch the relayer fee
+        const relayerFee = await ethRelayer.relayerFee(
+          CHAIN_ID_ETH,
+          wrappedTokenContract.address
+        );
+
+        // // recipient balance change
+        // expect(recipientBalanceAfter.sub(recipientBalanceBefore)).to.equal(
+        //   local.transferAmount.sub(local.toNativeTokenAmount).sub(relayerFee)
+        // );
+        // expect(relayerEthBalanceAfter.sub(relayerEthBalanceBefore)).to.equal(
+        //   nativeSwapQuote
+        // );
+
+        // relayer balance change
+      }
+
+      // // clear localVariables
+      // localVariables = {};
+
+      // // Save the recipient balance change and wrapped token contract for the
+      // // next test.
+      // localVariables.avaxWalletWrappedTokenBalance = recipientBalanceAfter.sub(
+      //   recipientBalanceBefore
+      // );
+      // localVariables.wrappedTokenContract = wrappedTokenContract;
+    });
+  });
+
+  // // compute denormalized amounts
+  // const relayerFee = tokenBridgeTransform(
+  //   await ethRelayer.relayerFee(
+  //     CHAIN_ID_ETH,
+  //     wrappedTokenContract.address
+  //   ),
+  //   local.tokenDecimals
+  // );
+  // const toNative = tokenBridgeTransform(
+  //   local.toNativeTokenAmount,
+  //   local.tokenDecimals
+  // );
 });

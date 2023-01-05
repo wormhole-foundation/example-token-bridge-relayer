@@ -18,7 +18,7 @@ anvil \
     --port 8546 \
     --fork-url $TESTING_ETH_FORK_RPC > anvil_eth.log &
 
-sleep 2
+sleep 10
 
 ## anvil's rpc
 AVAX_RPC="http://localhost:8545"

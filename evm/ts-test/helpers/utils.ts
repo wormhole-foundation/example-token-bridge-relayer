@@ -101,3 +101,13 @@ export function tokenBridgeDenormalizeAmount(
   }
   return amount;
 }
+
+export function tokenBridgeTransform(
+  amount: ethers.BigNumber,
+  decimals: number
+): ethers.BigNumber {
+  return tokenBridgeDenormalizeAmount(
+    tokenBridgeNormalizeAmount(amount, decimals),
+    decimals
+  );
+}
