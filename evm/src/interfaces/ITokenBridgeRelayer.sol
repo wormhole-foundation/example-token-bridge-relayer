@@ -58,9 +58,9 @@ interface ITokenBridgeRelayer {
 
     function updateRelayerFee(uint16 chainId_, address token, uint256 amount) external;
 
-    function updateNativeSwapRate(uint16 chainId_, address token, uint256 swapRate) external;
+    function updateSwapRate(uint16 chainId_, address token, uint256 swapRate) external;
 
-    function updateNativeSwapRatePrecision(uint16 chainId_, uint256 nativeSwapRatePrecision_) external;
+    function updateSwapRatePrecision(uint16 chainId_, uint256 swapRatePrecision_) external;
 
     function updateMaxNativeSwapAmount(uint16 chainId_, address token, uint256 maxAmount) external;
 
@@ -80,7 +80,9 @@ interface ITokenBridgeRelayer {
 
     function relayerFee(uint16 chainId_, address token) external view returns (uint256);
 
-    function nativeSwapRatePrecision() external view returns (uint256);
+    function swapRatePrecision() external view returns (uint256);
+
+    function swapRate(address token) external view returns (uint256);
 
     function nativeSwapRate(address token) external view returns (uint256);
 

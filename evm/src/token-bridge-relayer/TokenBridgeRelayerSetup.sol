@@ -24,7 +24,7 @@ contract TokenBridgeRelayerSetup is TokenBridgeRelayerGetters, ERC1967Upgrade, C
         setChainId(chainId);
         setWormhole(wormhole);
         setTokenBridge(tokenBridge_);
-        setNativeSwapRatePrecision(swapRatePrecision);
+        setSwapRatePrecision(swapRatePrecision);
 
         // set the wethAddress based on the token bridges WETH getter
         setWethAddress(address(tokenBridge().WETH()));

@@ -36,8 +36,8 @@ contract TokenBridgeRelayerSetters is TokenBridgeRelayerState {
         _state.registeredContracts[chainId_] = contract_;
     }
 
-    function setNativeSwapRatePrecision(uint256 precision) internal {
-        _state.nativeSwapRatePrecision = precision;
+    function setSwapRatePrecision(uint256 precision) internal {
+        _state.swapRatePrecision = precision;
     }
 
     function addAcceptedToken(address token) internal {
@@ -48,8 +48,8 @@ contract TokenBridgeRelayerSetters is TokenBridgeRelayerState {
         _state.relayerFees[chainId_][token] = fee;
     }
 
-    function setNativeSwapRate(address token, uint256 swapRate) internal {
-        _state.nativeSwapRates[token] = swapRate;
+    function setSwapRate(address token, uint256 swapRate) internal {
+        _state.swapRates[token] = swapRate;
     }
 
     function setMaxNativeSwapAmount(address token, uint256 maximum) internal {

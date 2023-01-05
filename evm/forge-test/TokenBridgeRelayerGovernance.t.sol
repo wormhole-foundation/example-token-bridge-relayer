@@ -75,7 +75,7 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
             address(avaxRelayer.tokenBridge()),
             vm.envAddress("TESTING_AVAX_BRIDGE_ADDRESS")
         );
-        assertEq(avaxRelayer.nativeSwapRatePrecision(), 1e8);
+        assertEq(avaxRelayer.swapRatePrecision(), 1e8);
     }
 
     /**
@@ -649,34 +649,32 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
     }
 
     /**
-     * @notice This test confirms that the owner can update the native swap
+     * @notice This test confirms that the owner can update the swap
      * rate for accepted tokens.
      */
-    function testUpdateNativeSwapRate(uint256 swapRate) public {
+    function testUpdateSwapRate(address token, uint256 swapRate) public {
         vm.assume(swapRate > 0);
-
-        // cache token address
-        address token = address(avaxRelayer.WETH());
+        vm.assume(token != address(0));
 
         // register the token
         avaxRelayer.registerToken(avaxRelayer.chainId(), token);
 
-        // update the native to WETH swap rate
-        avaxRelayer.updateNativeSwapRate(
+        // update the swap rate
+        avaxRelayer.updateSwapRate(
             avaxRelayer.chainId(),
             token,
             swapRate
         );
 
         // confirm state changes
-        assertEq(avaxRelayer.nativeSwapRate(token), swapRate);
+        assertEq(avaxRelayer.swapRate(token), swapRate);
     }
 
     /**
-     * @notice This test confirms that the owner cannot update the native
-     * swap rate to zero.
+     * @notice This test confirms that the owner cannot update the swap rate
+     * to zero.
      */
-    function testUpdateNativeSwapRateZeroRate() public {
+    function testUpdateSwapRateZeroRate() public {
         // cache token address
         address token = address(avaxRelayer.WETH());
         uint256 swapRate = 0;
@@ -684,9 +682,9 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
         // register the token
         avaxRelayer.registerToken(avaxRelayer.chainId(), token);
 
-        // expect the updateNativeSwapRate call to revert
+        // expect the updateSwapRate call to revert
         bytes memory encodedSignature = abi.encodeWithSignature(
-            "updateNativeSwapRate(uint16,address,uint256)",
+            "updateSwapRate(uint16,address,uint256)",
             avaxRelayer.chainId(),
             token,
             swapRate
@@ -699,17 +697,17 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
     }
 
     /**
-     * @notice This test confirms that the owner cannot update the native
-     * swap rate for an unregistered token.
+     * @notice This test confirms that the owner cannot update the swap rate
+     * for an unregistered token.
      */
-    function testUpdateNativeSwapRateInvalidToken() public {
+    function testUpdateSwapRateInvalidToken() public {
         // cache token address
         address token = address(avaxRelayer.WETH());
         uint256 swapRate = 1e10;
 
-        // expect the updateNativeSwapRate call to revert
+        // expect the updateSwapRate call to revert
         bytes memory encodedSignature = abi.encodeWithSignature(
-            "updateNativeSwapRate(uint16,address,uint256)",
+            "updateSwapRate(uint16,address,uint256)",
             avaxRelayer.chainId(),
             token,
             swapRate
@@ -721,20 +719,17 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
         );
     }
 
-    /**
-     * @notice This test confirms that ONLY the owner can update the native
-     * swap rate.
-     */
-    function testUpdateNativeSwapRateOwnerOnly() public {
+    /// @notice This test confirms that ONLY the owner can update the swap rarte
+    function testUpdateSwapRateOwnerOnly() public {
         address token = address(avaxRelayer.WETH());
         uint256 swapRate = 1e10;
 
         // prank the caller address to something different than the owner's
         vm.startPrank(wallet);
 
-        // expect the updateNativeSwapRate call to revert
+        // expect the updateSwapRate call to revert
         bytes memory encodedSignature = abi.encodeWithSignature(
-            "updateNativeSwapRate(uint16,address,uint256)",
+            "updateSwapRate(uint16,address,uint256)",
             avaxRelayer.chainId(),
             token,
             swapRate
@@ -749,18 +744,18 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
     }
 
     /**
-     * @notice This test confirms that the owner cannot update the native
-     * swap rate for the wrong chain.
+     * @notice This test confirms that the owner cannot update the swap rate
+     * for the wrong chain.
      */
-    function testUpdateNativeSwapRateWrongChain(uint16 chainId_) public {
+    function testUpdateSwapRateWrongChain(uint16 chainId_) public {
         vm.assume(chainId_ != avaxRelayer.chainId());
 
         address token = address(avaxRelayer.WETH());
         uint256 swapRate = 1e10;
 
-        // expect the updateNativeSwapRate call to revert
+        // expect the updateSwapRate call to revert
         vm.expectRevert("wrong chain");
-        avaxRelayer.updateNativeSwapRate(
+        avaxRelayer.updateSwapRate(
             chainId_,
             token,
             swapRate
@@ -768,39 +763,39 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
     }
 
     /**
-     * @notice This test confirms that the owner can update the native swap
-     * rate precision.
+     * @notice This test confirms that the owner can update the swap rate
+     * precision.
      */
-    function testUpdateNativeSwapRatePrecision(
-        uint256 nativeSwapRatePrecision_
+    function testUpdateSwapRatePrecision(
+        uint256 swapRatePrecision_
     ) public {
-        vm.assume(nativeSwapRatePrecision_ > 0);
+        vm.assume(swapRatePrecision_ > 0);
 
-        // update the native swap rate precision
-        avaxRelayer.updateNativeSwapRatePrecision(
+        // update the swap rate precision
+        avaxRelayer.updateSwapRatePrecision(
             avaxRelayer.chainId(),
-            nativeSwapRatePrecision_
+            swapRatePrecision_
         );
 
         // confirm state changes
         assertEq(
-            avaxRelayer.nativeSwapRatePrecision(),
-            nativeSwapRatePrecision_
+            avaxRelayer.swapRatePrecision(),
+            swapRatePrecision_
         );
     }
 
     /**
-     * @notice This test confirms that the owner cannot update the native swap
+     * @notice This test confirms that the owner cannot update the swap
      * rate precision to zero.
      */
-    function testUpdateNativeSwapRatePrecisionZeroAmount() public {
-        uint256 nativeSwapRatePrecision_ = 0;
+    function testUpdateSwapRatePrecisionZeroAmount() public {
+        uint256 swapRatePrecision_ = 0;
 
-        // expect the updateNativeSwapRatePrecision to revert
+        // expect the updateSwapRatePrecision to revert
         bytes memory encodedSignature = abi.encodeWithSignature(
-            "updateNativeSwapRatePrecision(uint16,uint256)",
+            "updateSwapRatePrecision(uint16,uint256)",
             avaxRelayer.chainId(),
-            nativeSwapRatePrecision_
+            swapRatePrecision_
         );
         expectRevert(
             address(avaxRelayer),
@@ -810,20 +805,20 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
     }
 
     /**
-     * @notice This test confirms that ONLY the owner can update the native
-     * swap rate precision.
+     * @notice This test confirms that ONLY the owner can update the swap rate
+     * precision.
      */
-    function testUpdateNativeSwapRatePrecisionOwnerOnly() public {
-        uint256 nativeSwapRatePrecision_ = 1e10;
+    function testUpdateSwapRatePrecisionOwnerOnly() public {
+        uint256 swapRatePrecision_ = 1e10;
 
         // prank the caller address to something different than the owner's
         vm.startPrank(wallet);
 
-        // expect the updateNativeSwapRatePrecision call to revert
+        // expect the updateSwapRatePrecision call to revert
         bytes memory encodedSignature = abi.encodeWithSignature(
-            "updateNativeSwapRatePrecision(uint16,uint256)",
+            "updateSwapRatePrecision(uint16,uint256)",
             avaxRelayer.chainId(),
-            nativeSwapRatePrecision_
+            swapRatePrecision_
         );
         expectRevert(
             address(avaxRelayer),
@@ -835,19 +830,19 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
     }
 
     /**
-     * @notice This test confirms that owner cannot update the native
-     * swap rate precision for the wrong chain.
+     * @notice This test confirms that owner cannot update the swap rate
+     * precision for the wrong chain.
      */
-    function testUpdateNativeSwapRatePrecisionWrongChain(uint16 chainId_) public {
+    function testUpdateSwapRatePrecisionWrongChain(uint16 chainId_) public {
         vm.assume(chainId_ != avaxRelayer.chainId());
 
-        uint256 nativeSwapRatePrecision_ = 1e10;
+        uint256 swapRatePrecision_ = 1e10;
 
-        // expect the updateNativeSwapRate call to revert
+        // expect the updateSwapRatePrecision call to revert
         vm.expectRevert("wrong chain");
-        avaxRelayer.updateNativeSwapRatePrecision(
+        avaxRelayer.updateSwapRatePrecision(
             chainId_,
-            nativeSwapRatePrecision_
+            swapRatePrecision_
         );
     }
 
@@ -936,7 +931,7 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
         address token = address(avaxRelayer.WETH());
         uint256 maxAmount = 1e10;
 
-        // expect the updateNativeSwapRate call to revert
+        // expect the updateMaxNativeSwapRate call to revert
         vm.expectRevert("wrong chain");
         avaxRelayer.updateMaxNativeSwapAmount(
             chainId_,

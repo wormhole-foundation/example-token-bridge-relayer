@@ -24,7 +24,7 @@ contract TokenBridgeRelayerStorage {
         address tokenBridge;
 
         // precision of the nativeSwapRates, this value should NEVER be set to zero
-        uint256 nativeSwapRatePrecision;
+        uint256 swapRatePrecision;
 
         // mapping of initialized implementation (logic) contracts
         mapping(address => bool) initializedImplementations;
@@ -35,11 +35,8 @@ contract TokenBridgeRelayerStorage {
         // allowed list of tokens
         mapping(address => bool) acceptedTokens;
 
-        /**
-         * Mapping of source token address to native asset swap rate
-         * (nativePriceUSD/tokenPriceUSD).
-         */
-        mapping(address => uint256) nativeSwapRates;
+        // token swap rate is USD terms
+        mapping(address => uint256) swapRates;
 
         /**
          * Mapping of source token address to maximum native asset swap amount

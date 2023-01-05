@@ -16,12 +16,16 @@ import {Helpers} from "./Helpers.sol";
 import {TokenBridgeRelayerSetup} from "../src/token-bridge-relayer/TokenBridgeRelayerSetup.sol";
 import {TokenBridgeRelayerProxy} from "../src/token-bridge-relayer/TokenBridgeRelayerProxy.sol";
 import {TokenBridgeRelayerImplementation} from "../src/token-bridge-relayer/TokenBridgeRelayerImplementation.sol";
+import {WormUSD} from "../src/token/WormUSD.sol";
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /**
  * @title A Test Suite for the EVM Token Bridge Relayer Contracts
+ * @dev Tests that use the wavax token do not need to register wavax
+ * or set the swap rate for wavax. Both actions are completed in the
+ * test setup.
  */
 contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
     // guardian private key for simulated signing of Wormhole messages
@@ -114,6 +118,14 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
         );
         avaxRelayer = ITokenBridgeRelayer(address(proxy));
 
+        // register and set the native token swap rate (WETH)
+        avaxRelayer.registerToken(avaxRelayer.chainId(), address(wavax));
+        avaxRelayer.updateSwapRate(
+            avaxRelayer.chainId(),
+            address(wavax),
+            69e4 * avaxRelayer.swapRatePrecision() // swap rate
+        );
+
         // verify initial state
         assertEq(avaxRelayer.isInitialized(address(implementation)), true);
         assertEq(avaxRelayer.chainId(), wormhole.chainId());
@@ -122,7 +134,12 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             address(avaxRelayer.tokenBridge()),
             vm.envAddress("TESTING_AVAX_BRIDGE_ADDRESS")
         );
-        assertEq(avaxRelayer.nativeSwapRatePrecision(), 1e8);
+        assertEq(avaxRelayer.swapRatePrecision(), 1e8);
+        assertEq(
+            avaxRelayer.swapRate(address(wavax)),
+            69e4 * avaxRelayer.swapRatePrecision()
+        );
+        assertEq(avaxRelayer.isAcceptedToken(address(wavax)), true);
     }
 
     /**
@@ -176,7 +193,6 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             ethereumChainId,
             targetContract
         );
-        avaxRelayer.registerToken(avaxRelayer.chainId(), address(wavax));
         avaxRelayer.updateRelayerFee(ethereumChainId, address(wavax), targetRelayerFee);
 
         // make some assumptions about the fuzz test values
@@ -292,13 +308,16 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
      * @dev this test does not register any tokens on purpose
      */
     function testTransferTokensWithRelayUnregisteredToken() public {
-        address token = address(wavax);
         uint256 amount = 1e18;
-        uint256 toNativeTokenAmount = 1e6;
+        uint256 toNativeTokenAmount = 0;
         bytes32 targetContract = addressToBytes32(address(this));
 
-        // wrap some wavax
-        wrap(token, amount);
+        // deploy erc ERC20 token
+        WormUSD token = new WormUSD(
+            address(this),
+            6, // token decimals
+            amount // token supply
+        );
 
         // register the target contract
         avaxRelayer.registerContract(
@@ -308,7 +327,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
 
         // approve the circle relayer to spend tokesn
         SafeERC20.safeApprove(
-            IERC20(token),
+            IERC20(address(token)),
             address(avaxRelayer),
             amount
         );
@@ -316,7 +335,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
         // the transferTokensWithRelay call should revert
         vm.expectRevert("token not accepted");
         avaxRelayer.transferTokensWithRelay(
-            token,
+            address(token),
             amount,
             toNativeTokenAmount,
             ethereumChainId,
@@ -372,9 +391,6 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             targetContract
         );
 
-        // register the token
-        avaxRelayer.registerToken(avaxRelayer.chainId(), address(wavax));
-
         // approve the circle relayer to spend tokesn
         SafeERC20.safeApprove(
             IERC20(token),
@@ -414,9 +430,6 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             targetContract
         );
 
-        // register the token
-        avaxRelayer.registerToken(avaxRelayer.chainId(), token);
-
         // approve the circle relayer to spend tokesn
         SafeERC20.safeApprove(
             IERC20(token),
@@ -449,9 +462,6 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
 
         // wrap some wavax
         wrap(token, amount);
-
-        // register the token
-        avaxRelayer.registerToken(avaxRelayer.chainId(), token);
 
         // approve the circle relayer to spend tokesn
         SafeERC20.safeApprove(
@@ -498,9 +508,6 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             targetContract
         );
 
-        // register the token
-        avaxRelayer.registerToken(avaxRelayer.chainId(), token);
-
         // approve the circle relayer to spend tokesn
         SafeERC20.safeApprove(
             IERC20(token),
@@ -541,9 +548,6 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             ethereumChainId,
             targetContract
         );
-
-        // register the token
-        avaxRelayer.registerToken(avaxRelayer.chainId(), token);
 
         // approve the circle relayer to spend tokesn
         SafeERC20.safeApprove(
@@ -588,9 +592,6 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             ethereumChainId,
             targetContract
         );
-
-        // register the token
-        avaxRelayer.registerToken(avaxRelayer.chainId(), token);
 
         // update the relayer fee
         avaxRelayer.updateRelayerFee(
@@ -637,7 +638,6 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             ethereumChainId,
             targetContract
         );
-        avaxRelayer.registerToken(avaxRelayer.chainId(), address(wavax));
         avaxRelayer.updateRelayerFee(ethereumChainId, address(wavax), targetRelayerFee);
 
         // make some assumptions about the fuzz test values
@@ -813,10 +813,10 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             );
 
             // set the native swap rate
-            avaxRelayer.updateNativeSwapRate(
+            avaxRelayer.updateSwapRate(
                 avaxRelayer.chainId(),
                 wrappedAsset,
-                6.9e3 * avaxRelayer.nativeSwapRatePrecision() // swap rate
+                6.9e3 * avaxRelayer.swapRatePrecision() // swap rate
             );
 
             // set the max to native amount
@@ -1022,10 +1022,10 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             );
 
             // set the native swap rate
-            avaxRelayer.updateNativeSwapRate(
+            avaxRelayer.updateSwapRate(
                 avaxRelayer.chainId(),
                 wrappedAsset,
-                6.9e3 * avaxRelayer.nativeSwapRatePrecision() // swap rate
+                6.9e3 * avaxRelayer.swapRatePrecision() // swap rate
             );
 
             // set the max to native amount
@@ -1186,10 +1186,10 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             );
 
             // set the native swap rate
-            avaxRelayer.updateNativeSwapRate(
+            avaxRelayer.updateSwapRate(
                 avaxRelayer.chainId(),
                 wrappedAsset,
-                6.9e3 * avaxRelayer.nativeSwapRatePrecision() // swap rate
+                6.9e3 * avaxRelayer.swapRatePrecision() // swap rate
             );
         }
 
@@ -1348,10 +1348,10 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             );
 
             // set the native swap rate
-            avaxRelayer.updateNativeSwapRate(
+            avaxRelayer.updateSwapRate(
                 avaxRelayer.chainId(),
                 wrappedAsset,
-                6.9e3 * avaxRelayer.nativeSwapRatePrecision() // swap rate
+                6.9e3 * avaxRelayer.swapRatePrecision() // swap rate
             );
 
             // NOTE: Don't set the max native swap amount so that it defaults to zero
@@ -1685,9 +1685,6 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
                 normAmounts.transferAmount > normAmounts.relayerFee
             );
 
-            // register weth from Ethereum
-            avaxRelayer.registerToken(avaxRelayer.chainId(), address(wavax));
-
             // update the relayer fee
             avaxRelayer.updateRelayerFee(
                 avaxRelayer.chainId(),
@@ -1699,13 +1696,6 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             avaxRelayer.registerContract(
                 ethereumChainId,
                 addressToBytes32(address(this))
-            );
-
-            // set the native swap rate
-            avaxRelayer.updateNativeSwapRate(
-                avaxRelayer.chainId(),
-                address(wavax),
-                6.9e3 * avaxRelayer.nativeSwapRatePrecision() // swap rate
             );
 
             // set the max to native amount
@@ -1822,9 +1812,6 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
                 normAmounts.transferAmount > normAmounts.relayerFee
             );
 
-            // register weth from Ethereum
-            avaxRelayer.registerToken(avaxRelayer.chainId(), address(wavax));
-
             // update the relayer fee
             avaxRelayer.updateRelayerFee(
                 avaxRelayer.chainId(),
@@ -1836,13 +1823,6 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             avaxRelayer.registerContract(
                 ethereumChainId,
                 addressToBytes32(address(this))
-            );
-
-            // set the native swap rate
-            avaxRelayer.updateNativeSwapRate(
-                avaxRelayer.chainId(),
-                address(wavax),
-                6.9e3 * avaxRelayer.nativeSwapRatePrecision() // swap rate
             );
 
             // set the max to native amount
@@ -1956,9 +1936,6 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
                 normAmounts.relayerFee < normAmounts.transferAmount
             );
 
-            // register weth from Ethereum
-            avaxRelayer.registerToken(avaxRelayer.chainId(), address(wavax));
-
             // NOTE: update the relayer fee with the state relayer fee
             avaxRelayer.updateRelayerFee(
                 avaxRelayer.chainId(),
@@ -1970,13 +1947,6 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             avaxRelayer.registerContract(
                 ethereumChainId,
                 addressToBytes32(address(this))
-            );
-
-            // set the native swap rate
-            avaxRelayer.updateNativeSwapRate(
-                avaxRelayer.chainId(),
-                address(wavax),
-                6.9e3 * avaxRelayer.nativeSwapRatePrecision() // swap rate
             );
 
             // set the max to native amount
@@ -2107,9 +2077,6 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
                 amount > encodedRelayerFee &&
                 amount < bridge.outstandingBridged(address(wavax))
             );
-
-            // target contract setup
-            avaxRelayer.registerToken(avaxRelayer.chainId(), address(wavax));
 
             // update the relayer fee
             avaxRelayer.updateRelayerFee(
@@ -2256,10 +2223,10 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             );
 
             // set the native swap rate
-            avaxRelayer.updateNativeSwapRate(
+            avaxRelayer.updateSwapRate(
                 avaxRelayer.chainId(),
                 wrappedAsset,
-                1 * avaxRelayer.nativeSwapRatePrecision() // swap rate
+                1 * avaxRelayer.swapRatePrecision() // swap rate
             );
 
             // set the max to native amount
@@ -2437,10 +2404,10 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             );
 
             // set the native swap rate
-            avaxRelayer.updateNativeSwapRate(
+            avaxRelayer.updateSwapRate(
                 avaxRelayer.chainId(),
                 wrappedAsset,
-                1 * avaxRelayer.nativeSwapRatePrecision() // swap rate
+                1 * avaxRelayer.swapRatePrecision() // swap rate
             );
 
             // set the max to native amount
@@ -2718,10 +2685,10 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
         );
 
         // set the native swap rate (so the native gas query works)
-        avaxRelayer.updateNativeSwapRate(
+        avaxRelayer.updateSwapRate(
             avaxRelayer.chainId(),
             wrappedAsset,
-            1 * avaxRelayer.nativeSwapRatePrecision() // swap rate
+            1 * avaxRelayer.swapRatePrecision() // swap rate
         );
 
         // get a quote from the contract for the native gas swap
@@ -2806,10 +2773,10 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
         );
 
         // set the native swap rate (so the native gas query works)
-        avaxRelayer.updateNativeSwapRate(
+        avaxRelayer.updateSwapRate(
             avaxRelayer.chainId(),
             wrappedAsset,
-            1 * avaxRelayer.nativeSwapRatePrecision() // swap rate
+            1 * avaxRelayer.swapRatePrecision() // swap rate
         );
 
         // set the max to native amount

@@ -42,8 +42,8 @@ contract TokenBridgeRelayerGetters is TokenBridgeRelayerSetters {
         return _state.registeredContracts[emitterChainId];
     }
 
-    function nativeSwapRatePrecision() public view returns (uint256) {
-        return _state.nativeSwapRatePrecision;
+    function swapRatePrecision() public view returns (uint256) {
+        return _state.swapRatePrecision;
     }
 
     function isAcceptedToken(address token) public view returns (bool) {
@@ -54,12 +54,24 @@ contract TokenBridgeRelayerGetters is TokenBridgeRelayerSetters {
         return _state.relayerFees[chainId_][token];
     }
 
-    function nativeSwapRate(address token) public view returns (uint256) {
-        return _state.nativeSwapRates[token];
+    function swapRate(address token) public view returns (uint256) {
+        return _state.swapRates[token];
     }
 
     function maxNativeSwapAmount(address token) public view returns (uint256) {
         return _state.maxNativeSwapAmount[token];
+    }
+
+    function nativeSwapRate(address token) public view returns (uint256) {
+        uint256 nativeSwapRate_ = swapRate(_state.wethAddress);
+        uint256 tokenSwapRate = swapRate(token);
+
+        require(
+            nativeSwapRate_ > 0 && tokenSwapRate > 0,
+            "swap rate not set"
+        );
+
+        return swapRatePrecision() * nativeSwapRate_ / tokenSwapRate;
     }
 
     function getDecimals(address token) internal view returns (uint8) {

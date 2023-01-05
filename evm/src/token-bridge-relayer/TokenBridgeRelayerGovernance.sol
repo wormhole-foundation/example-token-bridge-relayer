@@ -147,17 +147,16 @@ contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgra
     }
 
     /**
-     * @notice Updates the conversion rate between the native asset of this chain
-     * and the specified token.
+     * @notice Updates the swap rate for specified token in USD
      * @param chainId_ Wormhole chain ID
      * @param token Address of the token to update the conversion rate for
-     * @param swapRate The native -> token conversion rate.
+     * @param swapRate The token -> USD conversion rate.
      * @dev The swapRate is the conversion rate using asset prices denominated in
      * USD multiplied by the nativeSwapRatePrecision. For example, if the conversion
      * rate is $15 and the nativeSwapRatePrecision is 1000000, the swapRate should be set
      * to 15000000.
      */
-    function updateNativeSwapRate(
+    function updateSwapRate(
         uint16 chainId_,
         address token,
         uint256 swapRate
@@ -165,7 +164,7 @@ contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgra
         require(isAcceptedToken(token), "token not accepted");
         require(swapRate > 0, "swap rate must be nonzero");
 
-        setNativeSwapRate(token, swapRate);
+        setSwapRate(token, swapRate);
 
         emit SwapRateUpdated(token, swapRate);
     }
@@ -173,15 +172,15 @@ contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgra
     /**
      * @notice Updates the precision of the native swap rate
      * @param chainId_ Wormhole chain ID
-     * @param nativeSwapRatePrecision_ Precision of native swap rate
+     * @param swapRatePrecision_ Precision of native swap rate
      */
-    function updateNativeSwapRatePrecision(
+    function updateSwapRatePrecision(
         uint16 chainId_,
-        uint256 nativeSwapRatePrecision_
+        uint256 swapRatePrecision_
     ) public onlyOwner checkChain(chainId_) {
-        require(nativeSwapRatePrecision_ > 0, "precision must be > 0");
+        require(swapRatePrecision_ > 0, "precision must be > 0");
 
-        setNativeSwapRatePrecision(nativeSwapRatePrecision_);
+        setSwapRatePrecision(swapRatePrecision_);
     }
 
     /**

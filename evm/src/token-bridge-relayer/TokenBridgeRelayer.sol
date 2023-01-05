@@ -514,12 +514,9 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
     function calculateMaxSwapAmountIn(
         address token
     ) public view returns (uint256 maxAllowed) {
-        // cache swap rate
-        uint256 swapRate = nativeSwapRate(token);
-        require(swapRate > 0, "swap rate not set");
         maxAllowed =
-            (maxNativeSwapAmount(token) * swapRate) /
-            (10 ** (18 - getDecimals(token)) * nativeSwapRatePrecision());
+            (maxNativeSwapAmount(token) * nativeSwapRate(token)) /
+            (10 ** (18 - getDecimals(token)) * swapRatePrecision());
     }
 
     /**
@@ -535,12 +532,9 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         address token,
         uint256 toNativeAmount
     ) public view returns (uint256 nativeAmount) {
-        // cache swap rate
-        uint256 swapRate = nativeSwapRate(token);
-        require(swapRate > 0, "swap rate not set");
         nativeAmount =
-            nativeSwapRatePrecision() * toNativeAmount /
-            swapRate * 10 ** (18 - getDecimals(token));
+            swapRatePrecision() * toNativeAmount /
+            nativeSwapRate(token) * 10 ** (18 - getDecimals(token));
     }
 
     function custodyTokens(
