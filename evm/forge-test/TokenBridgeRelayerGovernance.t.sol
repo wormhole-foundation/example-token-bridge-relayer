@@ -21,7 +21,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../src/libraries/BytesLib.sol";
 
 /**
- * @title A Test Suite for the EVM Token Bridge avaxRelayer Messages module
+ * @title A Test Suite for the EVM Token Bridge Relayer Messages module
  */
 contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
     using BytesLib for bytes;
@@ -81,7 +81,7 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
     }
 
     /**
-     * @notice sets up the Token Bridge avaxRelayer contract before each test
+     * @notice Sets up the Token Bridge avaxRelayer contract before each test
      */
     function setUp() public {
         setupTokenBridgeRelayer();
@@ -113,7 +113,7 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
             implementationSlot
         );
 
-        // confrim state changes
+        // confirm state changes
         assertEq(implementationAfter != implementationBefore, true);
         assertEq(
             implementationAfter == addressToBytes32(address(implementation)),
@@ -296,7 +296,6 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
      * @notice This test confirms that only the pending owner can confirm an
      * ownership transfer request.
      */
-
      function testConfirmOwnershipTransferRequestNotPendingOwner(
         address pendingOwner
     ) public {
@@ -671,7 +670,7 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
     }
 
     /**
-     * @notice This test confirms that owner cannot update the relayer fee
+     * @notice This test confirms that the owner cannot update the relayer fee
      * precision for the wrong chain.
      */
     function testUpdateRelayerFeePrecisionWrongChain(uint16 chainId_) public {
@@ -869,7 +868,7 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
     }
 
     /**
-     * @notice This test confirms that owner cannot update the swap rate
+     * @notice This test confirms that the owner cannot update the swap rate
      * precision for the wrong chain.
      */
     function testUpdateSwapRatePrecisionWrongChain(uint16 chainId_) public {

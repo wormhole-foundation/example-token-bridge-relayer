@@ -38,7 +38,7 @@ contract TokenBridgeRelayerStorage {
         // allowed list of tokens
         mapping(address => bool) acceptedTokens;
 
-        // token swap rate is USD terms
+        // token swap rate in USD terms
         mapping(address => uint256) swapRates;
 
         /**
@@ -49,6 +49,9 @@ contract TokenBridgeRelayerStorage {
 
         // mapping of chainId to relayerFee in USD
         mapping(uint16 => uint256) relayerFees;
+
+        /// storage gap for additional state variables in future versions
+        uint256[50] ______gap;
     }
 }
 

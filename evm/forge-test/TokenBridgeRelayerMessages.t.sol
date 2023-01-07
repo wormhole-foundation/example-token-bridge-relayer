@@ -70,6 +70,7 @@ contract TestTokenBridgeRelayerMessages is Helpers, ForgeHelpers, Test {
             vm.envAddress("TESTING_AVAX_BRIDGE_ADDRESS")
         );
         assertEq(avaxRelayer.swapRatePrecision(), 1e8);
+        assertEq(avaxRelayer.relayerFeePrecision(), 1e8);
     }
 
     /**

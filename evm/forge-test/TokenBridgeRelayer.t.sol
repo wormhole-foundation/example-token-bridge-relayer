@@ -120,7 +120,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
         );
         avaxRelayer = ITokenBridgeRelayer(address(proxy));
 
-        // register and set the native token swap rate (WETH)
+        // register and set the native token swap rate (wavax)
         avaxRelayer.registerToken(avaxRelayer.chainId(), address(wavax));
         avaxRelayer.updateSwapRate(
             avaxRelayer.chainId(),
@@ -290,7 +290,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
     }
 
     /**
-     * @notice This tests confirms that the max swap amount in calculation does not
+     * @notice This tests confirms that the max swap amount calculation does not
      * revert when tested against a large range of input values.
      */
     function testCalculateMaxSwapAmountInArithmeticErrorCheck(
@@ -326,7 +326,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
     }
 
     /**
-     * @notice This tests confirms that the max swap amount in calculation does not
+     * @notice This tests confirms that the max swap amount calculation does not
      * revert when the maxNativeSwapAmount is zero.
      */
     function testCalculateMaxSwapAmountInZeroAmount(uint256 tokenSwapRate) public {
@@ -413,7 +413,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
         // set the relayer fee to zero
         avaxRelayer.updateRelayerFee(chainId_, relayerFeeUsd);
 
-        // call should revert
+        // call should not revert
         avaxRelayer.calculateRelayerFee(
             chainId_,
             token,
@@ -450,7 +450,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
         // set the relayer fee to zero
         avaxRelayer.updateRelayerFee(chainId_, 0);
 
-        // call should revert
+        // call should not revert
         uint256 tokenFee = avaxRelayer.calculateRelayerFee(
             chainId_,
             token,
@@ -639,7 +639,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             targetContract
         );
 
-        // approve the circle relayer to spend tokesn
+        // approve the relayer to spend tokens
         SafeERC20.safeApprove(
             IERC20(address(token)),
             address(avaxRelayer),
@@ -706,7 +706,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             targetContract
         );
 
-        // approve the circle relayer to spend tokesn
+        // approve the relayer to spend tokens
         SafeERC20.safeApprove(
             IERC20(token),
             address(avaxRelayer),
@@ -745,7 +745,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             targetContract
         );
 
-        // approve the circle relayer to spend tokesn
+        // approve the relayer to spend tokens
         SafeERC20.safeApprove(
             IERC20(token),
             address(avaxRelayer),
@@ -778,7 +778,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
         // wrap some wavax
         wrap(token, amount);
 
-        // approve the circle relayer to spend tokesn
+        // approve the relayer to spend tokens
         SafeERC20.safeApprove(
             IERC20(token),
             address(avaxRelayer),
@@ -823,7 +823,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             targetContract
         );
 
-        // approve the circle relayer to spend tokesn
+        // approve the relayer to spend tokens
         SafeERC20.safeApprove(
             IERC20(token),
             address(avaxRelayer),
@@ -864,7 +864,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             targetContract
         );
 
-        // approve the circle relayer to spend tokesn
+        // approve the relayer to spend tokens
         SafeERC20.safeApprove(
             IERC20(token),
             address(avaxRelayer),
@@ -872,7 +872,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
         );
 
         // the transferTokensWithRelay call should revert
-        vm.expectRevert("normalized toNativeTokenAmount must be > 0");
+        vm.expectRevert("invalid toNativeTokenAmount");
         avaxRelayer.transferTokensWithRelay(
             token,
             amount,
@@ -917,17 +917,17 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             18
         );
 
-        // // make some assumptions about the test
+        // make some assumptions about the test
         vm.assume(
             normalizeAmount(amount, 18) > 0
             && amount < relayerFeeToken &&
             amount < type(uint96).max
         );
 
-        // // wrap some wavax
+        // wrap some wavax
         wrap(token, amount);
 
-        // approve the circle relayer to spend tokesn
+        // approve the relayer to spend tokens
         SafeERC20.safeApprove(
             IERC20(token),
             address(avaxRelayer),
@@ -1101,7 +1101,6 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             addressToBytes32(weth)
         );
 
-
         // store normalized transfer amounts to reduce local variable count
         NormalizedAmounts memory normAmounts;
         normAmounts.tokenDecimals = getDecimals(wrappedAsset);
@@ -1173,7 +1172,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             );
         }
 
-        // encode the message by calling the encodePayload method
+        // encode the message by calling the encodeTransferWithRelay method
         bytes memory encodedTransferWithRelay = avaxRelayer.encodeTransferWithRelay(
             ITokenBridgeRelayer.TransferWithRelay({
                 payloadId: 1,
@@ -1307,7 +1306,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
     }
 
     /**
-     * @notice This test confirms that relayer contract correctly redeems wrapped
+     * @notice This test confirms that the relayer contract correctly redeems wrapped
      * native tokens to the encoded recipient. This test explicitly sets the
      * relayerFee and toNativeTokenAmount to zero.
      * @dev The minimum amount value has to be greater than 1e10. The token bridge
@@ -1360,7 +1359,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             );
         }
 
-        // encode the message by calling the encodePayload method
+        // encode the message by calling the encodeTransferWithRelay method
         bytes memory encodedTransferWithRelay = avaxRelayer.encodeTransferWithRelay(
             ITokenBridgeRelayer.TransferWithRelay({
                 payloadId: 1,
@@ -1541,7 +1540,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             vm.assume(additionalGas > 0 && additionalGas < type(uint64).max);
         }
 
-        // encode the message by calling the encodePayload method
+        // encode the message by calling the encodeTransferWithRelay method
         bytes memory encodedTransferWithRelay = avaxRelayer.encodeTransferWithRelay(
             ITokenBridgeRelayer.TransferWithRelay({
                 payloadId: 1,
@@ -1898,7 +1897,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             );
         }
 
-        // encode the message by calling the encodePayload method
+        // encode the message by calling the encodeTransferWithRelay method
         bytes memory encodedTransferWithRelay = avaxRelayer.encodeTransferWithRelay(
             ITokenBridgeRelayer.TransferWithRelay({
                 payloadId: 1,
@@ -1973,12 +1972,13 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
 
     /**
      * @notice This test confirms that the relayer contract correctly redeems wrapped
-     * native tokens, unwraps them, and sends them to the encoded recipient.
+     * native tokens, unwraps them, and sends them to the encoded recipient. This test
+     * explicitly does not pay the relayer a fee.
      */
     function testCompleteTransferWithRelayAndUnwrapNoFees(
         uint256 amount
     ) public {
-        // encoded relayer fee (must be > 1e10 or it will be truncated to zero)
+        // test variables
         uint256 encodedRelayerFee = 0;
         uint256 toNativeTokenAmount = 0;
         bool unwrapEth = true;
@@ -2018,7 +2018,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             );
         }
 
-        // encode the message by calling the encodePayload method
+        // encode the message by calling the encodeTransferWithRelay method
         bytes memory encodedTransferWithRelay = avaxRelayer.encodeTransferWithRelay(
             ITokenBridgeRelayer.TransferWithRelay({
                 payloadId: 1,
@@ -2083,7 +2083,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
     }
 
     /**
-     * @notice This test confirms that relayer contract correctly redeems and
+     * @notice This test confirms that the relayer contract correctly redeems and
      * unwraps WETH on the target contract. The contract will not pay a relayer
      * fee or allow any token swaps.
      */
@@ -2123,7 +2123,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             );
         }
 
-        // encode the message by calling the encodePayload method
+        // encode the message by calling the encodeTransferWithRelay method
         bytes memory encodedTransferWithRelay = avaxRelayer.encodeTransferWithRelay(
             ITokenBridgeRelayer.TransferWithRelay({
                 payloadId: 1,
@@ -2167,7 +2167,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
         Balances memory ethBalances;
         ethBalances.recipientBefore = avaxRecipient.balance;
 
-        // NOTE: for this test to work, we need to deposit ETH
+        // NOTE: For this test to work, we need to deposit ETH
         // into the WETH contract on behalf of the relayer contract.
         hoax(address(avaxRelayer), amount);
         wavax.deposit{value: amount}();
@@ -2205,7 +2205,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
     }
 
     /**
-     * @notice This test confirms that relayer contract correctly redeems wrapped
+     * @notice This test confirms that the relayer contract correctly redeems wrapped
      * stablecoins to the encoded recipient and handles relayer payments correctly.
      * @dev The contract behavior changes slightly when transferring stablecoins
      * since the contracts will not normalize the quantities (decimals < 8).
@@ -2278,7 +2278,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             );
         }
 
-        // encode the message by calling the encodePayload method
+        // encode the message by calling the encodeTransferWithRelay method
         bytes memory encodedTransferWithRelay = avaxRelayer.encodeTransferWithRelay(
             ITokenBridgeRelayer.TransferWithRelay({
                 payloadId: 1,
@@ -2397,7 +2397,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
     }
 
     /**
-     * @notice This test confirms that relayer contract correctly handles completing
+     * @notice This test confirms that the relayer contract correctly handles completing
      * transfers where the user specified to unwrap the token, but the token is not
      * the wrapped native token on the target chain.
      * @dev The contract should transfer the ERC20 tokens to the recipient and relayer.
@@ -2471,7 +2471,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             );
         }
 
-        // encode the message by calling the encodePayload method
+        // encode the message by calling the encodeTransferWithRelay method
         bytes memory encodedTransferWithRelay = avaxRelayer.encodeTransferWithRelay(
             ITokenBridgeRelayer.TransferWithRelay({
                 payloadId: 1,
@@ -2557,7 +2557,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
     }
 
     /**
-     * @notice This test confirms that relayer contract reverts when receiving
+     * @notice This test confirms that the relayer contract reverts when receiving
      * a transfer for an unregistered token.
      */
     function testCompleteTransferWithRelayUnregisteredToken() public {
@@ -2573,7 +2573,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
         );
         uint8 tokenDecimals = getDecimals(wrappedAsset);
 
-        // encode the message by calling the encodePayload method
+        // encode the message by calling the encodeTransferWithRelay method
         bytes memory encodedTransferWithRelay = avaxRelayer.encodeTransferWithRelay(
             ITokenBridgeRelayer.TransferWithRelay({
                 payloadId: 1,
@@ -2615,7 +2615,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
     }
 
     /**
-     * @notice This test confirms that relayer contract reverts when receiving
+     * @notice This test confirms that the relayer contract reverts when receiving
      * a transfer from an unregistered contract.
      */
     function testCompleteTransferWithRelayUnregisteredContract() public {
@@ -2631,7 +2631,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
         );
         uint8 tokenDecimals = getDecimals(wrappedAsset);
 
-        // encode the message by calling the encodePayload method
+        // encode the message by calling the encodeTransferWithRelay method
         bytes memory encodedTransferWithRelay = avaxRelayer.encodeTransferWithRelay(
             ITokenBridgeRelayer.TransferWithRelay({
                 payloadId: 1,
@@ -2676,7 +2676,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
     }
 
     /**
-     * @notice This test confirms that relayer contract reverts when the recipient
+     * @notice This test confirms that the relayer contract reverts when the recipient
      * tries to redeem their transfer and swap native assets.
      */
     function testCompleteTransferWithRelayInvalidSelfRedeem() public {
@@ -2692,7 +2692,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
         );
         uint8 tokenDecimals = getDecimals(wrappedAsset);
 
-        // encode the message by calling the encodePayload method
+        // encode the message by calling the encodeTransferWithRelay method
         bytes memory encodedTransferWithRelay = avaxRelayer.encodeTransferWithRelay(
             ITokenBridgeRelayer.TransferWithRelay({
                 payloadId: 1,
@@ -2762,7 +2762,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
     }
 
     /**
-     * @notice This test confirms that relayer contract reverts when the
+     * @notice This test confirms that the relayer contract reverts when the
      * off-chain relayer fails to provide enough native assets to facilitate
      * the swap requested by the recipient.
      * @dev this test explicitly sets value to 0 when completing the transfer
@@ -2780,7 +2780,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
         );
         uint8 tokenDecimals = getDecimals(wrappedAsset);
 
-        // encode the message by calling the encodePayload method
+        // encode the message by calling the encodeTransferWithRelay method
         bytes memory encodedTransferWithRelay = avaxRelayer.encodeTransferWithRelay(
             ITokenBridgeRelayer.TransferWithRelay({
                 payloadId: 1,

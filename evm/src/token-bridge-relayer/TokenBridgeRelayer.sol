@@ -21,10 +21,10 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
     using BytesLib for bytes;
 
     /**
-     * @notice Emitted when the transfer is completed by the Wormhole token bridge
-     * @param emitterChainId Wormhole chain ID of emitter contract on source chain
-     * @param emitterAddress Address (bytes32 zero-left-padded) of emitter on source chain
-     * @param sequence Sequence of Wormhole message
+     * @notice Emitted when a transfer is completed by the Wormhole token bridge
+     * @param emitterChainId Wormhole chain ID of emitter contract on the source chain
+     * @param emitterAddress Address (bytes32 zero-left-padded) of emitter on the source chain
+     * @param sequence Sequence of the Wormhole message
      */
     event TransferRedeemed(
         uint16 indexed emitterChainId,
@@ -32,6 +32,24 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         uint64 indexed sequence
     );
 
+    /**
+     * @notice Calls Wormhole's Token Bridge contract to emit a contract-controlled
+     * transfer. The transfer message includes an arbitrary payload with instructions
+     * for how to handle relayer payments on the target contract and the quantity of
+     * tokens to convert into native assets for the user.
+     * @param token ERC20 token address to transfer cross chain.
+     * @param amount Quantity of tokens to be transferred.
+     * @param toNativeTokenAmount Amount of tokens to swap into native assets on
+     * the target chain.
+     * @param targetChain Wormhole chain ID of the target blockchain.
+     * @param targetRecipient User's wallet address on the target blockchain in bytes32 format
+     * (zero-left-padded).
+     * @param unwrapWeth Specifies if native-wrapped assets should be unwrapped upon redemption
+     * on the target chain. This should only be set to true for assets being sent back
+     * to their native blockchain.
+     * @param batchId ID for Wormhole message batching
+     * @return messageSequence Wormhole sequence for emitted TransferTokensWithRelay message.
+     */
     function transferTokensWithRelay(
         address token,
         uint256 amount,
@@ -41,6 +59,8 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         bool unwrapWeth,
         uint32 batchId
     ) public payable nonReentrant returns (uint64 messageSequence) {
+        // Cache wormhole fee and confirm that the user has passed enough
+        // value to cover the wormhole protocol fee.
         uint256 wormholeFee = wormhole().messageFee();
         require(msg.value == wormholeFee, "insufficient value");
 
@@ -63,12 +83,27 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         );
     }
 
+    /**
+     * @notice Wraps Ether and calls Wormhole's Token Bridge contract to emit
+     * a contract-controlled transfer. The transfer message includes an arbitrary
+     * payload with instructions for how to handle relayer payments on the target
+     * contract and the quantity of tokens to convert into native assets for the user.
+     * @param toNativeTokenAmount Amount of tokens to swap into native assets on
+     * the target chain.
+     * @param targetChain Wormhole chain ID of the target blockchain.
+     * @param targetRecipient User's wallet address on the target blockchain in bytes32 format
+     * (zero-left-padded).
+     * @param batchId ID for Wormhole message batching
+     * @return messageSequence Wormhole sequence for emitted TransferTokensWithRelay message.
+     */
     function wrapAndTransferEthWithRelay(
         uint256 toNativeTokenAmount,
         uint16 targetChain,
         bytes32 targetRecipient,
         uint32 batchId
     ) public payable returns (uint64 messageSequence) {
+        // Cache wormhole fee and confirm that the user has passed enough
+        // value to cover the wormhole protocol fee.
         uint256 wormholeFee = wormhole().messageFee();
         require(msg.value > wormholeFee, "insufficient value");
 
@@ -135,7 +170,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         );
         require(
             params.toNativeTokenAmount == 0 || normalizedToNativeTokenAmount > 0,
-            "normalized toNativeTokenAmount must be > 0"
+            "invalid toNativeTokenAmount"
         );
 
         // revert if unwrap is true and toNativeTokenAmount is > 0
@@ -147,11 +182,12 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         }
 
         // Cache the target contract address and verify that there
-        // is a registered emitter for the specified targetChain.
+        // is a registered contract for the specified targetChain.
         bytes32 targetContract = getRegisteredContract(params.targetChain);
         require(targetContract != bytes32(0), "target not registered");
 
-        // confirm that the user has sent enough tokens
+        // Confirm that the user has sent enough tokens to cover the native swap
+        // on the target chain and to pay the relayer fee.
         uint256 targetRelayerFee = calculateRelayerFee(
             params.targetChain,
             params.token,
@@ -195,7 +231,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         );
 
         /**
-         * Call `transferTokensWithPayload`method on the token bridge and pay
+         * Call `transferTokensWithPayload` method on the token bridge and pay
          * the Wormhole network fee. The token bridge will emit a Wormhole
          * message with an encoded `TransferWithPayload` struct (see the
          * ITokenBridge.sol interface file in this repo).
@@ -210,12 +246,27 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
             );
     }
 
+    /**
+     * @notice Calls Wormhole's Token Bridge contract to complete token transfers. Takes
+     * custody of the wrapped (or released) tokens and sends the tokens to the target recipient.
+     * It pays the relayer in the minted token denomination. If requested by the user,
+     * it will perform a swap with the off-chain relayer to provide the user with native assets.
+     * If the `unwrapWeth` flag is set to true, the contract will unwrap native assets and send
+     * the transferred amount to the recipient and pay the relayer in native assets.
+     * @dev reverts if:
+     * - the transferred token is not accepted by this contract
+     * - the transffered token is not attested on this blockchain's Token Bridge contract
+     * - the emitter of the transfer message is not registered with this contract
+     * - the relayer fails to provide enough native assets to faciliate a native swap
+     * - the recipient attempts to swap native assets when performing a self redemption
+     * @param encodedTransferMessage Attested `TransferWithPayload` wormhole message.
+     */
     function completeTransferWithRelay(bytes calldata encodedTransferMessage) public payable {
         // complete the transfer by calling the token bridge
         (bytes memory payload, uint256 amount, address token) =
              _completeTransfer(encodedTransferMessage);
 
-        // parse the payload from the `TransferWithRelay` struct
+        // parse the payload into the `TransferWithRelay` struct
         TransferWithRelay memory transferWithRelay = decodeTransferWithRelay(
             payload
         );
@@ -292,7 +343,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
              * a toNativeTokenAmount that is too little to convert to native
              * asset. We need to override the toNativeTokenAmount to be zero
              * if that is the case, that way the user receives the full amount
-             * of transfered tokens.
+             * of transferred tokens.
              */
             if (nativeAmountForRecipient > 0) {
                 // check to see if the relayer sent enough value
@@ -397,8 +448,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
             "contract not registered"
         );
 
-
-        // Emit event with information about the TransferWithPayload message
+        // emit event with information about the TransferWithPayload message
         emit TransferRedeemed(
             parsedMessage.emitterChainId,
             parsedMessage.emitterAddress,
@@ -516,8 +566,16 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
             nativeSwapRate(token) * 10 ** (18 - getDecimals(token));
     }
 
+    /**
+     * @notice Converts the USD denominated relayer fee into the specified token
+     * denomination.
+     * @param targetChainId Wormhole chain ID of the target blockchain.
+     * @param token Address of token being transferred.
+     * @param decimals Token decimals of token being transferred.
+     * @return feeInTokenDenomination Relayer fee denominated in tokens.
+     */
     function calculateRelayerFee(
-        uint16 chainId,
+        uint16 targetChainId,
         address token,
         uint8 decimals
     ) public view returns (uint256 feeInTokenDenomination) {
@@ -525,7 +583,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         uint256 tokenSwapRate = swapRate(token);
         require(tokenSwapRate != 0, "swap rate not set");
         feeInTokenDenomination =
-            10 ** decimals * relayerFee(chainId) * swapRatePrecision() /
+            10 ** decimals * relayerFee(targetChainId) * swapRatePrecision() /
             tokenSwapRate / relayerFeePrecision();
     }
 

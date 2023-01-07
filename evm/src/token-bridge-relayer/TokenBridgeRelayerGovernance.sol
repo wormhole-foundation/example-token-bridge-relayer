@@ -16,9 +16,9 @@ contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgra
     event SwapRateUpdated(address indexed token, uint256 indexed swapRate);
 
     /**
-     * @notice Upgrades contract the implementation (logic contract)
-     * @param chainId_ Wormhole chain ID
-     * @param newImplementation Address of the new implementation (logic) contract
+     * @notice Upgrades the contract implementation (logic contract).
+     * @param chainId_ Wormhole chain ID.
+     * @param newImplementation Address of the new implementation (logic) contract.
      */
     function upgrade(
         uint16 chainId_,
@@ -43,8 +43,8 @@ contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgra
     /**
      * @notice Starts the ownership transfer process of the contracts. It saves
      * an address in the pending owner state variable.
-     * @param chainId_ Wormhole chain ID
-     * @param newOwner Address of the pending owner
+     * @param chainId_ Wormhole chain ID.
+     * @param newOwner Address of the pending owner.
      */
     function submitOwnershipTransferRequest(
         uint16 chainId_,
@@ -56,7 +56,7 @@ contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgra
     }
 
     /**
-     * @notice Finalizes the ownership transfer to the pending owner
+     * @notice Finalizes the ownership transfer to the pending owner.
      * @dev It checks that the caller is the pendingOwner to validate the wallet
      * address. It updates the owner state variable with the pendingOwner state
      * variable.
@@ -78,8 +78,8 @@ contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgra
     }
 
     /**
-     * @notice Registers foreign Token Bridge Relayer contracts
-     * @param chainId_ Wormhole chain ID of the foreign contract
+     * @notice Registers foreign Token Bridge Relayer contracts.
+     * @param chainId_ Wormhole chain ID of the foreign contract.
      * @param contractAddress Address of the foreign contract in bytes32 format
      * (zero-left-padded address).
      */
@@ -102,9 +102,9 @@ contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgra
     }
 
     /**
-     * @notice Register tokens accepted by this contract
-     * @param chainId_ Wormhole chain ID
-     * @param token Address of the token
+     * @notice Register tokens accepted by this contract.
+     * @param chainId_ Wormhole chain ID.
+     * @param token Address of the token.
      */
     function registerToken(
         uint16 chainId_,
@@ -117,9 +117,9 @@ contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgra
     }
 
     /**
-     * @notice Update the fee for relaying transfers to foreign contracts
-     * @param chainId_ Wormhole chain ID
-     * @param amount Amount of USD to pay the relayer upon redemption
+     * @notice Updates the fee for relaying transfers to foreign contracts.
+     * @param chainId_ Wormhole chain ID.
+     * @param amount Amount of USD to pay the relayer upon redemption.
      * @dev The relayerFee is scaled by the relayerFeePrecision. For example,
      * if the relayerFee is $15 and the relayerFeePrecision is 1000000, the
      * relayerFee should be set to 15000000.
@@ -138,9 +138,9 @@ contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgra
     }
 
     /**
-     * @notice Updates the precision of the relayer fee
-     * @param chainId_ Wormhole chain ID
-     * @param relayerFeePrecision_ Precision of swap rate
+     * @notice Updates the precision of the relayer fee.
+     * @param chainId_ Wormhole chain ID.
+     * @param relayerFeePrecision_ Precision of relayer fee.
      */
     function updateRelayerFeePrecision(
         uint16 chainId_,
@@ -152,9 +152,9 @@ contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgra
     }
 
     /**
-     * @notice Updates the swap rate for specified token in USD
-     * @param chainId_ Wormhole chain ID
-     * @param token Address of the token to update the conversion rate for
+     * @notice Updates the swap rate for specified token in USD.
+     * @param chainId_ Wormhole chain ID.
+     * @param token Address of the token to update the conversion rate for.
      * @param swapRate The token -> USD conversion rate.
      * @dev The swapRate is the conversion rate using asset prices denominated in
      * USD multiplied by the swapRatePrecision. For example, if the conversion
@@ -175,9 +175,9 @@ contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgra
     }
 
     /**
-     * @notice Updates the precision of the swap rate
-     * @param chainId_ Wormhole chain ID
-     * @param swapRatePrecision_ Precision of swap rate
+     * @notice Updates the precision of the swap rate.
+     * @param chainId_ Wormhole chain ID.
+     * @param swapRatePrecision_ Precision of swap rate.
      */
     function updateSwapRatePrecision(
         uint16 chainId_,
@@ -191,9 +191,9 @@ contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgra
     /**
      * @notice Updates the max amount of native assets the contract will pay
      * to the target recipient.
-     * @param chainId_ Wormhole chain ID
-     * @param token Address of the token to update the max native swap amount for
-     * @param maxAmount Max amount of native assets
+     * @param chainId_ Wormhole chain ID.
+     * @param token Address of the token to update the max native swap amount for.
+     * @param maxAmount Max amount of native assets.
      */
     function updateMaxNativeSwapAmount(
         uint16 chainId_,

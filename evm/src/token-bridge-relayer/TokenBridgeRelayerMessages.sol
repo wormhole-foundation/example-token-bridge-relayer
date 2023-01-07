@@ -9,9 +9,9 @@ contract TokenBridgeRelayerMessages is TokenBridgeRelayerStructs {
     using BytesLib for bytes;
 
     /**
-     * @notice Encodes the TransferWithRelay struct into bytes
-     * @param transfer TransferWithRelay struct
-     * @return encoded TransferWithRelay struct encoded into bytes
+     * @notice Encodes the TransferWithRelay struct into bytes.
+     * @param transfer TransferWithRelay struct.
+     * @return encoded TransferWithRelay struct encoded into bytes.
      */
     function encodeTransferWithRelay(
         TransferWithRelay memory transfer
@@ -27,12 +27,12 @@ contract TokenBridgeRelayerMessages is TokenBridgeRelayerStructs {
     }
 
     /**
-     * @notice Decodes an encoded `TransferWithRelay` struct
+     * @notice Decodes an encoded `TransferWithRelay` struct.
      * @dev reverts if:
      * - the first byte (payloadId) does not equal 1
      * - the length of the payload has an unexpected length
-     * @param encoded Encoded `TransferWithRelay` struct
-     * @return transfer `TransferTokenRelay` struct
+     * @param encoded Encoded `TransferWithRelay` struct.
+     * @return transfer `TransferTokenRelay` struct.
      */
     function decodeTransferWithRelay(
         bytes memory encoded
