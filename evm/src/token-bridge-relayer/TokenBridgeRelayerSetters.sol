@@ -40,12 +40,16 @@ contract TokenBridgeRelayerSetters is TokenBridgeRelayerState {
         _state.swapRatePrecision = precision;
     }
 
+    function setRelayerFeePrecision(uint256 precision) internal {
+        _state.relayerFeePrecision = precision;
+    }
+
     function addAcceptedToken(address token) internal {
         _state.acceptedTokens[token] = true;
     }
 
-    function setRelayerFee(uint16 chainId_, address token, uint256 fee) internal {
-        _state.relayerFees[chainId_][token] = fee;
+    function setRelayerFee(uint16 chainId_, uint256 fee) internal {
+        _state.relayerFees[chainId_] = fee;
     }
 
     function setSwapRate(address token, uint256 swapRate) internal {

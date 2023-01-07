@@ -23,6 +23,10 @@ export const AVAX_WORMHOLE_GUARDIAN_SET_INDEX = Number(
 );
 export const AVAX_BRIDGE_ADDRESS = process.env.TESTING_AVAX_BRIDGE_ADDRESS!;
 export const WAVAX_ADDRESS = process.env.TESTING_WRAPPED_AVAX_ADDRESS!;
+export const AVAX_SWAP_RATE_PRECISION =
+  process.env.TESTING_AVAX_RELAYER_FEE_PRECISION!;
+export const AVAX_RELAYER_FEE_PRECISION =
+  process.env.TESTING_AVAX_RELAYER_FEE_PRECISION!;
 
 // Ethereum wormhole variables
 export const ETH_WORMHOLE_ADDRESS = process.env.TESTING_ETH_WORMHOLE_ADDRESS!;
@@ -37,6 +41,10 @@ export const ETH_WORMHOLE_GUARDIAN_SET_INDEX = Number(
 );
 export const ETH_BRIDGE_ADDRESS = process.env.TESTING_ETH_BRIDGE_ADDRESS!;
 export const WETH_ADDRESS = process.env.TESTING_WRAPPED_ETH_ADDRESS!;
+export const ETH_SWAP_RATE_PRECISION =
+  process.env.TESTING_ETH_RELAYER_FEE_PRECISION!;
+export const ETH_RELAYER_FEE_PRECISION =
+  process.env.TESTING_ETH_RELAYER_FEE_PRECISION!;
 
 // signer
 export const GUARDIAN_PRIVATE_KEY = process.env.GUARDIAN_KEY!;

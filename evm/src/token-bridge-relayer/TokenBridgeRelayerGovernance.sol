@@ -118,32 +118,37 @@ contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgra
 
     /**
      * @notice Update the fee for relaying transfers to foreign contracts
-     * @dev This function can update the source contract's record of the relayer
-     * fee.
      * @param chainId_ Wormhole chain ID
-     * @param token Address of the token to update the relayer fee for
-     * @param amount Quantity of tokens to pay the relayer upon redemption
+     * @param amount Amount of USD to pay the relayer upon redemption
+     * @dev The relayerFee is scaled by the relayerFeePrecision. For example,
+     * if the relayerFee is $15 and the relayerFeePrecision is 1000000, the
+     * relayerFee should be set to 15000000.
      */
     function updateRelayerFee(
         uint16 chainId_,
-        address token,
         uint256 amount
     ) public onlyOwner {
+        require(chainId_ != chainId(), "invalid chain");
         require(
-            (chainId_ == chainId()) ||
             getRegisteredContract(chainId_) != bytes32(0),
             "contract doesn't exist"
         );
-        require(isAcceptedToken(token), "token not accepted");
 
-        // make sure the normalized relayer fee is nonzero
-        uint8 decimals = getDecimals(token);
-        require(
-            amount == 0 || normalizeAmount(amount, decimals) > 0,
-            "invalid relayer fee"
-        );
+        setRelayerFee(chainId_, amount);
+    }
 
-        setRelayerFee(chainId_, token, amount);
+    /**
+     * @notice Updates the precision of the relayer fee
+     * @param chainId_ Wormhole chain ID
+     * @param relayerFeePrecision_ Precision of swap rate
+     */
+    function updateRelayerFeePrecision(
+        uint16 chainId_,
+        uint256 relayerFeePrecision_
+    ) public onlyOwner checkChain(chainId_) {
+        require(relayerFeePrecision_ > 0, "precision must be > 0");
+
+        setRelayerFeePrecision(relayerFeePrecision_);
     }
 
     /**
@@ -152,8 +157,8 @@ contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgra
      * @param token Address of the token to update the conversion rate for
      * @param swapRate The token -> USD conversion rate.
      * @dev The swapRate is the conversion rate using asset prices denominated in
-     * USD multiplied by the nativeSwapRatePrecision. For example, if the conversion
-     * rate is $15 and the nativeSwapRatePrecision is 1000000, the swapRate should be set
+     * USD multiplied by the swapRatePrecision. For example, if the conversion
+     * rate is $15 and the swapRatePrecision is 1000000, the swapRate should be set
      * to 15000000.
      */
     function updateSwapRate(
@@ -170,9 +175,9 @@ contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgra
     }
 
     /**
-     * @notice Updates the precision of the native swap rate
+     * @notice Updates the precision of the swap rate
      * @param chainId_ Wormhole chain ID
-     * @param swapRatePrecision_ Precision of native swap rate
+     * @param swapRatePrecision_ Precision of swap rate
      */
     function updateSwapRatePrecision(
         uint16 chainId_,

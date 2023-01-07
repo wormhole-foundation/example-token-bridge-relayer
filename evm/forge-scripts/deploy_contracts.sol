@@ -40,12 +40,13 @@ contract ContractScript is Script {
         proxy = new TokenBridgeRelayerProxy(
             address(setup),
             abi.encodeWithSelector(
-                bytes4(keccak256("setup(address,uint16,address,address,uint256)")),
+                bytes4(keccak256("setup(address,uint16,address,address,uint256,uint256)")),
                 address(implementation),
                 wormhole.chainId(),
                 address(wormhole),
                 vm.envAddress("RELEASE_BRIDGE_ADDRESS"),
-                vm.envUint("RELEASE_SWAP_RATE_PRECISION")
+                vm.envUint("RELEASE_SWAP_RATE_PRECISION"),
+                vm.envUint("RELEASE_RELAYER_FEE_PRECISION")
             )
         );
 

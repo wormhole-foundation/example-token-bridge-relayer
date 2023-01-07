@@ -56,13 +56,14 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
             address(setup),
             abi.encodeWithSelector(
                 bytes4(
-                    keccak256("setup(address,uint16,address,address,uint256)")
+                    keccak256("setup(address,uint16,address,address,uint256,uint256)")
                 ),
                 address(implementation),
                 avaxChainId,
                 wormholeAddress,
                 vm.envAddress("TESTING_AVAX_BRIDGE_ADDRESS"),
-                1e8 // initial swap rate precision
+                1e8, // initial swap rate precision
+                1e8 // initial relayer fee precision
             )
         );
         avaxRelayer = ITokenBridgeRelayer(address(proxy));
@@ -76,6 +77,7 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
             vm.envAddress("TESTING_AVAX_BRIDGE_ADDRESS")
         );
         assertEq(avaxRelayer.swapRatePrecision(), 1e8);
+        assertEq(avaxRelayer.relayerFeePrecision(), 1e8);
     }
 
     /**
@@ -519,10 +521,6 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
 
         // make some assumptions about the fuzz test values
         vm.assume(chainId_ != 0 && chainId_ != avaxRelayer.chainId());
-        vm.assume(
-            relayerFee == 0 ||
-            normalizeAmount(relayerFee, getDecimals(token)) > 0
-        );
 
         // register random target contract
         avaxRelayer.registerContract(chainId_, addressToBytes32(address(this)));
@@ -533,54 +531,16 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
         // update the relayer fee
         avaxRelayer.updateRelayerFee(
             chainId_,
-            token,
             relayerFee
         );
 
         // confirm state changes
-        assertEq(avaxRelayer.relayerFee(chainId_, token), relayerFee);
-    }
-
-    /**
-     * @notice This test confirms that the relayer contract reverts when the
-     * owner attemps to update the relayer fee to a normalized value of zero.
-     */
-    function testUpdateRelayerFeeZeroNormalizedFee(
-        uint16 chainId_,
-        uint256 relayerFee
-    ) public {
-        address token = address(avaxRelayer.WETH());
-
-        // make some assumptions about the fuzz test values
-        vm.assume(chainId_ != 0 && chainId_ != avaxRelayer.chainId());
-        vm.assume(
-            relayerFee > 0 &&
-            normalizeAmount(relayerFee, getDecimals(token)) == 0
-        );
-
-        // register random target contract
-        avaxRelayer.registerContract(chainId_, addressToBytes32(address(this)));
-
-        // register the token
-        avaxRelayer.registerToken(avaxRelayer.chainId(), token);
-
-        // expect the updateRelayerFee call to revert
-        bytes memory encodedSignature = abi.encodeWithSignature(
-            "updateRelayerFee(uint16,address,uint256)",
-            chainId_,
-            token,
-            relayerFee
-        );
-        expectRevert(
-            address(avaxRelayer),
-            encodedSignature,
-            "invalid relayer fee"
-        );
+        assertEq(avaxRelayer.relayerFee(chainId_), relayerFee);
     }
 
     /**
      * @notice This test confirms that the owner can only update the relayerFee
-     * for a registered relayer contract or for its own chainId.
+     * for a registered relayer contract.
      * @dev Explicitly don't register a target contract.
      */
     function testUpdateRelayerFeeContractNotRegistered(uint16 chainId_) public {
@@ -588,9 +548,8 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
 
         // expect the updateRelayerFee method call to fail
         bytes memory encodedSignature = abi.encodeWithSignature(
-            "updateRelayerFee(uint16,address,uint256)",
+            "updateRelayerFee(uint16,uint256)",
             chainId_,
-            address(avaxRelayer.WETH()),
             1e18
         );
         expectRevert(
@@ -602,23 +561,21 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
 
     /**
      * @notice This test confirms that the owner cannot update the relayer
-     * fee for an unregistered token.
+     * fee for the source chain.
      */
-    function testUpdateRelayerFeeInvalidToken() public {
-        address unregisteredToken = address(avaxRelayer.WETH());
-        uint256 relayerFee = 1e8;
+    function testUpdateRelayerFeeContractNotRegistered() public {
+        uint16 chainId_ = avaxRelayer.chainId();
 
         // expect the updateRelayerFee method call to fail
         bytes memory encodedSignature = abi.encodeWithSignature(
-            "updateRelayerFee(uint16,address,uint256)",
-            avaxRelayer.chainId(),
-            unregisteredToken,
-            relayerFee
+            "updateRelayerFee(uint16,uint256)",
+            chainId_,
+            1e18
         );
         expectRevert(
             address(avaxRelayer),
             encodedSignature,
-            "token not accepted"
+            "invalid chain"
         );
     }
 
@@ -627,7 +584,6 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
      * fee for registered relayer contracts.
      */
     function testUpdateRelayerFeeOwnerOnly() public {
-        address token = address(avaxRelayer.WETH());
         uint16 chainId_ = 42069;
         uint256 relayerFee = 1e8;
 
@@ -641,11 +597,94 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
         vm.expectRevert("caller not the owner");
         avaxRelayer.updateRelayerFee(
             chainId_,
-            token,
             relayerFee
         );
 
         vm.stopPrank();
+    }
+
+    /**
+     * @notice This test confirms that the owner can update the relayer fee
+     * precision.
+     */
+    function testUpdateRelayerFeePrecision(
+        uint256 relayerFeePrecision_
+    ) public {
+        vm.assume(relayerFeePrecision_ > 0);
+
+        // update the relayer fee precision
+        avaxRelayer.updateRelayerFeePrecision(
+            avaxRelayer.chainId(),
+            relayerFeePrecision_
+        );
+
+        // confirm state changes
+        assertEq(
+            avaxRelayer.relayerFeePrecision(),
+            relayerFeePrecision_
+        );
+    }
+
+    /**
+     * @notice This test confirms that the owner cannot update the relayer
+     * fee precision to zero.
+     */
+    function testUpdateRelayerFeePrecisionZeroAmount() public {
+        uint256 relayerFeePrecision_ = 0;
+
+        // expect the updateRelayerFeePrecision to revert
+        bytes memory encodedSignature = abi.encodeWithSignature(
+            "updateRelayerFeePrecision(uint16,uint256)",
+            avaxRelayer.chainId(),
+            relayerFeePrecision_
+        );
+        expectRevert(
+            address(avaxRelayer),
+            encodedSignature,
+            "precision must be > 0"
+        );
+    }
+
+    /**
+     * @notice This test confirms that ONLY the owner can update the relayer fee
+     * precision.
+     */
+    function testUpdateRelayerFeePrecisionOwnerOnly() public {
+        uint256 relayerFeePrecision_ = 1e10;
+
+        // prank the caller address to something different than the owner's
+        vm.startPrank(wallet);
+
+        // expect the updateRelayerFeePrecision call to revert
+        bytes memory encodedSignature = abi.encodeWithSignature(
+            "updateRelayerFeePrecision(uint16,uint256)",
+            avaxRelayer.chainId(),
+            relayerFeePrecision_
+        );
+        expectRevert(
+            address(avaxRelayer),
+            encodedSignature,
+            "caller not the owner"
+        );
+
+        vm.stopPrank();
+    }
+
+    /**
+     * @notice This test confirms that owner cannot update the relayer fee
+     * precision for the wrong chain.
+     */
+    function testUpdateRelayerFeePrecisionWrongChain(uint16 chainId_) public {
+        vm.assume(chainId_ != avaxRelayer.chainId());
+
+        uint256 relayerFeePrecision_ = 1e10;
+
+        // expect the updateRelayerFeePrecision call to revert
+        vm.expectRevert("wrong chain");
+        avaxRelayer.updateRelayerFeePrecision(
+            chainId_,
+            relayerFeePrecision_
+        );
     }
 
     /**

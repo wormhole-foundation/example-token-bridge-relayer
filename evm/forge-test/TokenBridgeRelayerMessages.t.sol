@@ -49,13 +49,14 @@ contract TestTokenBridgeRelayerMessages is Helpers, ForgeHelpers, Test {
             address(setup),
             abi.encodeWithSelector(
                 bytes4(
-                    keccak256("setup(address,uint16,address,address,uint256)")
+                    keccak256("setup(address,uint16,address,address,uint256,uint256)")
                 ),
                 address(implementation),
                 avaxChainId,
                 wormholeAddress,
                 vm.envAddress("TESTING_AVAX_BRIDGE_ADDRESS"),
-                1e8 // initial swap rate precision
+                1e8, // initial swap rate precision
+                1e8 // initial relayer fee precision
             )
         );
         avaxRelayer = ITokenBridgeRelayer(address(proxy));

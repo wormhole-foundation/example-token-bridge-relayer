@@ -50,16 +50,20 @@ contract TokenBridgeRelayerGetters is TokenBridgeRelayerSetters {
         return _state.acceptedTokens[token];
     }
 
-    function relayerFee(uint16 chainId_, address token) public view returns (uint256) {
-        return _state.relayerFees[chainId_][token];
+    function relayerFeePrecision() public view returns (uint256) {
+        return _state.relayerFeePrecision;
     }
 
-    function swapRate(address token) public view returns (uint256) {
-        return _state.swapRates[token];
+    function relayerFee(uint16 chainId_) public view returns (uint256) {
+        return _state.relayerFees[chainId_];
     }
 
     function maxNativeSwapAmount(address token) public view returns (uint256) {
         return _state.maxNativeSwapAmount[token];
+    }
+
+    function swapRate(address token) public view returns (uint256) {
+        return _state.swapRates[token];
     }
 
     function nativeSwapRate(address token) public view returns (uint256) {
@@ -72,22 +76,6 @@ contract TokenBridgeRelayerGetters is TokenBridgeRelayerSetters {
         );
 
         return swapRatePrecision() * nativeSwapRate_ / tokenSwapRate;
-    }
-
-    function getDecimals(address token) internal view returns (uint8) {
-        (,bytes memory queriedDecimals) = token.staticcall(
-            abi.encodeWithSignature("decimals()")
-        );
-        return abi.decode(queriedDecimals, (uint8));
-    }
-
-    function getBalance(address token) internal view returns (uint256 balance) {
-        // fetch the specified token balance for this contract
-        (, bytes memory queriedBalance) =
-            token.staticcall(
-                abi.encodeWithSelector(IERC20.balanceOf.selector, address(this))
-            );
-        balance = abi.decode(queriedBalance, (uint256));
     }
 
     function normalizeAmount(
@@ -108,5 +96,21 @@ contract TokenBridgeRelayerGetters is TokenBridgeRelayerSetters {
             amount *= 10 ** (decimals - 8);
         }
         return amount;
+    }
+
+    function getDecimals(address token) internal view returns (uint8) {
+        (,bytes memory queriedDecimals) = token.staticcall(
+            abi.encodeWithSignature("decimals()")
+        );
+        return abi.decode(queriedDecimals, (uint8));
+    }
+
+    function getBalance(address token) internal view returns (uint256 balance) {
+        // fetch the specified token balance for this contract
+        (, bytes memory queriedBalance) =
+            token.staticcall(
+                abi.encodeWithSelector(IERC20.balanceOf.selector, address(this))
+            );
+        balance = abi.decode(queriedBalance, (uint256));
     }
 }

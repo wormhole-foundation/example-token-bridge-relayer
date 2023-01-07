@@ -26,7 +26,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
      * @param emitterAddress Address (bytes32 zero-left-padded) of emitter on source chain
      * @param sequence Sequence of Wormhole message
      */
-    event TransferCompleted(
+    event TransferRedeemed(
         uint16 indexed emitterChainId,
         bytes32 indexed emitterAddress,
         uint64 indexed sequence
@@ -41,8 +41,6 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         bool unwrapWeth,
         uint32 batchId
     ) public payable nonReentrant returns (uint64 messageSequence) {
-        // Cache Wormhole fee value, and confirm that the caller has sent
-        // enough value to pay for the Wormhole message fee.
         uint256 wormholeFee = wormhole().messageFee();
         require(msg.value == wormholeFee, "insufficient value");
 
@@ -154,7 +152,11 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         require(targetContract != bytes32(0), "target not registered");
 
         // confirm that the user has sent enough tokens
-        uint256 targetRelayerFee = relayerFee(params.targetChain, params.token);
+        uint256 targetRelayerFee = calculateRelayerFee(
+            params.targetChain,
+            params.token,
+            tokenDecimals
+        );
         require(
             params.amount > targetRelayerFee + params.toNativeTokenAmount,
             "insufficient amount"
@@ -318,25 +320,16 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
             }
         }
 
-        /**
-         * Override the relayerFee if the encoded targetRelayerFee is less
-         * than the relayer fee set on this chain. This should only happen
-         * if relayer fees are not synchronized across all chains.
-         */
-        uint256 relayerFee = relayerFee(chainId(), token);
-        if (relayerFee > transferWithRelay.targetRelayerFee) {
-            relayerFee = transferWithRelay.targetRelayerFee;
-        }
-
         // add the token swap amount to the relayer fee
-        relayerFee = relayerFee + transferWithRelay.toNativeTokenAmount;
+        uint256 amountForRelayer =
+            transferWithRelay.targetRelayerFee + transferWithRelay.toNativeTokenAmount;
 
-        // pay the relayer if relayerFee > 0 and the caller is not the recipient
-        if (relayerFee > 0) {
+        // pay the relayer if amountForRelayer > 0
+        if (amountForRelayer > 0) {
             SafeERC20.safeTransfer(
                 IERC20(token),
                 msg.sender,
-                relayerFee
+                amountForRelayer
             );
         }
 
@@ -344,7 +337,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         SafeERC20.safeTransfer(
             IERC20(token),
             recipient,
-            amount - relayerFee
+            amount - amountForRelayer
         );
     }
 
@@ -406,7 +399,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
 
 
         // Emit event with information about the TransferWithPayload message
-        emit TransferCompleted(
+        emit TransferRedeemed(
             parsedMessage.emitterChainId,
             parsedMessage.emitterAddress,
             parsedMessage.sequence
@@ -448,23 +441,10 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
     function _completeUnwrap(
         uint256 amount,
         address recipient,
-        uint256 encodedRelayerFee
+        uint256 relayerFee
     ) internal {
-        // cache weth instance
-        IWETH weth = WETH();
-
-        /**
-         * Override the relayerFee if the encoded targetRelayerFee is less
-         * than the relayer fee set on this chain. This should only happen
-         * if relayer fees are not synchronized across all chains.
-         */
-        uint256 relayerFee = relayerFee(chainId(), address(weth));
-        if (relayerFee > encodedRelayerFee) {
-            relayerFee = encodedRelayerFee;
-        }
-
         // withdraw eth
-        weth.withdraw(amount);
+        WETH().withdraw(amount);
 
         // transfer eth to recipient
         payable(recipient).transfer(amount - relayerFee);
@@ -522,7 +502,6 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
     /**
      * @notice Calculates the amount of native assets that a user will receive
      * when swapping transferred tokens for native assets.
-     * @dev The swap rate is governed by the `nativeSwapRate` state variable.
      * @param token Address of token being transferred.
      * @param toNativeAmount Quantity of tokens to be converted to native assets.
      * @return nativeAmount The exchange rate between native assets and the `toNativeAmount`
@@ -535,6 +514,19 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         nativeAmount =
             swapRatePrecision() * toNativeAmount /
             nativeSwapRate(token) * 10 ** (18 - getDecimals(token));
+    }
+
+    function calculateRelayerFee(
+        uint16 chainId,
+        address token,
+        uint8 decimals
+    ) public view returns (uint256 feeInTokenDenomination) {
+        // cache swap rate
+        uint256 tokenSwapRate = swapRate(token);
+        require(tokenSwapRate != 0, "swap rate not set");
+        feeInTokenDenomination =
+            10 ** decimals * relayerFee(chainId) * swapRatePrecision() /
+            tokenSwapRate / relayerFeePrecision();
     }
 
     function custodyTokens(

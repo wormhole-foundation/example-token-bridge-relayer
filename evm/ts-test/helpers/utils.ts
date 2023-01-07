@@ -82,6 +82,24 @@ export async function formatWormholeMessageFromReceipt(
   return results;
 }
 
+export function findTransferCompletedEventInLogs(
+  logs: ethers.providers.Log[],
+  contract: string
+): ethers.utils.Result {
+  let result: ethers.utils.Result = {} as ethers.utils.Result;
+  for (const log of logs) {
+    if (log.address == ethers.utils.getAddress(contract)) {
+      const iface = new ethers.utils.Interface([
+        "event TransferRedeemed(uint16 indexed emitterChainId, bytes32 indexed emitterAddress, uint64 indexed sequence)",
+      ]);
+
+      result = iface.parseLog(log).args;
+      break;
+    }
+  }
+  return result;
+}
+
 export function tokenBridgeNormalizeAmount(
   amount: ethers.BigNumber,
   decimals: number

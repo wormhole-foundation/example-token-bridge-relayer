@@ -26,6 +26,9 @@ contract TokenBridgeRelayerStorage {
         // precision of the nativeSwapRates, this value should NEVER be set to zero
         uint256 swapRatePrecision;
 
+        // precision of the relayerFee, this value should NEVER be set to zero
+        uint256 relayerFeePrecision;
+
         // mapping of initialized implementation (logic) contracts
         mapping(address => bool) initializedImplementations;
 
@@ -44,8 +47,8 @@ contract TokenBridgeRelayerStorage {
          */
         mapping(address => uint256) maxNativeSwapAmount;
 
-        // mapping of chainId to token address to relayerFee
-        mapping(uint16 => mapping(address => uint256)) relayerFees;
+        // mapping of chainId to relayerFee in USD
+        mapping(uint16 => uint256) relayerFees;
     }
 }
 

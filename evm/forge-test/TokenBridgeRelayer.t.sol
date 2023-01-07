@@ -45,6 +45,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
     IWETH wavax = IWETH(vm.envAddress("TESTING_WRAPPED_AVAX_ADDRESS"));
     address avaxRecipient = vm.envAddress("TESTING_AVAX_RECIPIENT");
     address avaxRelayerWallet = vm.envAddress("TESTING_AVAX_RELAYER");
+    address avaxUsdc = vm.envAddress("TESTING_AVAX_USDC_ADDRESS");
 
     // contract instances
     ITokenBridge bridge = ITokenBridge(vm.envAddress("TESTING_AVAX_BRIDGE_ADDRESS"));
@@ -107,13 +108,14 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             address(setup),
             abi.encodeWithSelector(
                 bytes4(
-                    keccak256("setup(address,uint16,address,address,uint256)")
+                    keccak256("setup(address,uint16,address,address,uint256,uint256)")
                 ),
                 address(implementation),
                 uint16(wormhole.chainId()),
                 address(wormhole),
                 vm.envAddress("TESTING_AVAX_BRIDGE_ADDRESS"),
-                1e8 // initial swap rate precision
+                1e8, // initial swap rate precision
+                1e8 // initial relayer fee precision
             )
         );
         avaxRelayer = ITokenBridgeRelayer(address(proxy));
@@ -175,6 +177,308 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
     }
 
     /**
+     * @notice This tests confirms that the native swap amount calculation does not
+     * revert when the toNativeTokenAmount is zero.
+     */
+    function testCalculateNativeSwapAmountZeroAmount(uint256 tokenSwapRate) public {
+        vm.assume(tokenSwapRate > avaxRelayer.swapRatePrecision());
+        vm.assume(
+            tokenSwapRate <=
+            avaxRelayer.swapRate(address(wavax)) * avaxRelayer.swapRatePrecision()
+        );
+
+        address token = avaxUsdc;
+        uint256 toNativeAmount = 0;
+
+        // register the token
+        avaxRelayer.registerToken(avaxRelayer.chainId(), token);
+
+        // set the swap rate for the token
+        avaxRelayer.updateSwapRate(avaxRelayer.chainId(), token, tokenSwapRate);
+
+        // compute the native amount
+        uint256 nativeAmount = avaxRelayer.calculateNativeSwapAmountOut(
+            token,
+            toNativeAmount
+        );
+
+        assertEq(nativeAmount, 0);
+    }
+
+    /**
+     * @notice This tests confirms that the native swap amount calculation does not
+     * revert when tested for a large range of toNativeTokenAmount values.
+     */
+    function testCalculateNativeSwapAmountArithmeticError(
+        uint256 tokenSwapRate,
+        uint256 toNativeTokenAmount
+    ) public {
+        vm.assume(tokenSwapRate > avaxRelayer.swapRatePrecision());
+        vm.assume(
+            tokenSwapRate <=
+            avaxRelayer.swapRate(address(wavax)) * avaxRelayer.swapRatePrecision()
+        );
+        vm.assume(toNativeTokenAmount < type(uint128).max);
+
+        address token = avaxUsdc;
+
+        // register the token
+        avaxRelayer.registerToken(avaxRelayer.chainId(), token);
+
+        // set the swap rate for the token
+        avaxRelayer.updateSwapRate(avaxRelayer.chainId(), token, tokenSwapRate);
+
+        // compute the native amount
+        avaxRelayer.calculateNativeSwapAmountOut(
+            token,
+            toNativeTokenAmount
+        );
+    }
+
+    /**
+     * @notice This tests confirms that the native swap amount calculation does not
+     * revert when tested for a large range of toNativeTokenAmount values.
+     */
+    function testCalculateNativeSwapAmountZeroAmountWrappedNative() public {
+        address token = address(wavax);
+        uint256 toNativeTokenAmount = 0;
+
+        // compute the native amount
+        uint256 nativeAmount = avaxRelayer.calculateNativeSwapAmountOut(
+            token,
+            toNativeTokenAmount
+        );
+
+        assertEq(nativeAmount, 0);
+    }
+
+    /**
+     * @notice This tests confirms that the native swap amount calculation does not
+     * revert when the toNativeTokenAmount is zero.
+     */
+    function testCalculateNativeSwapAmountArithmeticErrorCheckWrappedNative(
+        uint256 toNativeTokenAmount
+    ) public view {
+        vm.assume(toNativeTokenAmount < type(uint128).max);
+        address token = address(wavax);
+
+        // compute the native amount
+        avaxRelayer.calculateNativeSwapAmountOut(
+            token,
+            toNativeTokenAmount
+        );
+    }
+
+    /**
+     * @notice This tests confirms that the native swap amount calculation reverts
+     * when one of the components of the native swap rate is not set.
+     */
+    function testCalculateNativeSwapAmountSwapRateNotSet(
+        uint256 toNativeTokenAmount
+    ) public {
+        vm.assume(toNativeTokenAmount > 0 && toNativeTokenAmount < type(uint128).max);
+
+        // register the token
+        avaxRelayer.registerToken(avaxRelayer.chainId(), avaxUsdc);
+
+        // call should revert
+        vm.expectRevert("swap rate not set");
+        avaxRelayer.calculateNativeSwapAmountOut(
+            avaxUsdc,
+            toNativeTokenAmount
+        );
+    }
+
+    /**
+     * @notice This tests confirms that the max swap amount in calculation does not
+     * revert when tested against a large range of input values.
+     */
+    function testCalculateMaxSwapAmountInArithmeticErrorCheck(
+        uint256 tokenSwapRate,
+        uint256 maxNativeSwapAmount
+    ) public {
+        vm.assume(tokenSwapRate > avaxRelayer.swapRatePrecision());
+        vm.assume(
+            tokenSwapRate <=
+            avaxRelayer.swapRate(address(wavax)) * avaxRelayer.swapRatePrecision()
+        );
+        vm.assume(maxNativeSwapAmount < type(uint128).max);
+
+        address token = avaxUsdc;
+
+        // register the token
+        avaxRelayer.registerToken(avaxRelayer.chainId(), token);
+
+        // set the swap rate for the token
+        avaxRelayer.updateSwapRate(avaxRelayer.chainId(), token, tokenSwapRate);
+
+        // set the maxNativeSwapAmount
+        avaxRelayer.updateMaxNativeSwapAmount(
+            avaxRelayer.chainId(),
+            token,
+            maxNativeSwapAmount
+        );
+
+        // compute the native amount
+        avaxRelayer.calculateMaxSwapAmountIn(
+            token
+        );
+    }
+
+    /**
+     * @notice This tests confirms that the max swap amount in calculation does not
+     * revert when the maxNativeSwapAmount is zero.
+     */
+    function testCalculateMaxSwapAmountInZeroAmount(uint256 tokenSwapRate) public {
+        vm.assume(tokenSwapRate > avaxRelayer.swapRatePrecision());
+        vm.assume(
+            tokenSwapRate <=
+            avaxRelayer.swapRate(address(wavax)) * avaxRelayer.swapRatePrecision()
+        );
+
+        address token = avaxUsdc;
+        uint256 maxNativeSwapAmount = 0;
+
+        // register the token
+        avaxRelayer.registerToken(avaxRelayer.chainId(), token);
+
+        // set the swap rate for the token
+        avaxRelayer.updateSwapRate(avaxRelayer.chainId(), token, tokenSwapRate);
+
+        // set the maxNativeSwapAmount
+        avaxRelayer.updateMaxNativeSwapAmount(
+            avaxRelayer.chainId(),
+            token,
+            maxNativeSwapAmount
+        );
+
+        // compute the native amount
+        uint256 maxAllowed = avaxRelayer.calculateMaxSwapAmountIn(
+            token
+        );
+
+        assertEq(maxAllowed, 0);
+    }
+
+    /**
+     * @notice This test confirms that the max swap amount calculation reverts
+     * when one of the components of the native swap rate is not set.
+     */
+    function testCalculateMaxSwapAmountSwapRateNotSet(
+        uint256 toNativeTokenAmount
+    ) public {
+        vm.assume(toNativeTokenAmount > 0);
+
+        // register the token
+        avaxRelayer.registerToken(avaxRelayer.chainId(), avaxUsdc);
+
+        // call should revert
+        vm.expectRevert("swap rate not set");
+        avaxRelayer.calculateMaxSwapAmountIn(
+            avaxUsdc
+        );
+    }
+
+    /**
+     * @notice This tests confirms that the relayer fee calculation does not
+     * revert when tested against a large range of input values.
+     */
+    function testCalculateRelayerFeeArithmeticErrorCheck(
+        uint256 tokenSwapRate,
+        uint256 relayerFeeUsd
+    ) public {
+        vm.assume(
+            relayerFeeUsd < type(uint128).max &&
+            relayerFeeUsd > avaxRelayer.relayerFeePrecision()
+        );
+        vm.assume(tokenSwapRate > avaxRelayer.swapRatePrecision());
+        vm.assume(
+            tokenSwapRate <=
+            avaxRelayer.swapRate(address(wavax)) * avaxRelayer.swapRatePrecision()
+        );
+
+        uint16 chainId_ = ethereumChainId;
+        address token = avaxUsdc;
+        uint8 decimals = getDecimals(token);
+
+        // register the token
+        avaxRelayer.registerToken(avaxRelayer.chainId(), token);
+
+        // set the swap rate for the token
+        avaxRelayer.updateSwapRate(avaxRelayer.chainId(), token, tokenSwapRate);
+
+        // register the target contract
+        avaxRelayer.registerContract(chainId_, addressToBytes32(address(this)));
+
+        // set the relayer fee to zero
+        avaxRelayer.updateRelayerFee(chainId_, relayerFeeUsd);
+
+        // call should revert
+        avaxRelayer.calculateRelayerFee(
+            chainId_,
+            token,
+            decimals
+        );
+    }
+
+    /**
+     * @notice This test confirms that the relayer fee calculation does not
+     * revert when the USD relayer fee is 0.
+     */
+    function testCalculateRelayerFeeZeroAmount(
+        uint256 tokenSwapRate
+    ) public {
+        vm.assume(tokenSwapRate > avaxRelayer.swapRatePrecision());
+        vm.assume(
+            tokenSwapRate <=
+            avaxRelayer.swapRate(address(wavax)) * avaxRelayer.swapRatePrecision()
+        );
+
+        uint16 chainId_ = ethereumChainId;
+        address token = avaxUsdc;
+        uint8 decimals = getDecimals(token);
+
+        // register the token
+        avaxRelayer.registerToken(avaxRelayer.chainId(), token);
+
+        // set the swap rate for the token
+        avaxRelayer.updateSwapRate(avaxRelayer.chainId(), token, tokenSwapRate);
+
+        // register the target contract
+        avaxRelayer.registerContract(chainId_, addressToBytes32(address(this)));
+
+        // set the relayer fee to zero
+        avaxRelayer.updateRelayerFee(chainId_, 0);
+
+        // call should revert
+        uint256 tokenFee = avaxRelayer.calculateRelayerFee(
+            chainId_,
+            token,
+            decimals
+        );
+
+        assertEq(tokenFee, 0);
+    }
+
+    /**
+     * @notice This test confirms that the relayer fee calculation reverts
+     * when the token swap rate is not set.
+     */
+    function testCalculateRelayerFeeSwapRateNotSet() public {
+        uint16 chainId_ = ethereumChainId;
+        address token = avaxUsdc;
+        uint8 decimals = getDecimals(token);
+
+        // call should revert
+        vm.expectRevert("swap rate not set");
+        avaxRelayer.calculateRelayerFee(
+            chainId_,
+            token,
+            decimals
+        );
+    }
+
+    /**
      * @notice This test confirms that the `TransferTokensWithRelay` method
      * correctly sends an ERC20 token with the `TransferWithRelayer` payload.
      */
@@ -184,8 +488,6 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
         bool unwrapEth
     ) public {
         // target contract info
-        uint256 targetRelayerFee = 1e11;
-        bytes32 targetRecipient = addressToBytes32(ethereumRecipient);
         bytes32 targetContract = addressToBytes32(address(this));
 
         // contract setup
@@ -193,13 +495,25 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             ethereumChainId,
             targetContract
         );
-        avaxRelayer.updateRelayerFee(ethereumChainId, address(wavax), targetRelayerFee);
+
+        // set relayer fee to 5 USD
+        avaxRelayer.updateRelayerFee(
+            ethereumChainId,
+            5 * avaxRelayer.relayerFeePrecision()
+        );
+
+        // compute the relayer fee in token terms (this is encoded in the payload)
+        uint256 relayerFeeToken = avaxRelayer.calculateRelayerFee(
+            ethereumChainId,
+            address(wavax),
+            18
+        );
 
         // make some assumptions about the fuzz test values
         {
             uint256 normalizedAmount = normalizeAmount(amount, 18);
             uint256 normalizedToNative = normalizeAmount(toNativeTokenAmount, 18);
-            uint256 normalizedFee = normalizeAmount(targetRelayerFee, 18);
+            uint256 normalizedFee = normalizeAmount(relayerFeeToken, 18);
 
             vm.assume(normalizedAmount > 0 && amount < type(uint96).max);
             vm.assume(
@@ -232,7 +546,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             amount,
             toNativeTokenAmount,
             ethereumChainId,
-            targetRecipient,
+            addressToBytes32(ethereumRecipient),
             unwrapEth,
             0 // opt out of batching
         );
@@ -270,7 +584,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
          */
         assertEq(
             transfer.amount,
-            normalizeAmount(amount, getDecimals(address(wavax)))
+            normalizeAmount(amount, 18)
         );
 
         // verify the remaining TransferWithPayload values
@@ -292,13 +606,13 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
         assertEq(message.payloadId, 1);
         assertEq(
             message.targetRelayerFee,
-            normalizeAmount(targetRelayerFee, getDecimals(address(wavax)))
+            normalizeAmount(relayerFeeToken, 18)
         );
         assertEq(
             message.toNativeTokenAmount,
-            normalizeAmount(toNativeTokenAmount, getDecimals(address(wavax)))
+            normalizeAmount(toNativeTokenAmount, 18)
         );
-        assertEq(message.targetRecipient, targetRecipient);
+        assertEq(message.targetRecipient, addressToBytes32(ethereumRecipient));
         assertEq(message.unwrap, unwrapEth);
     }
 
@@ -344,6 +658,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             0 // batchId
         );
     }
+
     /**
      * @notice This test confirms that the `transferTokensWithRelay` method reverts
      * when the token is the zero address.
@@ -532,7 +847,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
      * @notice This test confirms that the `transferTokensWithRelay` method reverts
      * when the normalized toNativeTokenAmount is not greater than zero.
      */
-    function testTransferTokensWithRelayInsufficientNormalizedAmount() public {
+    function testTransferTokensWithRelayInsufficientToNativeNormalizedAmount() public {
         address token = address(wavax);
         uint256 amount = 6.9e18;
         uint256 toNativeTokenAmount = 1e6; // normalized amount should be zero
@@ -571,21 +886,17 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
 
     /**
      * @notice This test confirms that the `transferTokensWithRelay` method reverts
-     * when the transfer amount isn't large enough to cover the relayer fee and
-     * the to native token swap amount.
+     * when the transfer amount isn't large enough to cover the relayer fee.
      */
-    function testTransferTokensWithRelayInsufficientAmount() public {
+    function testTransferTokensWithRelayInsufficientAmount(
+        uint256 amount,
+        uint256 relayerFeeUsd
+    ) public {
+        vm.assume(relayerFeeUsd < type(uint96).max);
+
         address token = address(wavax);
         bytes32 targetContract = addressToBytes32(address(this));
-
-        // define amounts
-        uint256 relayerFee = 1e11;
-        uint256 amount = 1e18;
-        uint256 toNativeTokenAmount = 1e18 - 1;
-        require(amount < relayerFee + toNativeTokenAmount, "bad test setup");
-
-        // wrap some wavax
-        wrap(token, amount);
+        uint256 toNativeTokenAmount = 0;
 
         // register the target contract
         avaxRelayer.registerContract(
@@ -596,9 +907,25 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
         // update the relayer fee
         avaxRelayer.updateRelayerFee(
             ethereumChainId,
-            token,
-            relayerFee
+            relayerFeeUsd
         );
+
+        // calculate the relayer fee in token terms
+        uint256 relayerFeeToken = avaxRelayer.calculateRelayerFee(
+            ethereumChainId,
+            token,
+            18
+        );
+
+        // // make some assumptions about the test
+        vm.assume(
+            normalizeAmount(amount, 18) > 0
+            && amount < relayerFeeToken &&
+            amount < type(uint96).max
+        );
+
+        // // wrap some wavax
+        wrap(token, amount);
 
         // approve the circle relayer to spend tokesn
         SafeERC20.safeApprove(
@@ -622,15 +949,13 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
 
     /**
      * @notice This test confirms that the `wrapAndTransferEthWithRelay` method
-     * correctly sends native assets with the `TransferWithRelayer` payload.
+     * correctly sends native assets with the `TransferWithRelay` payload.
      */
     function testWrapAndTransferEthWithRelay(
         uint256 amount,
         uint256 toNativeTokenAmount
     ) public {
         // target contract info
-        uint256 targetRelayerFee = 1e11;
-        bytes32 targetRecipient = addressToBytes32(ethereumRecipient);
         bytes32 targetContract = addressToBytes32(address(this));
 
         // contract setup
@@ -638,13 +963,25 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             ethereumChainId,
             targetContract
         );
-        avaxRelayer.updateRelayerFee(ethereumChainId, address(wavax), targetRelayerFee);
+
+        // set relayer fee to 5 USD
+        avaxRelayer.updateRelayerFee(
+            ethereumChainId,
+            5 * avaxRelayer.relayerFeePrecision()
+        );
+
+        // compute the relayer fee in token terms (this is encoded in the payload)
+        uint256 relayerFeeToken = avaxRelayer.calculateRelayerFee(
+            ethereumChainId,
+            address(wavax),
+            18
+        );
 
         // make some assumptions about the fuzz test values
         {
             uint256 normalizedAmount = normalizeAmount(amount, 18);
             uint256 normalizedToNative = normalizeAmount(toNativeTokenAmount, 18);
-            uint256 normalizedFee = normalizeAmount(targetRelayerFee, 18);
+            uint256 normalizedFee = normalizeAmount(relayerFeeToken, 18);
 
             vm.assume(normalizedAmount > 0 && amount < type(uint96).max);
             vm.assume(
@@ -665,7 +1002,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
         uint64 sequence = avaxRelayer.wrapAndTransferEthWithRelay{value: amount}(
             toNativeTokenAmount,
             ethereumChainId,
-            targetRecipient,
+            addressToBytes32(ethereumRecipient),
             0 // opt out of batching
         );
 
@@ -737,13 +1074,13 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
         assertEq(message.payloadId, 1);
         assertEq(
             message.targetRelayerFee,
-            normalizeAmount(targetRelayerFee, 18)
+            normalizeAmount(relayerFeeToken, 18)
         );
         assertEq(
             message.toNativeTokenAmount,
             normalizeAmount(toNativeTokenAmount, 18)
         );
-        assertEq(message.targetRecipient, targetRecipient);
+        assertEq(message.targetRecipient, addressToBytes32(ethereumRecipient));
         assertEq(message.unwrap, false);
     }
 
@@ -757,9 +1094,6 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
         uint256 amount,
         uint256 toNativeTokenAmount
     ) public {
-        // encoded relayer fee (must be > 1e10 or it will be truncated to zero)
-        uint256 encodedRelayerFee = 1.1e11;
-
         // Fetch the wrapped weth contract on avalanche, since the token
         // address encoded in the signedMessage is weth from Ethereum.
         address wrappedAsset = bridge.wrappedAsset(
@@ -767,15 +1101,12 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             addressToBytes32(weth)
         );
 
+
         // store normalized transfer amounts to reduce local variable count
         NormalizedAmounts memory normAmounts;
         normAmounts.tokenDecimals = getDecimals(wrappedAsset);
         normAmounts.transferAmount = normalizeAmount(
             amount,
-            normAmounts.tokenDecimals
-        );
-        normAmounts.relayerFee = normalizeAmount(
-            encodedRelayerFee,
             normAmounts.tokenDecimals
         );
         normAmounts.toNative = normalizeAmount(
@@ -785,26 +1116,8 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
 
         // test setup
         {
-            // make some assumptions about the fuzz test values
-            vm.assume(
-                normAmounts.transferAmount > 0 &&
-                amount < type(uint96).max
-            );
-            vm.assume(
-                normAmounts.toNative > 0 &&
-                toNativeTokenAmount < type(uint96).max &&
-                normAmounts.transferAmount > normAmounts.toNative + normAmounts.relayerFee
-            );
-
             // target contract setup
             avaxRelayer.registerToken(avaxRelayer.chainId(), wrappedAsset);
-
-            // update the relayer fee
-            avaxRelayer.updateRelayerFee(
-                avaxRelayer.chainId(),
-                wrappedAsset,
-                encodedRelayerFee
-            );
 
             // register this contract as the foreign emitter
             avaxRelayer.registerContract(
@@ -816,7 +1129,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             avaxRelayer.updateSwapRate(
                 avaxRelayer.chainId(),
                 wrappedAsset,
-                6.9e3 * avaxRelayer.swapRatePrecision() // swap rate
+                6.9e2 * avaxRelayer.swapRatePrecision() // swap rate
             );
 
             // set the max to native amount
@@ -824,6 +1137,39 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
                 avaxRelayer.chainId(),
                 wrappedAsset,
                 6.9e18 // max native swap amount
+            );
+
+            /**
+             * NOTE: The relayer fee is calculated on the source chain, and the
+             * target relayer contract will pay the relayer the encoded value. We
+             * need to simulate calculating the value based on information stored
+             * in the target chain.
+             */
+
+            // set relayer fee to 20 USD
+            avaxRelayer.updateRelayerFee(
+                ethereumChainId,
+                20 * avaxRelayer.relayerFeePrecision()
+            );
+
+            normAmounts.relayerFee = normalizeAmount(
+                avaxRelayer.calculateRelayerFee(
+                    ethereumChainId,
+                    wrappedAsset,
+                    normAmounts.tokenDecimals
+                ),
+                normAmounts.tokenDecimals
+            );
+
+            // make some assumptions about the fuzz test values
+            vm.assume(
+                normAmounts.transferAmount > 0 &&
+                amount < type(uint96).max
+            );
+            vm.assume(
+                normAmounts.toNative > 0 &&
+                toNativeTokenAmount < type(uint96).max &&
+                normAmounts.transferAmount > normAmounts.toNative + normAmounts.relayerFee
             );
         }
 
@@ -906,9 +1252,9 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
         // validate results
         {
             /**
-            * Overwrite the toNativeTokenAmount if the value is larger than
-            * the max swap amount. The contract executes the same instruction.
-            */
+             * Overwrite the toNativeTokenAmount if the value is larger than
+             * the max swap amount. The contract executes the same instruction.
+             */
             uint256 maxToNative = avaxRelayer.calculateMaxSwapAmountIn(wrappedAsset);
             uint256 denormToNativeAmount = denormalizeAmount(
                 normAmounts.toNative,
@@ -919,10 +1265,10 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             }
 
             /**
-            * Set the toNativeTokenAmount to zero if the nativeGasQuote is zero.
-            * The nativeGasQuote can be zero if the toNativeTokenAmount is too little
-            * to convert to native assets (solidity rounds towards zero).
-            */
+             * Set the toNativeTokenAmount to zero if the nativeGasQuote is zero.
+             * The nativeGasQuote can be zero if the toNativeTokenAmount is too little
+             * to convert to native assets (solidity rounds towards zero).
+             */
             if (nativeGasQuote == 0) {
                 denormToNativeAmount = 0;
             }
@@ -956,178 +1302,6 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             assertEq(
                 ethBalances.relayerBefore - ethBalances.relayerAfter,
                 nativeGasQuote > maxNativeSwapAmount ? maxNativeSwapAmount : nativeGasQuote
-            );
-        }
-    }
-
-    /**
-     * @notice This test confirms that relayer contract correctly redeems wrapped
-     * native tokens to the encoded recipient and handles relayer payments correctly.
-     * This tests explicitly encodes a relayer fee that is less than the fee in the
-     * relayer contract's state. The contract should use the minimum of the two.
-     * @dev The minimum amount value has to be greater than 1e10. The token bridge
-     * will truncate the value to zero if it's less than 1e10.
-     */
-    function testCompleteTransferWithRelayWrappedNativeInconsistentFees(
-        uint256 encodedRelayerFee
-    ) public {
-        // encoded relayer fee (must be > 1e10 or it will be truncated to zero)
-        uint256 stateRelayerFee = 4.2e18;
-
-        // Fetch the wrapped weth contract on avalanche, since the token
-        // address encoded in the signedMessage is weth from Ethereum.
-        address wrappedAsset = bridge.wrappedAsset(
-            ethereumChainId,
-            addressToBytes32(weth)
-        );
-
-        // store normalized transfer amounts to reduce local variable count
-        NormalizedAmounts memory normAmounts;
-        normAmounts.tokenDecimals = getDecimals(wrappedAsset);
-        normAmounts.relayerFee = normalizeAmount(
-            encodedRelayerFee,
-            normAmounts.tokenDecimals
-        );
-
-        // NOTE: hardcode the amount and toNativeTokenAmount
-        normAmounts.transferAmount = normalizeAmount(
-            6.9e18,
-            normAmounts.tokenDecimals
-        );
-        normAmounts.toNative = 0;
-
-        // test setup
-        {
-            // make some assumptions about the fuzz test values
-            vm.assume(
-                encodedRelayerFee < stateRelayerFee &&
-                normAmounts.relayerFee > 0 &&
-                normAmounts.relayerFee < normAmounts.transferAmount
-            );
-
-            // target contract setup
-            avaxRelayer.registerToken(avaxRelayer.chainId(), wrappedAsset);
-
-            // update the relayer fee with the state relayer fee
-            avaxRelayer.updateRelayerFee(
-                avaxRelayer.chainId(),
-                wrappedAsset,
-                stateRelayerFee
-            );
-
-            // register this contract as the foreign emitter
-            avaxRelayer.registerContract(
-                ethereumChainId,
-                addressToBytes32(address(this))
-            );
-
-            // set the native swap rate
-            avaxRelayer.updateSwapRate(
-                avaxRelayer.chainId(),
-                wrappedAsset,
-                6.9e3 * avaxRelayer.swapRatePrecision() // swap rate
-            );
-
-            // set the max to native amount
-            avaxRelayer.updateMaxNativeSwapAmount(
-                avaxRelayer.chainId(),
-                wrappedAsset,
-                6.9e18 // max native swap amount
-            );
-        }
-
-        // encode the message by calling the encodePayload method
-        bytes memory encodedTransferWithRelay = avaxRelayer.encodeTransferWithRelay(
-            ITokenBridgeRelayer.TransferWithRelay({
-                payloadId: 1,
-                targetRelayerFee: normAmounts.relayerFee,
-                toNativeTokenAmount: normAmounts.toNative,
-                targetRecipient: addressToBytes32(avaxRecipient),
-                unwrap: false
-            })
-        );
-
-        // Create a simulated version of the wormhole message that the
-        // relayer contract will emit.
-        ITokenBridge.TransferWithPayload memory transfer =
-            ITokenBridge.TransferWithPayload({
-                payloadID: uint8(3), // payload3 transfer
-                amount: normAmounts.transferAmount,
-                tokenAddress: addressToBytes32(weth),
-                tokenChain: ethereumChainId,
-                to: addressToBytes32(address(avaxRelayer)),
-                toChain: avaxRelayer.chainId(),
-                fromAddress: addressToBytes32(address(this)),
-                payload: encodedTransferWithRelay
-            });
-
-        // Encode the TransferWithPayload struct and simulate signing
-        // the message with the devnet guardian key.
-        bytes memory signedMessage = getTransferWithPayloadMessage(
-            transfer,
-            ethereumChainId,
-            addressToBytes32(ethereumTokenBridge)
-        );
-
-        // fetch token balances
-        Balances memory tokenBalances;
-        tokenBalances.recipientBefore = getBalance(
-            wrappedAsset,
-            avaxRecipient
-        );
-        tokenBalances.relayerBefore = getBalance(
-            wrappedAsset,
-            avaxRelayerWallet
-        );
-
-        // prank relayer wallet and balance check
-        vm.prank(avaxRelayerWallet);
-
-        // call redeemTokens from relayer wallet
-        avaxRelayer.completeTransferWithRelay(signedMessage);
-
-        // check token balance of the recipient and relayer
-        tokenBalances.recipientAfter = getBalance(
-            wrappedAsset,
-            avaxRecipient
-        );
-        tokenBalances.relayerAfter = getBalance(
-            wrappedAsset,
-            avaxRelayerWallet
-        );
-
-        // validate results
-        {
-            // calculate the denormalized amount and relayer fee
-            uint256 denormAmount = denormalizeAmount(
-                normAmounts.transferAmount,
-                normAmounts.tokenDecimals
-            );
-            uint256 denormRelayerFee = denormalizeAmount(
-                normAmounts.relayerFee,
-                normAmounts.tokenDecimals
-            );
-            require(
-                denormRelayerFee < avaxRelayer.relayerFee(
-                    avaxRelayer.chainId(), wrappedAsset
-                ),
-                "oops"
-            );
-
-            // validate token balances
-            assertEq(
-                tokenBalances.recipientAfter - tokenBalances.recipientBefore,
-                denormAmount - denormRelayerFee
-            );
-
-            /**
-             * Validate the balance change for the relayer, the relayer should be
-             * paid the encodedRelayer fee instead of the stateRelayerFee, since the
-             * contract will pay the minimum of the two.
-             */
-            assertEq(
-                tokenBalances.relayerAfter - tokenBalances.relayerBefore,
-                denormRelayerFee
             );
         }
     }
@@ -1171,13 +1345,6 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
 
             // target contract setup
             avaxRelayer.registerToken(avaxRelayer.chainId(), wrappedAsset);
-
-            // update the relayer fee
-            avaxRelayer.updateRelayerFee(
-                avaxRelayer.chainId(),
-                wrappedAsset,
-                encodedRelayerFee
-            );
 
             // register this contract as the foreign emitter
             avaxRelayer.registerContract(
@@ -1291,7 +1458,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
     }
 
     /**
-     * @notice This test confirms that relayer contract correctly redeems wrapped
+     * @notice This test confirms that the relayer contract correctly redeems wrapped
      * native tokens to the encoded recipient and handles relayer payments correctly.
      * It also confirms that the contract refunds the relayer any excess native gas
      * that it passed to the contract.
@@ -1301,15 +1468,15 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
     function testCompleteTransferWithRelayWrappedNativeRelayerRefund(
         uint256 additionalGas
     ) public {
-        // set transfer param values (must be > 1e10)
-        uint256 encodedRelayerFee = 1.1e11;
-
         // Fetch the wrapped weth contract on avalanche, since the token
         // address encoded in the signedMessage is weth from Ethereum.
         address wrappedAsset = bridge.wrappedAsset(
             ethereumChainId,
             addressToBytes32(weth)
         );
+
+        // set the toNativetTokenAmount
+        uint256 toNativeTokenAmount = 6.9e16;
 
         // store normalized transfer amounts to reduce local variable count
         NormalizedAmounts memory normAmounts;
@@ -1318,28 +1485,15 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             4.2e18, // transfer amount
             normAmounts.tokenDecimals
         );
-        normAmounts.relayerFee = normalizeAmount(
-            encodedRelayerFee,
-            normAmounts.tokenDecimals
-        );
         normAmounts.toNative = normalizeAmount(
-            6.9e16, // toNativeTokenAmount
+            toNativeTokenAmount,
             normAmounts.tokenDecimals
         );
 
         // test setup
         {
-            vm.assume(additionalGas > 0 && additionalGas < type(uint64).max);
-
             // target contract setup
             avaxRelayer.registerToken(avaxRelayer.chainId(), wrappedAsset);
-
-            // update the relayer fee
-            avaxRelayer.updateRelayerFee(
-                avaxRelayer.chainId(),
-                wrappedAsset,
-                encodedRelayerFee
-            );
 
             // register this contract as the foreign emitter
             avaxRelayer.registerContract(
@@ -1354,7 +1508,37 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
                 6.9e3 * avaxRelayer.swapRatePrecision() // swap rate
             );
 
-            // NOTE: Don't set the max native swap amount so that it defaults to zero
+            // set the max native swap amount to the toNativeTokenAmount
+            avaxRelayer.updateMaxNativeSwapAmount(
+                avaxRelayer.chainId(),
+                wrappedAsset,
+                toNativeTokenAmount
+            );
+
+            /**
+             * Another NOTE: The relayer fee is calculated on the source chain, and the
+             * target relayer contract will pay the relayer the encoded value. We
+             * need to simulate calculating the value based on information stored
+             * in the target chain.
+             *
+             * set relayer fee to 20 USD
+             */
+            avaxRelayer.updateRelayerFee(
+                ethereumChainId,
+                20 * avaxRelayer.relayerFeePrecision()
+            );
+
+            normAmounts.relayerFee = normalizeAmount(
+                avaxRelayer.calculateRelayerFee(
+                    ethereumChainId,
+                    wrappedAsset,
+                    normAmounts.tokenDecimals
+                ),
+                normAmounts.tokenDecimals
+            );
+
+
+            vm.assume(additionalGas > 0 && additionalGas < type(uint64).max);
         }
 
         // encode the message by calling the encodePayload method
@@ -1451,15 +1635,6 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
                 denormToNativeAmount = maxToNative;
             }
 
-            /**
-            * Set the toNativeTokenAmount to zero if the nativeGasQuote is zero.
-            * The nativeGasQuote can be zero if the toNativeTokenAmount is too little
-            * to convert to native assets (solidity rounds towards zero).
-            */
-            if (nativeGasQuote == 0) {
-                denormToNativeAmount = 0;
-            }
-
             // calculate the denormalized amount and relayer fee
             uint256 denormAmount = denormalizeAmount(
                 normAmounts.transferAmount,
@@ -1489,11 +1664,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
 
             // NOTE: Verify that the relayer was refunded. If it wasn't than the
             // require statement would trigger.
-            require(
-                nativeGasQuote + additionalGas > nativeGasQuote &&
-                maxNativeSwapAmount == 0,
-                "oops"
-            );
+            require(nativeGasQuote + additionalGas > nativeGasQuote, "oops");
             assertEq(
                 ethBalances.relayerBefore - ethBalances.relayerAfter,
                 nativeGasQuote > maxNativeSwapAmount ? maxNativeSwapAmount : nativeGasQuote
@@ -1503,7 +1674,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
 
     /**
      * @notice This test confirms that relayer contract correctly redeems wrapped
-     * native tokens to the self redeeming recipient. The contract will not pay a
+     * native tokens to the self redeeming recipient. The contract should not pay a
      * relayer fee or allow any token swaps.
      * @dev The unwrapEth boolean value is fuzz tested. At some point it will be set
      * to true to confirm that the contract correctly handles instances where the user
@@ -1514,9 +1685,6 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
         uint256 toNativeTokenAmount,
         bool unwrapEth
     ) public {
-        // encoded relayer fee (must be > 1e10 or it will be truncated to zero)
-        uint256 encodedRelayerFee = 1.1e11;
-
         // Fetch the wrapped weth contract on avalanche, since the token
         // address encoded in the signedMessage is weth from Ethereum.
         address wrappedAsset = bridge.wrappedAsset(
@@ -1528,20 +1696,54 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
         NormalizedAmounts memory normAmounts;
         normAmounts.tokenDecimals = getDecimals(wrappedAsset);
         normAmounts.transferAmount = normalizeAmount(
-            amount,
-            normAmounts.tokenDecimals
-        );
-        normAmounts.relayerFee = normalizeAmount(
-            encodedRelayerFee,
+            4.2e18, // transfer amount
             normAmounts.tokenDecimals
         );
         normAmounts.toNative = normalizeAmount(
-            toNativeTokenAmount,
+            6.9e16, // toNativeTokenAmount
             normAmounts.tokenDecimals
         );
 
         // test setup
         {
+            // target contract setup
+            avaxRelayer.registerToken(avaxRelayer.chainId(), wrappedAsset);
+
+            // register this contract as the foreign emitter
+            avaxRelayer.registerContract(
+                ethereumChainId,
+                addressToBytes32(address(this))
+            );
+
+            // set the native swap rate
+            avaxRelayer.updateSwapRate(
+                avaxRelayer.chainId(),
+                wrappedAsset,
+                6.9e3 * avaxRelayer.swapRatePrecision() // swap rate
+            );
+
+            /**
+             * NOTE: The relayer fee is calculated on the source chain, and the
+             * target relayer contract will pay the relayer the encoded value. We
+             * need to simulate calculating the value based on information stored
+             * in the target chain.
+             *
+             * set relayer fee to 69 USD
+             */
+            avaxRelayer.updateRelayerFee(
+                ethereumChainId,
+                69 * avaxRelayer.relayerFeePrecision()
+            );
+
+            normAmounts.relayerFee = normalizeAmount(
+                avaxRelayer.calculateRelayerFee(
+                    ethereumChainId,
+                    wrappedAsset,
+                    normAmounts.tokenDecimals
+                ),
+                normAmounts.tokenDecimals
+            );
+
             // make some assumptions about the fuzz test values
             vm.assume(
                 normAmounts.transferAmount > 0 &&
@@ -1552,25 +1754,9 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
                 toNativeTokenAmount < type(uint96).max &&
                 normAmounts.transferAmount > normAmounts.toNative + normAmounts.relayerFee
             );
-
-            // target contract setup
-            avaxRelayer.registerToken(avaxRelayer.chainId(), wrappedAsset);
-
-            // update the relayer fee
-            avaxRelayer.updateRelayerFee(
-                avaxRelayer.chainId(),
-                wrappedAsset,
-                encodedRelayerFee
-            );
-
-            // register this contract as the foreign emitter
-            avaxRelayer.registerContract(
-                ethereumChainId,
-                addressToBytes32(address(this))
-            );
         }
 
-        // encode the message by calling the encodePayload method
+        // encode the message by calling the encodeTransferWithRelay method
         bytes memory encodedTransferWithRelay = avaxRelayer.encodeTransferWithRelay(
             ITokenBridgeRelayer.TransferWithRelay({
                 payloadId: 1,
@@ -1653,8 +1839,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
     function testCompleteTransferWithRelayAndUnwrapNative(
         uint256 amount
     ) public {
-        // encoded relayer fee (must be > 1e10 or it will be truncated to zero)
-        uint256 encodedRelayerFee = 1.1e11;
+        // test variables
         uint256 toNativeTokenAmount = 0;
         bool unwrapEth = true;
 
@@ -1665,33 +1850,9 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             amount,
             normAmounts.tokenDecimals
         );
-        normAmounts.relayerFee = normalizeAmount(
-            encodedRelayerFee,
-            normAmounts.tokenDecimals
-        );
-        normAmounts.toNative = normalizeAmount(
-            toNativeTokenAmount,
-            normAmounts.tokenDecimals
-        );
 
         // test setup
         {
-            // make some assumptions about the fuzz test values
-            vm.assume(
-                normAmounts.transferAmount > 0 &&
-                amount < bridge.outstandingBridged(address(wavax))
-            );
-            vm.assume(
-                normAmounts.transferAmount > normAmounts.relayerFee
-            );
-
-            // update the relayer fee
-            avaxRelayer.updateRelayerFee(
-                avaxRelayer.chainId(),
-                address(wavax),
-                encodedRelayerFee
-            );
-
             // register this contract as the foreign emitter
             avaxRelayer.registerContract(
                 ethereumChainId,
@@ -1704,6 +1865,37 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
                 address(wavax),
                 6.9e18 // max native swap amount
             );
+
+            /**
+             * Another NOTE: The relayer fee is calculated on the source chain, and the
+             * target relayer contract will pay the relayer the encoded value. We
+             * need to simulate calculating the value based on information stored
+             * in the target chain.
+             *
+             * set relayer fee to 1 USD
+             */
+            avaxRelayer.updateRelayerFee(
+                ethereumChainId,
+                1 * avaxRelayer.relayerFeePrecision()
+            );
+
+            normAmounts.relayerFee = normalizeAmount(
+                avaxRelayer.calculateRelayerFee(
+                    ethereumChainId,
+                    address(wavax),
+                    normAmounts.tokenDecimals
+                ),
+                normAmounts.tokenDecimals
+            );
+
+            // make some assumptions about the fuzz test values
+            vm.assume(
+                normAmounts.transferAmount > 0 &&
+                amount < bridge.outstandingBridged(address(wavax))
+            );
+            vm.assume(
+                normAmounts.transferAmount > normAmounts.relayerFee
+            );
         }
 
         // encode the message by calling the encodePayload method
@@ -1711,7 +1903,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             ITokenBridgeRelayer.TransferWithRelay({
                 payloadId: 1,
                 targetRelayerFee: normAmounts.relayerFee,
-                toNativeTokenAmount: normAmounts.toNative,
+                toNativeTokenAmount: toNativeTokenAmount,
                 targetRecipient: addressToBytes32(avaxRecipient),
                 unwrap: unwrapEth
             })
@@ -1812,13 +2004,6 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
                 normAmounts.transferAmount > normAmounts.relayerFee
             );
 
-            // update the relayer fee
-            avaxRelayer.updateRelayerFee(
-                avaxRelayer.chainId(),
-                address(wavax),
-                encodedRelayerFee
-            );
-
             // register this contract as the foreign emitter
             avaxRelayer.registerContract(
                 ethereumChainId,
@@ -1898,152 +2083,6 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
     }
 
     /**
-     * @notice This test confirms that relayer contract correctly unwraps native
-     * tokens to the encoded recipient and handles relayer payments correctly.
-     * @dev This tests explicitly encodes a relayer fee that is less than the fee in the
-     * relayer contract's state. The contract should use the minimum of the two.
-     */
-    function testCompleteTransferWithRelayAndUnwrapInconsistentFees(
-        uint256 encodedRelayerFee
-    ) public {
-        // encoded relayer fee (must be > 1e10 or it will be truncated to zero)
-        uint256 stateRelayerFee = 4.2e18;
-        uint256 toNativeTokenAmount = 0;
-        uint256 amount = 6.9e18;
-        bool unwrapEth = true;
-
-        // store normalized transfer amounts to reduce local variable count
-        NormalizedAmounts memory normAmounts;
-        normAmounts.tokenDecimals = getDecimals(address(wavax));
-        normAmounts.relayerFee = normalizeAmount(
-            encodedRelayerFee,
-            normAmounts.tokenDecimals
-        );
-
-        // NOTE: hardcode the amount and toNativeTokenAmount
-        normAmounts.transferAmount = normalizeAmount(
-            amount,
-            normAmounts.tokenDecimals
-        );
-        normAmounts.toNative = toNativeTokenAmount;
-
-        // test setup
-        {
-            // make some assumptions about the fuzz test values
-            vm.assume(
-                encodedRelayerFee < stateRelayerFee &&
-                normAmounts.relayerFee > 0 &&
-                normAmounts.relayerFee < normAmounts.transferAmount
-            );
-
-            // NOTE: update the relayer fee with the state relayer fee
-            avaxRelayer.updateRelayerFee(
-                avaxRelayer.chainId(),
-                address(wavax),
-                stateRelayerFee
-            );
-
-            // register this contract as the foreign emitter
-            avaxRelayer.registerContract(
-                ethereumChainId,
-                addressToBytes32(address(this))
-            );
-
-            // set the max to native amount
-            avaxRelayer.updateMaxNativeSwapAmount(
-                avaxRelayer.chainId(),
-                address(wavax),
-                6.9e18 // max native swap amount
-            );
-        }
-
-        // encode the message by calling the encodePayload method
-        bytes memory encodedTransferWithRelay = avaxRelayer.encodeTransferWithRelay(
-            ITokenBridgeRelayer.TransferWithRelay({
-                payloadId: 1,
-                targetRelayerFee: normAmounts.relayerFee,
-                toNativeTokenAmount: normAmounts.toNative,
-                targetRecipient: addressToBytes32(avaxRecipient),
-                unwrap: unwrapEth
-            })
-        );
-
-        // Create a simulated version of the wormhole message that the
-        // relayer contract will emit.
-        ITokenBridge.TransferWithPayload memory transfer =
-            ITokenBridge.TransferWithPayload({
-                payloadID: uint8(3), // payload3 transfer
-                amount: normAmounts.transferAmount,
-                tokenAddress: addressToBytes32(address(wavax)),
-                tokenChain: avaxRelayer.chainId(),
-                to: addressToBytes32(address(avaxRelayer)),
-                toChain: avaxRelayer.chainId(),
-                fromAddress: addressToBytes32(address(this)),
-                payload: encodedTransferWithRelay
-            });
-
-        // Encode the TransferWithPayload struct and simulate signing
-        // the message with the devnet guardian key.
-        bytes memory signedMessage = getTransferWithPayloadMessage(
-            transfer,
-            ethereumChainId,
-            addressToBytes32(ethereumTokenBridge)
-        );
-
-        // check the native balance of the recipient
-        Balances memory ethBalances;
-        ethBalances.recipientBefore = avaxRecipient.balance;
-        ethBalances.relayerBefore = avaxRelayerWallet.balance;
-
-        // deposit avax into the wavax contract on behalf of the relayer
-        hoax(address(avaxRelayer), amount);
-        wavax.deposit{value: amount}();
-
-        // call redeemTokens from relayer wallet
-        vm.prank(avaxRelayerWallet);
-        avaxRelayer.completeTransferWithRelay(signedMessage);
-
-        // check the native balance of the recipient and relayer
-        ethBalances.recipientAfter = avaxRecipient.balance;
-        ethBalances.relayerAfter = avaxRelayerWallet.balance;
-
-        // validate balances
-        {
-            // calculate the denormalized amount and relayer fee
-            uint256 denormAmount = denormalizeAmount(
-                normAmounts.transferAmount,
-                normAmounts.tokenDecimals
-            );
-            uint256 denormRelayerFee = denormalizeAmount(
-                normAmounts.relayerFee,
-                normAmounts.tokenDecimals
-            );
-            require(
-                denormRelayerFee < avaxRelayer.relayerFee(
-                    avaxRelayer.chainId(), address(wavax)
-                ),
-                "oops"
-            );
-
-            // validate token balances
-            assertEq(
-                ethBalances.recipientAfter - ethBalances.recipientBefore,
-                denormAmount - denormRelayerFee
-            );
-
-            /**
-             * Validate the balance change for the relayer, the relayer should be
-             * paid the encodedRelayer fee instead of the stateRelayerFee, since the
-             * contract will pay the minimum of the two.
-             */
-            assertEq(
-                ethBalances.relayerAfter - ethBalances.relayerBefore,
-                denormRelayerFee
-            );
-        }
-    }
-
-    /**
      * @notice This test confirms that relayer contract correctly redeems and
      * unwraps WETH on the target contract. The contract will not pay a relayer
      * fee or allow any token swaps.
@@ -2051,10 +2090,9 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
     function testCompleteTransferWithRelaySelfRedeemAndUnwrap(
         uint256 amount
     ) public {
-        // encoded relayer fee (must be > 1e10 or it will be truncated to zero)
+        // Set the realyer fee to a nonzero number to confirm that the
+        // contract does not pay out relayer fees for a self redemption.
         uint256 encodedRelayerFee = 1.1e11;
-
-        // set unwrap to true
         bool unwrapEth = true;
 
         // store normalized transfer amounts to reduce local variable count
@@ -2076,13 +2114,6 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             vm.assume(
                 amount > encodedRelayerFee &&
                 amount < bridge.outstandingBridged(address(wavax))
-            );
-
-            // update the relayer fee
-            avaxRelayer.updateRelayerFee(
-                avaxRelayer.chainId(),
-                address(wavax),
-                encodedRelayerFee
             );
 
             // register this contract as the foreign emitter
@@ -2176,16 +2207,13 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
     /**
      * @notice This test confirms that relayer contract correctly redeems wrapped
      * stablecoins to the encoded recipient and handles relayer payments correctly.
-     * @dev The contract behavior changes slight when transferring stablecoins
+     * @dev The contract behavior changes slightly when transferring stablecoins
      * since the contracts will not normalize the quantities (decimals < 8).
      */
     function testCompleteTransferWithRelayWrappedStable(
         uint256 amount,
         uint256 toNativeTokenAmount
     ) public {
-        // encoded relayer fee
-        uint256 encodedRelayerFee = 6.9e6;
-
         // Fetch the wrapped usdc contract on avalanche, since the token
         // address encoded in the signedMessage is usdc from Ethereum.
         address wrappedAsset = bridge.wrappedAsset(
@@ -2194,32 +2222,22 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
         );
 
         // test setup
+        uint256 encodedRelayerFee;
         {
-            // make some assumptions about the fuzz test values
-            vm.assume(
-                amount > 0 &&
-                amount < type(uint96).max
-            );
-            vm.assume(
-                toNativeTokenAmount > 0 &&
-                toNativeTokenAmount < type(uint96).max &&
-                amount > toNativeTokenAmount + encodedRelayerFee
-            );
-
             // target contract setup
             avaxRelayer.registerToken(avaxRelayer.chainId(), wrappedAsset);
-
-            // update the relayer fee
-            avaxRelayer.updateRelayerFee(
-                avaxRelayer.chainId(),
-                wrappedAsset,
-                encodedRelayerFee
-            );
 
             // register this contract as the foreign emitter
             avaxRelayer.registerContract(
                 ethereumChainId,
                 addressToBytes32(address(this))
+            );
+
+            // set the max to native amount
+            avaxRelayer.updateMaxNativeSwapAmount(
+                avaxRelayer.chainId(),
+                wrappedAsset,
+                1e18 // max native swap amount
             );
 
             // set the native swap rate
@@ -2229,11 +2247,34 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
                 1 * avaxRelayer.swapRatePrecision() // swap rate
             );
 
-            // set the max to native amount
-            avaxRelayer.updateMaxNativeSwapAmount(
-                avaxRelayer.chainId(),
+            /**
+             * NOTE: The relayer fee is calculated on the source chain, and the
+             * target relayer contract will pay the relayer the encoded value. We
+             * need to simulate calculating the value based on information stored
+             * in the target chain.
+             *
+             * set relayer fee to 20 USD
+             */
+            avaxRelayer.updateRelayerFee(
+                ethereumChainId,
+                20 * avaxRelayer.relayerFeePrecision()
+            );
+
+            encodedRelayerFee = avaxRelayer.calculateRelayerFee(
+                ethereumChainId,
                 wrappedAsset,
-                1e18 // max native swap amount
+                getDecimals(wrappedAsset)
+            );
+
+            // make some assumptions about the fuzz test values
+            vm.assume(
+                amount > 0 &&
+                amount < type(uint96).max
+            );
+            vm.assume(
+                toNativeTokenAmount > 0 &&
+                toNativeTokenAmount < type(uint96).max &&
+                amount > toNativeTokenAmount + encodedRelayerFee
             );
         }
 
@@ -2364,8 +2405,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
     function testCompleteTransferWithRelayCannotUnwrapToken(
         uint256 amount
     ) public {
-        // tranfer parameters
-        uint256 encodedRelayerFee = 6.9e6;
+        // toNativeTokenAmount should be zero when wrap is true
         uint256 toNativeTokenAmount = 0;
         bool unwrapEth = true;
 
@@ -2377,25 +2417,10 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
         );
 
         // test setup
+        uint256 encodedRelayerFee;
         {
-            // make some assumptions about the fuzz test values
-            vm.assume(
-                amount > 0 &&
-                amount < type(uint96).max
-            );
-            vm.assume(
-                amount > encodedRelayerFee
-            );
-
             // register weth from Ethereum
             avaxRelayer.registerToken(avaxRelayer.chainId(), wrappedAsset);
-
-            // update the relayer fee
-            avaxRelayer.updateRelayerFee(
-                avaxRelayer.chainId(),
-                wrappedAsset,
-                encodedRelayerFee
-            );
 
             // register this contract as the foreign emitter
             avaxRelayer.registerContract(
@@ -2415,6 +2440,34 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
                 avaxRelayer.chainId(),
                 wrappedAsset,
                 1e18 // max native swap amount
+            );
+
+            /**
+             * NOTE: The relayer fee is calculated on the source chain, and the
+             * target relayer contract will pay the relayer the encoded value. We
+             * need to simulate calculating the value based on information stored
+             * in the target chain.
+             *
+             * set relayer fee to 69 USD
+             */
+            avaxRelayer.updateRelayerFee(
+                ethereumChainId,
+                69 * avaxRelayer.relayerFeePrecision()
+            );
+
+            encodedRelayerFee = avaxRelayer.calculateRelayerFee(
+                ethereumChainId,
+                wrappedAsset,
+                getDecimals(wrappedAsset)
+            );
+
+            // make some assumptions about the fuzz test values
+            vm.assume(
+                amount > 0 &&
+                amount < type(uint96).max
+            );
+            vm.assume(
+                amount > encodedRelayerFee
             );
         }
 
