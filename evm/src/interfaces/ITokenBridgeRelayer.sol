@@ -12,7 +12,6 @@ interface ITokenBridgeRelayer {
         uint256 targetRelayerFee;
         uint256 toNativeTokenAmount;
         bytes32 targetRecipient;
-        bool unwrap;
     }
 
     event TransferRedeemed(
@@ -27,7 +26,6 @@ interface ITokenBridgeRelayer {
         uint256 toNativeTokenAmount,
         uint16 targetChain,
         bytes32 targetRecipient,
-        bool unwrapWeth,
         uint32 batchId
     ) external payable returns (uint64 messageSequence);
 

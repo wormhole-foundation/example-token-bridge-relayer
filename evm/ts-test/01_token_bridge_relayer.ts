@@ -723,7 +723,6 @@ describe("Token Bridge Relayer", () => {
           local.toNativeTokenAmount,
           CHAIN_ID_ETH,
           "0x" + tryNativeToHexString(ethWallet.address, CHAIN_ID_ETH),
-          false, // unwrap eth
           0 // batchId
         )
         .then(async (tx: ethers.ContractTransaction) => {
@@ -755,7 +754,7 @@ describe("Token Bridge Relayer", () => {
       expect(local.signedTransferMessage).is.not.null;
     });
 
-    it("Should Redeem Wrapped wormUSD tokens on ETH", async () => {
+    it("Redeem Wrapped wormUSD tokens on ETH", async () => {
       // fetch the token bridge wrapper for the transferred token
       const wrappedTokenOnEth = await ethBridge.wrappedAsset(
         CHAIN_ID_AVAX,
@@ -935,7 +934,6 @@ describe("Token Bridge Relayer", () => {
           local.toNativeTokenAmount,
           CHAIN_ID_AVAX,
           "0x" + tryNativeToHexString(avaxWallet.address, CHAIN_ID_AVAX),
-          false, // unwrap eth
           0 // batchId
         )
         .then(async (tx: ethers.ContractTransaction) => {
@@ -969,7 +967,7 @@ describe("Token Bridge Relayer", () => {
       expect(local.signedTransferMessage).is.not.null;
     });
 
-    it("Should Redeem wormUSD tokens on AVAX", async () => {
+    it("Redeem wormUSD tokens on AVAX", async () => {
       // Check the balance of the recipient and relayer wallet before
       // redeeming the token transfer.
       const relayerBalanceBefore = await avaxWormUsd.balanceOf(
@@ -1145,7 +1143,6 @@ describe("Token Bridge Relayer", () => {
           local.toNativeTokenAmount,
           CHAIN_ID_ETH,
           "0x" + tryNativeToHexString(ethWallet.address, CHAIN_ID_ETH),
-          false, // unwrap eth
           0 // batchId
         )
         .then(async (tx: ethers.ContractTransaction) => {
@@ -1177,7 +1174,7 @@ describe("Token Bridge Relayer", () => {
       expect(local.signedTransferMessage).is.not.null;
     });
 
-    it("Should Redeem Wrapped AVAX on ETH", async () => {
+    it("Redeem Wrapped AVAX on ETH", async () => {
       // fetch the token bridge wrapper for the transferred token
       const wrappedTokenOnEth = await ethBridge.wrappedAsset(
         CHAIN_ID_AVAX,
@@ -1321,7 +1318,31 @@ describe("Token Bridge Relayer", () => {
       local.wrappedTokenContract = wrappedTokenContract;
     });
 
-    it("Transfer Wrapped AVAX From ETH to AVAX", async () => {
+    it("Deregister Wrapped Avax on ETH and Revert on transfer", async () => {
+      // deregister wrapped avax on ETH
+      {
+        const receipt = await ethRelayer
+          .deregisterToken(CHAIN_ID_ETH, local.wrappedTokenContract.address)
+          .then((tx: ethers.ContractTransaction) => tx.wait())
+          .catch((msg: any) => {
+            // should not happen
+            console.log(msg);
+            return null;
+          });
+        expect(receipt).is.not.null;
+
+        // query the contract and confirm that the emitter is set in storage
+        const tokenIsRegistered = await ethRelayer.isAcceptedToken(
+          local.wrappedTokenContract.address
+        );
+        expect(tokenIsRegistered).is.false;
+
+        // confirm that wrapped avax was removed from the list
+        const acceptedTokenList = await ethRelayer.getAcceptedTokensList();
+        expect(acceptedTokenList.includes(local.wrappedTokenContract.address))
+          .is.false;
+      }
+
       // define the transfer amounts
       local.tokenDecimals = await local.wrappedTokenContract.decimals();
       local.transferAmount = local.avaxWalletWrappedTokenBalance;
@@ -1335,13 +1356,6 @@ describe("Token Bridge Relayer", () => {
         CHAIN_ID_AVAX,
         local.wrappedTokenContract.address,
         local.tokenDecimals
-      );
-
-      // validate amounts before the test
-      expect(
-        local.transferAmount.gt(
-          local.toNativeTokenAmount.add(local.tokenRelayerFee)
-        )
       );
 
       // increase allowance of the wrapped wavax token for the eth wallet
@@ -1362,167 +1376,32 @@ describe("Token Bridge Relayer", () => {
         ethWallet.address
       );
 
-      // call transferTokensWithRelay
-      const receipt = await ethRelayer
-        .transferTokensWithRelay(
-          local.wrappedTokenContract.address,
-          local.transferAmount,
-          local.toNativeTokenAmount,
-          CHAIN_ID_AVAX,
-          "0x" + tryNativeToHexString(avaxWallet.address, CHAIN_ID_AVAX),
-          false, // unwrap eth
-          0 // batchId
-        )
-        .then(async (tx: ethers.ContractTransaction) => {
-          const receipt = await tx.wait();
-          return receipt;
-        })
-        .catch((msg) => {
-          // should not happen
-          console.log(msg);
-          return null;
-        });
-      expect(receipt).is.not.null;
-
-      // check token balance after to confirm the transfer worked
-      const balanceAfter = await local.wrappedTokenContract.balanceOf(
-        ethWallet.address
-      );
-      expect(balanceBefore.sub(balanceAfter).eq(local.transferAmount)).is.true;
-
-      // now grab the Wormhole message
-      const unsignedMessages = await formatWormholeMessageFromReceipt(
-        receipt!,
-        CHAIN_ID_ETH
-      );
-      expect(unsignedMessages.length).to.equal(1);
-
-      // sign the TransferWithPayload message
-      local.signedTransferMessage = Uint8Array.from(
-        guardians.addSignatures(unsignedMessages[0], [0])
-      );
-      expect(local.signedTransferMessage).is.not.null;
-    });
-
-    it("Should Redeem WAVAX on AVAX", async () => {
-      // Check the balance of the recipient and relayer wallet before
-      // redeeming the token transfer.
-      const relayerBalanceBefore = await wavax.balanceOf(
-        avaxRelayerWallet.address
-      );
-      const recipientBalanceBefore = await wavax.balanceOf(avaxWallet.address);
-      const relayerEthBalanceBefore = await avaxRelayerWallet.getBalance();
-      const recipientEthBalanceBefore = await avaxWallet.getBalance();
-
-      // fetch the native swap quote
-      const nativeSwapQuote = await avaxRelayer.calculateNativeSwapAmountOut(
-        wavax.address,
-        local.toNativeTokenAmount
-      );
-
-      // Invoke the relayer contract to redeem the transfer, passing the
-      // encoded Wormhole message. Invoke this method using the avaxRelayerWallet
-      // to confirm that the contract handles relayer payouts correctly.
-      const receipt = await avaxRelayer
-        .connect(avaxRelayerWallet) // change signer
-        .completeTransferWithRelay(local.signedTransferMessage, {
-          value: nativeSwapQuote,
-        })
-        .then(async (tx: ethers.ContractTransaction) => {
-          const receipt = await tx.wait();
-          return receipt;
-        })
-        .catch((msg) => {
-          // should not happen
-          console.log(msg);
-          return null;
-        });
-      expect(receipt).is.not.null;
-
-      // parse the wormhole message
-      const parsedMessage = await avaxWormhole.parseVM(
-        local.signedTransferMessage
-      );
-
-      // fetch the Redeem event emitted by the contract
-      const event = findTransferCompletedEventInLogs(
-        receipt!.logs,
-        avaxRelayer.address
-      );
-      expect(event.emitterChainId).to.equal(parsedMessage.emitterChainId);
-      expect(event.emitterAddress).to.equal(parsedMessage.emitterAddress);
-      expect(event.sequence.toString()).to.equal(
-        parsedMessage.sequence.toString()
-      );
-
-      // fetch the balances after redeeming the token transfer
-      const relayerBalanceAfter = await wavax.balanceOf(
-        avaxRelayerWallet.address
-      );
-      const recipientBalanceAfter = await wavax.balanceOf(avaxWallet.address);
-      const relayerEthBalanceAfter = await avaxRelayerWallet.getBalance();
-      const recipientEthBalanceAfter = await avaxWallet.getBalance();
-
-      // validate balance changes
-      {
-        // transform toNativeTokenAmount and relayerFee
-        let denormToNative = tokenBridgeTransform(
-          local.toNativeTokenAmount,
-          local.tokenDecimals
-        );
-        let denormRelayerFee = tokenBridgeTransform(
-          local.tokenRelayerFee,
-          local.tokenDecimals
-        );
-        let denormTransferAmount = tokenBridgeTransform(
-          local.transferAmount,
-          local.tokenDecimals
-        );
-
-        const maxToNative = await avaxRelayer.calculateMaxSwapAmountIn(
-          wavax.address
-        );
-        if (denormToNative > maxToNative) {
-          denormToNative = maxToNative;
-        }
-        if (nativeSwapQuote.eq(0)) {
-          denormToNative = ethers.BigNumber.from("0");
-        }
-
-        // calculate the expected eth balance change for the relayer/recipient
-        let expectedEthBalanceChange = await avaxRelayer.maxNativeSwapAmount(
-          wavax.address
-        );
-        if (nativeSwapQuote < expectedEthBalanceChange) {
-          expectedEthBalanceChange = nativeSwapQuote;
-        }
-
-        // recipient balance changes
-        expect(
-          recipientBalanceAfter.sub(recipientBalanceBefore).toString()
-        ).to.equal(
-          denormTransferAmount
-            .sub(denormToNative)
-            .sub(denormRelayerFee)
-            .toString()
-        );
-        expect(
-          recipientEthBalanceAfter.sub(recipientEthBalanceBefore).toString()
-        ).to.equal(expectedEthBalanceChange.toString());
-
-        // relayer balance changes
-        expect(
-          relayerBalanceAfter.sub(relayerBalanceBefore).toString()
-        ).to.equal(denormToNative.add(denormRelayerFee).toString());
-        expect(
-          relayerEthBalanceBefore
-            .sub(relayerEthBalanceAfter)
-            .gte(expectedEthBalanceChange)
-        ).is.true;
+      // try to redeem the transfer again
+      let failed: boolean = false;
+      try {
+        // call transferTokensWithRelay
+        const receipt = await ethRelayer
+          .transferTokensWithRelay(
+            local.wrappedTokenContract.address,
+            local.transferAmount,
+            local.toNativeTokenAmount,
+            CHAIN_ID_AVAX,
+            "0x" + tryNativeToHexString(avaxWallet.address, CHAIN_ID_AVAX),
+            0 // batchId
+          )
+          .then(async (tx: ethers.ContractTransaction) => {
+            const receipt = await tx.wait();
+            return receipt;
+          });
+        expect(receipt).is.not.null;
+      } catch (e: any) {
+        expect(e.error.reason, "execution reverted: token not accepted").to.be
+          .equal;
+        failed = true;
       }
 
-      // clear localVariables
-      local = {};
+      // confirm that the call failed
+      expect(failed).is.true;
     });
 
     it("Wrap and Transfer ETH From ETH to AVAX", async () => {
@@ -1589,7 +1468,7 @@ describe("Token Bridge Relayer", () => {
       expect(local.signedTransferMessage).is.not.null;
     });
 
-    it("Should Redeem Wrapped ETH on AVAX", async () => {
+    it("Redeem Wrapped ETH on AVAX", async () => {
       // fetch the token bridge wrapper for the transferred token
       const wrappedTokenOnAvax = await avaxBridge.wrappedAsset(
         CHAIN_ID_ETH,
@@ -1782,7 +1661,6 @@ describe("Token Bridge Relayer", () => {
           local.toNativeTokenAmount,
           CHAIN_ID_ETH,
           "0x" + tryNativeToHexString(ethWallet.address, CHAIN_ID_ETH),
-          true, // unwrap eth
           0 // batchId
         )
         .then(async (tx: ethers.ContractTransaction) => {
@@ -1816,7 +1694,7 @@ describe("Token Bridge Relayer", () => {
       expect(local.signedTransferMessage).is.not.null;
     });
 
-    it("Should Redeem and Unwrap ETH on ETH", async () => {
+    it("Redeem and Unwrap ETH on ETH", async () => {
       // Check the balance of the recipient and relayer wallet before
       // redeeming the token transfer.
       const relayerEthBalanceBefore = await ethRelayerWallet.getBalance();
@@ -1934,7 +1812,6 @@ describe("Token Bridge Relayer", () => {
           local.toNativeTokenAmount,
           CHAIN_ID_ETH,
           "0x" + tryNativeToHexString(ethWallet.address, CHAIN_ID_ETH),
-          false, // unwrap eth
           0 // batchId
         )
         .then(async (tx: ethers.ContractTransaction) => {
@@ -1966,7 +1843,7 @@ describe("Token Bridge Relayer", () => {
       expect(local.signedTransferMessage).is.not.null;
     });
 
-    it("Should Self Redeem (No Relayer) Wrapped wormUSD tokens on ETH", async () => {
+    it("Self Redeem (No Relayer) Wrapped wormUSD tokens on ETH", async () => {
       // fetch the token bridge wrapper for the transferred token
       const wrappedTokenOnEth = await ethBridge.wrappedAsset(
         CHAIN_ID_AVAX,
@@ -2049,7 +1926,7 @@ describe("Token Bridge Relayer", () => {
       local.wrappedTokenContract = wrappedTokenContract;
     });
 
-    it("Should Not Redeem a Transfer More Than Once", async () => {
+    it("Not Redeem a Transfer More Than Once", async () => {
       // grab the balance before redeeming the transfer
       const balanceBefore = await local.wrappedTokenContract.balanceOf(
         ethWallet.address

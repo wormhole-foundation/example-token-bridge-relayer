@@ -21,8 +21,7 @@ contract TokenBridgeRelayerMessages is TokenBridgeRelayerStructs {
             transfer.payloadId,
             transfer.targetRelayerFee,
             transfer.toNativeTokenAmount,
-            transfer.targetRecipient,
-            transfer.unwrap ? uint8(1) : uint8(0)
+            transfer.targetRecipient
         );
     }
 
@@ -56,10 +55,6 @@ contract TokenBridgeRelayerMessages is TokenBridgeRelayerStructs {
         // recipient of the transfered tokens and native assets
         transfer.targetRecipient = encoded.toBytes32(index);
         index += 32;
-
-        // unwrap boolean
-        transfer.unwrap = encoded.toUint8(index) != 0;
-        index += 1;
 
         require(index == encoded.length, "invalid message length");
     }

@@ -44,9 +44,6 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
      * @param targetChain Wormhole chain ID of the target blockchain.
      * @param targetRecipient User's wallet address on the target blockchain in bytes32 format
      * (zero-left-padded).
-     * @param unwrapWeth Specifies if native-wrapped assets should be unwrapped upon redemption
-     * on the target chain. This should only be set to true for assets being sent back
-     * to their native blockchain.
      * @param batchId ID for Wormhole message batching
      * @return messageSequence Wormhole sequence for emitted TransferTokensWithRelay message.
      */
@@ -56,7 +53,6 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         uint256 toNativeTokenAmount,
         uint16 targetChain,
         bytes32 targetRecipient,
-        bool unwrapWeth,
         uint32 batchId
     ) public payable nonReentrant returns (uint64 messageSequence) {
         // Cache wormhole fee and confirm that the user has passed enough
@@ -75,8 +71,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
                 amount: amount,
                 toNativeTokenAmount: toNativeTokenAmount,
                 targetChain: targetChain,
-                targetRecipient: targetRecipient,
-                unwrap: unwrapWeth
+                targetRecipient: targetRecipient
             }),
             batchId,
             wormholeFee
@@ -132,8 +127,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
                 amount: amountLessDust,
                 toNativeTokenAmount: toNativeTokenAmount,
                 targetChain: targetChain,
-                targetRecipient: targetRecipient,
-                unwrap: false
+                targetRecipient: targetRecipient
             }),
             batchId,
             wormholeFee
@@ -173,14 +167,6 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
             "invalid toNativeTokenAmount"
         );
 
-        // revert if unwrap is true and toNativeTokenAmount is > 0
-        if (params.unwrap) {
-            require(
-                params.toNativeTokenAmount == 0,
-                "cannot swap when unwrap is true"
-            );
-        }
-
         // Cache the target contract address and verify that there
         // is a registered contract for the specified targetChain.
         bytes32 targetContract = getRegisteredContract(params.targetChain);
@@ -215,8 +201,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
                     tokenDecimals
                 ),
                 toNativeTokenAmount: normalizedToNativeTokenAmount,
-                targetRecipient: params.targetRecipient,
-                unwrap: params.unwrap
+                targetRecipient: params.targetRecipient
             })
         );
 
@@ -251,7 +236,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
      * custody of the wrapped (or released) tokens and sends the tokens to the target recipient.
      * It pays the relayer in the minted token denomination. If requested by the user,
      * it will perform a swap with the off-chain relayer to provide the user with native assets.
-     * If the `unwrapWeth` flag is set to true, the contract will unwrap native assets and send
+     * If the `token` being transferred is WETH, the contract will unwrap native assets and send
      * the transferred amount to the recipient and pay the relayer in native assets.
      * @dev reverts if:
      * - the transferred token is not accepted by this contract
@@ -279,8 +264,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
             _completeSelfRedemption(
                 token,
                 recipient,
-                amount,
-                transferWithRelay.unwrap
+                amount
             );
 
             // bail out
@@ -297,7 +281,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         );
 
         // unwrap and transfer ETH
-        if (transferWithRelay.unwrap && token == address(WETH())) {
+        if (token == address(WETH())) {
             _completeUnwrap(
                 amount,
                 recipient,
@@ -465,8 +449,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
     function _completeSelfRedemption(
         address token,
         address recipient,
-        uint256 amount,
-        bool unwrap
+        uint256 amount
     ) internal {
         // revert if the caller sends ether to this contract
         require(msg.value == 0, "recipient cannot swap native assets");
@@ -475,7 +458,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         IWETH weth = WETH();
 
         // transfer the full amount to the recipient
-        if (unwrap && token == address(weth)) {
+        if (token == address(weth)) {
             // withdraw weth and send to the recipient
             weth.withdraw(amount);
             payable(recipient).transfer(amount);
