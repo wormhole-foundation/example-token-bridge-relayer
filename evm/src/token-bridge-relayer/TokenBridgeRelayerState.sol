@@ -35,9 +35,6 @@ contract TokenBridgeRelayerStorage {
         // Wormhole chain ID to known relayer contract address mapping
         mapping(uint16 => bytes32) registeredContracts;
 
-        // allowed list of tokens
-        mapping(address => bool) acceptedTokens;
-
         // token swap rate in USD terms
         mapping(address => uint256) swapRates;
 
@@ -50,7 +47,13 @@ contract TokenBridgeRelayerStorage {
         // mapping of chainId to relayerFee in USD
         mapping(uint16 => uint256) relayerFees;
 
-        /// storage gap for additional state variables in future versions
+        // accepted token to bool mapping
+        mapping(address => bool) acceptedTokens;
+
+        // list of accepted token addresses
+        address[] acceptedTokensList;
+
+        // storage gap for additional state variables in future versions
         uint256[50] ______gap;
     }
 }

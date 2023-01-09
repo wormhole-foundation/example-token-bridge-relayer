@@ -23,7 +23,7 @@ import "../src/libraries/BytesLib.sol";
 /**
  * @title A Test Suite for the EVM Token Bridge Relayer Messages module
  */
-contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
+contract TokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
     using BytesLib for bytes;
 
     // contract instances
@@ -416,6 +416,10 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
 
         // verify that the state was updated correctly
         assertEq(avaxRelayer.isAcceptedToken(token), true);
+
+        // verify that the registered tokens list was updated
+        address[] memory acceptedTokens = avaxRelayer.getAcceptedTokensList();
+        assertEq(acceptedTokens[0], token);
     }
 
     /// @notice This test confirms that the contract cannot register address(0).
@@ -438,9 +442,9 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
 
     /**
      * @notice This test confirms that the owner cannot register a token
-     * with the same chainId.
+     * with the wrong chainId.
      */
-    function testRegisterContractWrongChainId(uint16 chainId_) public {
+    function testRegisterTokenThisChainId(uint16 chainId_) public {
         vm.assume(chainId_ != avaxRelayer.chainId());
 
         // test variables
@@ -499,6 +503,154 @@ contract TestTokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
         // expect the registerToken call to fail
         bytes memory encodedSignature = abi.encodeWithSignature(
             "registerToken(uint16,address)",
+            avaxRelayer.chainId(),
+            token
+        );
+        expectRevert(
+            address(avaxRelayer),
+            encodedSignature,
+            "caller not the owner"
+        );
+
+        vm.stopPrank();
+    }
+
+    /**
+     * @notice This test confirms that the owner can correctly deregister a token
+     * when it's the only token registered.
+     */
+    function testDeregisterToken(
+        uint8 numTokens
+    ) public {
+        vm.assume(numTokens > 0);
+
+        // create array of token "addresses"
+        address[] memory tokens = new address[](numTokens);
+        for (uint256 i = 0; i < numTokens; i++) {
+            tokens[i] = bytes32ToAddress(
+                keccak256(abi.encodePacked(block.number, i))
+            );
+
+            // register the token
+            avaxRelayer.registerToken(avaxRelayer.chainId(), tokens[i]);
+        }
+
+        // confirm that all tokens were registered
+        address[] memory tokenList = avaxRelayer.getAcceptedTokensList();
+        assertEq(tokenList.length, numTokens);
+
+        // deregister each token
+        for (uint256 i = 0; i < numTokens; i++) {
+            assertEq(avaxRelayer.isAcceptedToken(tokens[i]), true);
+            avaxRelayer.deregisterToken(avaxRelayer.chainId(), tokens[i]);
+            assertEq(avaxRelayer.isAcceptedToken(tokens[i]), false);
+        }
+
+        // confirm all tokens were removed
+        tokenList = avaxRelayer.getAcceptedTokensList();
+        assertEq(tokenList.length, 0);
+    }
+
+    /**
+     * @notice This test confirms that the owner can correctly deregister a token
+     * when it's the only token registered.
+     */
+    function testDeregisterTokenOnlyTokenRegistered() public {
+        // test variables
+        address token = wavax;
+
+        // register the token
+        avaxRelayer.registerToken(avaxRelayer.chainId(), token);
+
+        // verify that the state was updated correctly
+        address[] memory tokenList = avaxRelayer.getAcceptedTokensList();
+        assertEq(tokenList[0], token);
+        assertEq(avaxRelayer.isAcceptedToken(token), true);
+
+        // deregister the token
+        avaxRelayer.deregisterToken(avaxRelayer.chainId(), token);
+
+        // verify that the token was removed from the contract's state
+        tokenList = avaxRelayer.getAcceptedTokensList();
+        assertEq(tokenList.length, 0);
+        assertEq(avaxRelayer.isAcceptedToken(token), false);
+    }
+
+    /// @notice This test confirms that the contract cannot deregister address(0).
+    function testDeregisterTokenZeroAddress() public {
+        // test variables
+        address token = address(0);
+
+        // expect the registerToken call to fail
+        bytes memory encodedSignature = abi.encodeWithSignature(
+            "deregisterToken(uint16,address)",
+            avaxRelayer.chainId(),
+            token
+        );
+        expectRevert(
+            address(avaxRelayer),
+            encodedSignature,
+            "invalid token"
+        );
+    }
+
+    /**
+     * @notice This test confirms that the owner cannot deregister a token
+     * with the wrong chainId.
+     */
+    function testDeregisterTokenThisChainId(uint16 chainId_) public {
+        vm.assume(chainId_ != avaxRelayer.chainId());
+
+        // test variables
+        address token = address(0);
+
+        // expect the registerToken call to fail
+        bytes memory encodedSignature = abi.encodeWithSignature(
+            "deregisterToken(uint16,address)",
+            chainId_,
+            token
+        );
+        expectRevert(
+            address(avaxRelayer),
+            encodedSignature,
+            "wrong chain"
+        );
+    }
+
+    /**
+     * @notice This test confirms that the owner cannot deregister a token
+     * that is not registered.
+     */
+    function testDeregisterTokenNotRegistered() public {
+        // test variables
+        address token = wavax;
+
+        assertEq(avaxRelayer.isAcceptedToken(token), false);
+
+        // expect the registerToken call to fail
+        bytes memory encodedSignature = abi.encodeWithSignature(
+            "deregisterToken(uint16,address)",
+            avaxRelayer.chainId(),
+            token
+        );
+        expectRevert(
+            address(avaxRelayer),
+            encodedSignature,
+            "token not registered"
+        );
+    }
+
+    ///@notice This test confirms that ONLY the owner can register a token.
+    function testDeregisterTokenOwnerOnly() public {
+        // test variables
+        address token = wavax;
+
+        // prank the caller address to something different than the owner's
+        vm.startPrank(wallet);
+
+        // expect the registerToken call to fail
+        bytes memory encodedSignature = abi.encodeWithSignature(
+            "deregisterToken(uint16,address)",
             avaxRelayer.chainId(),
             token
         );

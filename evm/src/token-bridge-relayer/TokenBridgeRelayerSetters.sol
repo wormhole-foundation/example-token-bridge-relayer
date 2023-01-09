@@ -46,6 +46,37 @@ contract TokenBridgeRelayerSetters is TokenBridgeRelayerState {
 
     function addAcceptedToken(address token) internal {
         _state.acceptedTokens[token] = true;
+        _state.acceptedTokensList.push(token);
+    }
+
+    function removeAcceptedToken(address token) internal {
+        require(
+            _state.acceptedTokens[token],
+            "token not registered"
+        );
+
+        // set bool in acceptedTokens to false
+        _state.acceptedTokens[token] = false;
+
+        // cache array length
+        uint256 length_ = _state.acceptedTokensList.length;
+
+        // Replace `token` in the acceptedTokensList with the last
+        // element in the acceptedTokensList array.
+        uint256 i = 0;
+        for (; i < length_;) {
+            if (_state.acceptedTokensList[i] == token) {
+                break;
+            }
+            unchecked { i += 1; }
+        }
+
+        if (i != length_) {
+            if (length_ > 1) {
+                _state.acceptedTokensList[i] = _state.acceptedTokensList[length_ - 1];
+            }
+            _state.acceptedTokensList.pop();
+        }
     }
 
     function setRelayerFee(uint16 chainId_, uint256 fee) internal {

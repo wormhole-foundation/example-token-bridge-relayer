@@ -50,6 +50,10 @@ contract TokenBridgeRelayerGetters is TokenBridgeRelayerSetters {
         return _state.acceptedTokens[token];
     }
 
+    function getAcceptedTokensList() public view returns (address[] memory) {
+        return _state.acceptedTokensList;
+    }
+
     function relayerFeePrecision() public view returns (uint256) {
         return _state.relayerFeePrecision;
     }

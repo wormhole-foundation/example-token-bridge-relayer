@@ -62,6 +62,8 @@ interface ITokenBridgeRelayer {
 
     function registerToken(uint16 chainId_, address token) external;
 
+    function deregisterToken(uint16 chainId_, address token) external;
+
     function updateRelayerFee(uint16 chainId_, uint256 amount) external;
 
     function updateRelayerFeePrecision(uint16 chainId_, uint256 relayerFeePrecision_) external;
@@ -103,4 +105,6 @@ interface ITokenBridgeRelayer {
     function getRegisteredContract(uint16 emitterChainId) external view returns (bytes32);
 
     function isAcceptedToken(address token) external view returns (bool);
+
+    function getAcceptedTokensList() external view returns (address[] memory);
 }

@@ -12,8 +12,11 @@ contract Helpers {
     }
 
     function addressToBytes32(address address_) internal pure returns (bytes32) {
-        // convert address to bytes32 (left-zero-padded if less than 20 bytes)
         return bytes32(uint256(uint160(address_)));
+    }
+
+    function bytes32ToAddress(bytes32 address_) internal pure returns (address) {
+        return address(uint160(uint256(address_)));
     }
 
     function normalizeAmount(

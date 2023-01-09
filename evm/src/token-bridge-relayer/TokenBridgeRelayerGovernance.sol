@@ -117,6 +117,22 @@ contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgra
     }
 
     /**
+     * @notice Deregister tokens accepted by this contract.
+     * @dev The `removeAcceptedToken` function will revert
+     * if the token is not registered.
+     * @param chainId_ Wormhole chain ID.
+     * @param token Address of the token.
+     */
+    function deregisterToken(
+        uint16 chainId_,
+        address token
+    ) public onlyOwner checkChain(chainId_) {
+        require(token != address(0), "invalid token");
+
+        removeAcceptedToken(token);
+    }
+
+    /**
      * @notice Updates the fee for relaying transfers to foreign contracts.
      * @param chainId_ Wormhole chain ID.
      * @param amount Amount of USD to pay the relayer upon redemption.
