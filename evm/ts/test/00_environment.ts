@@ -23,12 +23,12 @@ import {
   ETH_WORMHOLE_GUARDIAN_SET_INDEX,
   ETH_WORMHOLE_MESSAGE_FEE,
   WALLET_PRIVATE_KEY,
-} from "./helpers/consts";
+} from "../helpers/consts";
 import {
   formatWormholeMessageFromReceipt,
   readWormUSDContractAddress,
-} from "./helpers/utils";
-import {IWormhole__factory, IERC20__factory} from "./src/ethers-contracts";
+} from "../helpers/utils";
+import {IWormhole__factory, IERC20__factory} from "../src/ethers-contracts";
 import {ITokenBridge__factory} from "@certusone/wormhole-sdk/lib/cjs/ethers-contracts";
 
 describe("Environment Test", () => {

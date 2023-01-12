@@ -3,10 +3,19 @@ import {ChainId, tryNativeToHexString} from "@certusone/wormhole-sdk";
 import {WORMHOLE_MESSAGE_EVENT_ABI, WORMHOLE_TOPIC} from "./consts";
 import * as fs from "fs";
 
-export function readTokenBridgeRelayerContractAddress(chain: number): string {
+export function readTokenBridgeRelayerContractAddress(
+  chain: number,
+  isTest = false
+): string {
+  let broadcastType;
+  if (isTest) {
+    broadcastType = "broadcast-test";
+  } else {
+    broadcastType = "broadcast";
+  }
   return JSON.parse(
     fs.readFileSync(
-      `${__dirname}/../../broadcast-test/deploy_contracts.sol/${chain}/run-latest.json`,
+      `${__dirname}/../../${broadcastType}/deploy_contracts.sol/${chain}/run-latest.json`,
       "utf-8"
     )
   ).transactions[2].contractAddress;

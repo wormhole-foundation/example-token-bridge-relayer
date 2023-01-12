@@ -1,5 +1,5 @@
 import {expect} from "chai";
-import {ethers, Wallet} from "ethers";
+import {ethers} from "ethers";
 import {MockGuardians} from "@certusone/wormhole-sdk/lib/cjs/mock";
 import {
   CHAIN_ID_ETH,
@@ -23,20 +23,20 @@ import {
   WALLET_PRIVATE_KEY,
   WALLET_PRIVATE_KEY_TWO,
   GUARDIAN_PRIVATE_KEY,
-} from "./helpers/consts";
+} from "../helpers/consts";
 import {
   formatWormholeMessageFromReceipt,
   readTokenBridgeRelayerContractAddress,
   readWormUSDContractAddress,
   tokenBridgeTransform,
   findTransferCompletedEventInLogs,
-} from "./helpers/utils";
+} from "../helpers/utils";
 import {
   ITokenBridgeRelayer__factory,
   ITokenBridge__factory,
   IWormhole__factory,
-} from "./src/ethers-contracts";
-import {makeContract} from "./helpers/io";
+} from "../src/ethers-contracts";
+import {makeContract} from "../helpers/io";
 import {IWETH__factory} from "@certusone/wormhole-sdk/lib/cjs/ethers-contracts";
 
 describe("Token Bridge Relayer", () => {
@@ -77,7 +77,7 @@ describe("Token Bridge Relayer", () => {
   );
 
   // WormUSD ERC20 contract
-  const wormUsdAbi = `${__dirname}/../out/WormUSD.sol/WormUSD.json`;
+  const wormUsdAbi = `${__dirname}/../../out/WormUSD.sol/WormUSD.json`;
   const avaxWormUsd = makeContract(
     avaxWallet,
     readWormUSDContractAddress(FORK_AVAX_CHAIN_ID),
@@ -91,11 +91,11 @@ describe("Token Bridge Relayer", () => {
 
   // Token Bridge Relayer contracts
   const avaxRelayer = ITokenBridgeRelayer__factory.connect(
-    readTokenBridgeRelayerContractAddress(FORK_AVAX_CHAIN_ID),
+    readTokenBridgeRelayerContractAddress(FORK_AVAX_CHAIN_ID, true),
     avaxWallet
   );
   const ethRelayer = ITokenBridgeRelayer__factory.connect(
-    readTokenBridgeRelayerContractAddress(FORK_ETH_CHAIN_ID),
+    readTokenBridgeRelayerContractAddress(FORK_ETH_CHAIN_ID, true),
     ethWallet
   );
 
