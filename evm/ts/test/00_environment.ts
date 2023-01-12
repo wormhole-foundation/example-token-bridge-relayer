@@ -23,12 +23,12 @@ import {
   ETH_WORMHOLE_GUARDIAN_SET_INDEX,
   ETH_WORMHOLE_MESSAGE_FEE,
   WALLET_PRIVATE_KEY,
-} from "./helpers/consts";
+} from "../helpers/consts";
 import {
   formatWormholeMessageFromReceipt,
   readWormUSDContractAddress,
-} from "./helpers/utils";
-import {IWormhole__factory, IERC20__factory} from "./src/ethers-contracts";
+} from "../helpers/utils";
+import {IWormhole__factory, IERC20__factory} from "../src/ethers-contracts";
 import {ITokenBridge__factory} from "@certusone/wormhole-sdk/lib/cjs/ethers-contracts";
 
 describe("Environment Test", () => {
@@ -94,14 +94,14 @@ describe("Environment Test", () => {
     });
 
     it("Guardian Set", async () => {
-      // Check guardian set index
+      // check guardian set index
       const guardianSetIndex = await avaxWormhole.getCurrentGuardianSetIndex();
       expect(guardianSetIndex).to.equal(AVAX_WORMHOLE_GUARDIAN_SET_INDEX);
 
-      // Override guardian set
+      // override guardian set
       const abiCoder = ethers.utils.defaultAbiCoder;
 
-      // Get slot for Guardian Set at the current index
+      // get slot for Guardian Set at the current index
       const guardianSetSlot = ethers.utils.keccak256(
         abiCoder.encode(["uint32", "uint256"], [guardianSetIndex, 2])
       );
@@ -143,14 +143,14 @@ describe("Environment Test", () => {
         ethers.utils.hexZeroPad(devnetGuardian, 32),
       ]);
 
-      // Change the length to 1 guardian
+      // change the length to 1 guardian
       await avaxProvider.send("anvil_setStorageAt", [
         AVAX_WORMHOLE_ADDRESS,
         guardianSetSlot,
         ethers.utils.hexZeroPad("0x1", 32),
       ]);
 
-      // Confirm guardian set override
+      // confirm guardian set override
       const guardians = await avaxWormhole
         .getGuardianSet(guardianSetIndex)
         .then(
@@ -173,14 +173,14 @@ describe("Environment Test", () => {
     });
 
     it("Guardian Set", async () => {
-      // Check guardian set index
+      // check guardian set index
       const guardianSetIndex = await ethWormhole.getCurrentGuardianSetIndex();
       expect(guardianSetIndex).to.equal(ETH_WORMHOLE_GUARDIAN_SET_INDEX);
 
-      // Override guardian set
+      // override guardian set
       const abiCoder = ethers.utils.defaultAbiCoder;
 
-      // Get slot for Guardian Set at the current index
+      // get slot for Guardian Set at the current index
       const guardianSetSlot = ethers.utils.keccak256(
         abiCoder.encode(["uint32", "uint256"], [guardianSetIndex, 2])
       );
@@ -222,14 +222,14 @@ describe("Environment Test", () => {
         ethers.utils.hexZeroPad(devnetGuardian, 32),
       ]);
 
-      // Change the length to 1 guardian
+      // change the length to 1 guardian
       await ethProvider.send("anvil_setStorageAt", [
         ETH_WORMHOLE_ADDRESS,
         guardianSetSlot,
         ethers.utils.hexZeroPad("0x1", 32),
       ]);
 
-      // Confirm guardian set override
+      // confirm guardian set override
       const guardians = await ethWormhole.getGuardianSet(guardianSetIndex).then(
         (guardianSet: any) => guardianSet[0] // first element is array of keys
       );

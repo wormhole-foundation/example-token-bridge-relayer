@@ -3,28 +3,28 @@ import {ChainId, tryNativeToHexString} from "@certusone/wormhole-sdk";
 import {WORMHOLE_MESSAGE_EVENT_ABI, WORMHOLE_TOPIC} from "./consts";
 import * as fs from "fs";
 
-export function readHelloWorldContractAddress(chain: number): string {
+export function readTokenBridgeRelayerContractAddress(
+  chain: number,
+  isTest = false
+): string {
+  let broadcastType;
+  if (isTest) {
+    broadcastType = "broadcast-test";
+  } else {
+    broadcastType = "broadcast";
+  }
   return JSON.parse(
     fs.readFileSync(
-      `${__dirname}/../../broadcast/deploy_01_hello_world.sol/${chain}/run-latest.json`,
+      `${__dirname}/../../${broadcastType}/deploy_contracts.sol/${chain}/run-latest.json`,
       "utf-8"
     )
-  ).transactions[0].contractAddress;
-}
-
-export function readHelloTokenContractAddress(chain: number): string {
-  return JSON.parse(
-    fs.readFileSync(
-      `${__dirname}/../../broadcast/deploy_02_hello_token.sol/${chain}/run-latest.json`,
-      "utf-8"
-    )
-  ).transactions[0].contractAddress;
+  ).transactions[2].contractAddress;
 }
 
 export function readWormUSDContractAddress(chain: number): string {
   return JSON.parse(
     fs.readFileSync(
-      `${__dirname}/../../broadcast/deploy_wormUSD.sol/${chain}/run-latest.json`,
+      `${__dirname}/../../broadcast-test/deploy_wormUSD.sol/${chain}/run-latest.json`,
       "utf-8"
     )
   ).transactions[0].contractAddress;
@@ -91,6 +91,24 @@ export async function formatWormholeMessageFromReceipt(
   return results;
 }
 
+export function findTransferCompletedEventInLogs(
+  logs: ethers.providers.Log[],
+  contract: string
+): ethers.utils.Result {
+  let result: ethers.utils.Result = {} as ethers.utils.Result;
+  for (const log of logs) {
+    if (log.address == ethers.utils.getAddress(contract)) {
+      const iface = new ethers.utils.Interface([
+        "event TransferRedeemed(uint16 indexed emitterChainId, bytes32 indexed emitterAddress, uint64 indexed sequence)",
+      ]);
+
+      result = iface.parseLog(log).args;
+      break;
+    }
+  }
+  return result;
+}
+
 export function tokenBridgeNormalizeAmount(
   amount: ethers.BigNumber,
   decimals: number
@@ -109,4 +127,14 @@ export function tokenBridgeDenormalizeAmount(
     amount = amount.mul(10 ** (decimals - 8));
   }
   return amount;
+}
+
+export function tokenBridgeTransform(
+  amount: ethers.BigNumber,
+  decimals: number
+): ethers.BigNumber {
+  return tokenBridgeDenormalizeAmount(
+    tokenBridgeNormalizeAmount(amount, decimals),
+    decimals
+  );
 }

@@ -189,7 +189,7 @@ contract WormholeSimulator {
     }
 
     /**
-     * @notice Formats and signs a simulated Wormhole batch VAA given an array of Wormhole log entries 
+     * @notice Formats and signs a simulated Wormhole batch VAA given an array of Wormhole log entries
      * @param logs The forge Vm.log entries captured when recording events during test execution
      * @param nonce The nonce of the messages to be accumulated into the batch VAA
      * @return signedMessage Formatted and signed Wormhole message
@@ -226,7 +226,7 @@ contract WormholeSimulator {
                 counter++;
             }
         }
-    
+
         bytes32 batchHash = doubleKeccak256(abi.encodePacked(uint8(2), keccak256(abi.encodePacked(hashes))));
 
         IWormhole.Signature[] memory sigs = new IWormhole.Signature[](1);

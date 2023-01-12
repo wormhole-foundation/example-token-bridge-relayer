@@ -9,42 +9,53 @@ contract TokenBridgeRelayerMessages is TokenBridgeRelayerStructs {
     using BytesLib for bytes;
 
     /**
-     * @notice Encodes the TokenBridgeRelayerMessage struct into bytes
-     * @param parsedMessage TokenBridgeRelayerMessage struct
-     * @return encodedMessage TokenBridgeRelayerMessage struct encoded into bytes
+     * @notice Encodes the TransferWithRelay struct into bytes.
+     * @param transfer TransferWithRelay struct.
+     * @return encoded TransferWithRelay struct encoded into bytes.
      */
-    function encodePayload(
-        TokenBridgeRelayerMessage memory parsedMessage
-    ) public pure returns (bytes memory encodedMessage) {
-        encodedMessage = abi.encodePacked(
-            parsedMessage.payloadID, // payloadID = 1
-            parsedMessage.targetRecipient
+    function encodeTransferWithRelay(
+        TransferWithRelay memory transfer
+    ) public pure returns (bytes memory encoded) {
+       require(transfer.payloadId == 1, "invalid payloadId");
+        encoded = abi.encodePacked(
+            transfer.payloadId,
+            transfer.targetRelayerFee,
+            transfer.toNativeTokenAmount,
+            transfer.targetRecipient
         );
     }
 
     /**
-     * @notice Decodes bytes into TokenBridgeRelayerMessage struct
+     * @notice Decodes an encoded `TransferWithRelay` struct.
      * @dev reverts if:
-     * - the message payloadID is not 1
-     * - the encodedMessage length is incorrect
-     * @param encodedMessage encoded TokenBridgeRelayer message
-     * @return parsedMessage TokenBridgeRelayerMessage struct
+     * - the first byte (payloadId) does not equal 1
+     * - the length of the payload has an unexpected length
+     * @param encoded Encoded `TransferWithRelay` struct.
+     * @return transfer `TransferTokenRelay` struct.
      */
-    function decodePayload(
-        bytes memory encodedMessage
-    ) public pure returns (TokenBridgeRelayerMessage memory parsedMessage) {
+    function decodeTransferWithRelay(
+        bytes memory encoded
+    ) public pure returns (TransferWithRelay memory transfer) {
         uint256 index = 0;
 
-        // parse payloadId
-        parsedMessage.payloadID = encodedMessage.toUint8(index);
-        require(parsedMessage.payloadID == 1, "invalid payloadID");
+        // parse the payloadId
+        transfer.payloadId = encoded.toUint8(index);
         index += 1;
 
-        // target wallet recipient
-        parsedMessage.targetRecipient = encodedMessage.toBytes32(index);
+        require(transfer.payloadId == 1, "invalid payloadId");
+
+        // target relayer fee
+        transfer.targetRelayerFee = encoded.toUint256(index);
         index += 32;
 
-        // confirm that the payload was the expected size
-        require(index == encodedMessage.length, "invalid payload length");
+        // amount of tokens to convert to native assets
+        transfer.toNativeTokenAmount = encoded.toUint256(index);
+        index += 32;
+
+        // recipient of the transfered tokens and native assets
+        transfer.targetRecipient = encoded.toBytes32(index);
+        index += 32;
+
+        require(index == encoded.length, "invalid message length");
     }
 }

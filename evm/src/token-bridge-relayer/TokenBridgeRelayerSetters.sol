@@ -4,8 +4,16 @@ pragma solidity ^0.8.13;
 import "./TokenBridgeRelayerState.sol";
 
 contract TokenBridgeRelayerSetters is TokenBridgeRelayerState {
+    function setInitialized(address implementatiom) internal {
+        _state.initializedImplementations[implementatiom] = true;
+    }
+
     function setOwner(address owner_) internal {
         _state.owner = owner_;
+    }
+
+    function setPendingOwner(address pendingOwner_) internal {
+        _state.pendingOwner = pendingOwner_;
     }
 
     function setWormhole(address wormhole_) internal {
@@ -16,23 +24,70 @@ contract TokenBridgeRelayerSetters is TokenBridgeRelayerState {
         _state.tokenBridge = payable(tokenBridge_);
     }
 
+    function setWethAddress(address weth_) internal {
+        _state.wethAddress = weth_;
+    }
+
     function setChainId(uint16 chainId_) internal {
         _state.chainId = chainId_;
     }
 
-    function setWormholeFinality(uint8 finality) internal {
-        _state.wormholeFinality = finality;
+    function _registerContract(uint16 chainId_, bytes32 contract_) internal {
+        _state.registeredContracts[chainId_] = contract_;
     }
 
-    function setEmitter(uint16 chainId, bytes32 emitter) internal {
-        _state.registeredEmitters[chainId] = emitter;
+    function setSwapRatePrecision(uint256 precision) internal {
+        _state.swapRatePrecision = precision;
     }
 
-    function setFeePrecision(uint32 feePrecision_) internal {
-        _state.feePrecision = feePrecision_;
+    function setRelayerFeePrecision(uint256 precision) internal {
+        _state.relayerFeePrecision = precision;
     }
 
-    function setRelayerFeePercentage(uint32 relayerFeePercentage_) internal {
-        _state.relayerFeePercentage = relayerFeePercentage_;
+    function addAcceptedToken(address token) internal {
+        _state.acceptedTokens[token] = true;
+        _state.acceptedTokensList.push(token);
+    }
+
+    function removeAcceptedToken(address token) internal {
+        require(
+            _state.acceptedTokens[token],
+            "token not registered"
+        );
+
+        // set bool in acceptedTokens to false
+        _state.acceptedTokens[token] = false;
+
+        // cache array length
+        uint256 length_ = _state.acceptedTokensList.length;
+
+        // Replace `token` in the acceptedTokensList with the last
+        // element in the acceptedTokensList array.
+        uint256 i = 0;
+        for (; i < length_;) {
+            if (_state.acceptedTokensList[i] == token) {
+                break;
+            }
+            unchecked { i += 1; }
+        }
+
+        if (i != length_) {
+            if (length_ > 1) {
+                _state.acceptedTokensList[i] = _state.acceptedTokensList[length_ - 1];
+            }
+            _state.acceptedTokensList.pop();
+        }
+    }
+
+    function setRelayerFee(uint16 chainId_, uint256 fee) internal {
+        _state.relayerFees[chainId_] = fee;
+    }
+
+    function setSwapRate(address token, uint256 swapRate) internal {
+        _state.swapRates[token] = swapRate;
+    }
+
+    function setMaxNativeSwapAmount(address token, uint256 maximum) internal {
+        _state.maxNativeSwapAmount[token] = maximum;
     }
 }

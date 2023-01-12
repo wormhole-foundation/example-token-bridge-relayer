@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "outDir": "ts/scripts/lib/",
     "types": ["mocha", "chai"],
     "typeRoots": ["./node_modules/@types"],
     "lib": ["es2020"],
@@ -9,5 +10,6 @@
     "strict": true,
     "resolveJsonModule": true,
     "moduleResolution": "node"
-  }
+  },
+  "include": ["ts/scripts/"]
 }
