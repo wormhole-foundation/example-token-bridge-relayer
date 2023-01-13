@@ -45,7 +45,7 @@ function getRpc(rpcEvnVariable: any): WebSocketProvider {
 }
 
 // read in config
-const configPath = `${__dirname}/../cfg/tokenBridgeRelayer.json`;
+const configPath = `${__dirname}/../../cfg/tokenBridgeRelayer.json`;
 const CONFIG = JSON.parse(fs.readFileSync(configPath, "utf8"));
 
 // supported chains
@@ -339,4 +339,4 @@ async function main(sleepMs: number) {
 }
 
 // start the process
-main(3000000);
+main(30000000);

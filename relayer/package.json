@@ -1,7 +1,8 @@
 {
   "scripts": {
     "build": "tsc",
-    "start-relayer": "node lib/main.js"
+    "start-relayer": "node lib/tokenBridgeRelayer/main.js",
+    "start-oracle": "node lib/priceRelayer/main.js"
   },
   "dependencies": {
     "@certusone/wormhole-sdk": "^0.9.0",

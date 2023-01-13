@@ -8,5 +8,5 @@ out.log
 broadcast
 broadcast-test
 forge-scripts/deploy.out
-ts-test/src/
+ts/src/
 yarn-error.log
