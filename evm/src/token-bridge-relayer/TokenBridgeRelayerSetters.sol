@@ -4,10 +4,6 @@ pragma solidity ^0.8.13;
 import "./TokenBridgeRelayerState.sol";
 
 contract TokenBridgeRelayerSetters is TokenBridgeRelayerState {
-    function setInitialized(address implementatiom) internal {
-        _state.initializedImplementations[implementatiom] = true;
-    }
-
     function setOwner(address owner_) internal {
         _state.owner = owner_;
     }

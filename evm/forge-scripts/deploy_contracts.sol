@@ -9,18 +9,11 @@ import {IWormhole} from "../src/interfaces/IWormhole.sol";
 import {ITokenBridge} from "../src/interfaces/ITokenBridge.sol";
 import {ITokenBridgeRelayer} from "../src/interfaces/ITokenBridgeRelayer.sol";
 
-import {TokenBridgeRelayerSetup} from "../src/token-bridge-relayer/TokenBridgeRelayerSetup.sol";
-import {TokenBridgeRelayerProxy} from "../src/token-bridge-relayer/TokenBridgeRelayerProxy.sol";
-import {TokenBridgeRelayerImplementation} from "../src/token-bridge-relayer/TokenBridgeRelayerImplementation.sol";
+import {TokenBridgeRelayer} from "../src/token-bridge-relayer/TokenBridgeRelayer.sol";
 
 contract ContractScript is Script {
+    // Wormhole Interface
     IWormhole wormhole;
-    ITokenBridgeRelayer tokenBridgeRelayerImplementation;
-
-    // TokenBridgeRelayer contracts
-    TokenBridgeRelayerSetup setup;
-    TokenBridgeRelayerImplementation implementation;
-    TokenBridgeRelayerProxy proxy;
 
     // TokenBridgeRelayer instance (post deployment)
     ITokenBridgeRelayer relayer;
@@ -30,27 +23,29 @@ contract ContractScript is Script {
     }
 
     function deployTokenBridgeRelayer() public {
-        // first Setup
-        setup = new TokenBridgeRelayerSetup();
+        // read environment variables
+        address tokenBridgeAddress = vm.envAddress("RELEASE_BRIDGE_ADDRESS");
+        uint256 swapRatePrecision = vm.envUint("RELEASE_SWAP_RATE_PRECISION");
+        uint256 relayerFeePrecision = vm.envUint("RELEASE_RELAYER_FEE_PRECISION");
 
-        // next Implementation
-        implementation = new TokenBridgeRelayerImplementation();
-
-        // setup Proxy using Implementation
-        proxy = new TokenBridgeRelayerProxy(
-            address(setup),
-            abi.encodeWithSelector(
-                bytes4(keccak256("setup(address,uint16,address,address,uint256,uint256)")),
-                address(implementation),
-                wormhole.chainId(),
-                address(wormhole),
-                vm.envAddress("RELEASE_BRIDGE_ADDRESS"),
-                vm.envUint("RELEASE_SWAP_RATE_PRECISION"),
-                vm.envUint("RELEASE_RELAYER_FEE_PRECISION")
-            )
+        // deploy the contract and set up the contract
+        TokenBridgeRelayer deployedRelayer = new TokenBridgeRelayer(
+            wormhole.chainId(),
+            address(wormhole),
+            tokenBridgeAddress,
+            swapRatePrecision,
+            relayerFeePrecision
         );
 
-        relayer = ITokenBridgeRelayer(address(proxy));
+        // check the contract getters
+        relayer = ITokenBridgeRelayer(address(deployedRelayer));
+
+        // verify getters
+        require(relayer.chainId() == wormhole.chainId());
+        require(address(relayer.wormhole()) == address(wormhole));
+        require(address(relayer.tokenBridge()) == tokenBridgeAddress);
+        require(relayer.swapRatePrecision() == swapRatePrecision);
+        require(relayer.relayerFeePrecision() == relayerFeePrecision);
     }
 
     function run() public {

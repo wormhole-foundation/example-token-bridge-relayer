@@ -13,9 +13,7 @@ import {WormholeSimulator} from "wormhole-solidity/WormholeSimulator.sol";
 import {ForgeHelpers} from "wormhole-solidity/ForgeHelpers.sol";
 import {Helpers} from "./Helpers.sol";
 
-import {TokenBridgeRelayerSetup} from "../src/token-bridge-relayer/TokenBridgeRelayerSetup.sol";
-import {TokenBridgeRelayerProxy} from "../src/token-bridge-relayer/TokenBridgeRelayerProxy.sol";
-import {TokenBridgeRelayerImplementation} from "../src/token-bridge-relayer/TokenBridgeRelayerImplementation.sol";
+import {TokenBridgeRelayer} from "../src/token-bridge-relayer/TokenBridgeRelayer.sol";
 import {WormUSD} from "../src/token/WormUSD.sol";
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -27,7 +25,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
  * or set the swap rate for wavax. Both actions are completed in the
  * test setup.
  */
-contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
+contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
     // guardian private key for simulated signing of Wormhole messages
     uint256 guardianSigner;
 
@@ -96,29 +94,15 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
     }
 
     function setupTokenBridgeRelayer() internal {
-        // deploy Setup
-        TokenBridgeRelayerSetup setup = new TokenBridgeRelayerSetup();
-
-        // deploy Implementation
-        TokenBridgeRelayerImplementation implementation =
-            new TokenBridgeRelayerImplementation();
-
-        // deploy Proxy
-        TokenBridgeRelayerProxy proxy = new TokenBridgeRelayerProxy(
-            address(setup),
-            abi.encodeWithSelector(
-                bytes4(
-                    keccak256("setup(address,uint16,address,address,uint256,uint256)")
-                ),
-                address(implementation),
-                uint16(wormhole.chainId()),
-                address(wormhole),
-                vm.envAddress("TESTING_AVAX_BRIDGE_ADDRESS"),
-                1e8, // initial swap rate precision
-                1e8 // initial relayer fee precision
-            )
+        // deploy the relayer contract
+        TokenBridgeRelayer deployedRelayer = new TokenBridgeRelayer(
+            uint16(wormhole.chainId()),
+            address(wormhole),
+            vm.envAddress("TESTING_AVAX_BRIDGE_ADDRESS"),
+            1e8, // initial swap rate precision
+            1e8 // initial relayer fee precision
         );
-        avaxRelayer = ITokenBridgeRelayer(address(proxy));
+        avaxRelayer = ITokenBridgeRelayer(address(deployedRelayer));
 
         // register and set the native token swap rate (wavax)
         avaxRelayer.registerToken(avaxRelayer.chainId(), address(wavax));
@@ -129,7 +113,6 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
         );
 
         // verify initial state
-        assertEq(avaxRelayer.isInitialized(address(implementation)), true);
         assertEq(avaxRelayer.chainId(), wormhole.chainId());
         assertEq(address(avaxRelayer.wormhole()), address(wormhole));
         assertEq(
@@ -137,6 +120,7 @@ contract TokenBridgeRelayer is Helpers, ForgeHelpers, Test {
             vm.envAddress("TESTING_AVAX_BRIDGE_ADDRESS")
         );
         assertEq(avaxRelayer.swapRatePrecision(), 1e8);
+        assertEq(avaxRelayer.relayerFeePrecision(), 1e8);
         assertEq(
             avaxRelayer.swapRate(address(wavax)),
             69e4 * avaxRelayer.swapRatePrecision()

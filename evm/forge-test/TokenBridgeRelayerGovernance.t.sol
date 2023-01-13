@@ -12,9 +12,7 @@ import {ITokenBridgeRelayer} from "../src/interfaces/ITokenBridgeRelayer.sol";
 import {ForgeHelpers} from "wormhole-solidity/ForgeHelpers.sol";
 import {Helpers} from "./Helpers.sol";
 
-import {TokenBridgeRelayerSetup} from "../src/token-bridge-relayer/TokenBridgeRelayerSetup.sol";
-import {TokenBridgeRelayerProxy} from "../src/token-bridge-relayer/TokenBridgeRelayerProxy.sol";
-import {TokenBridgeRelayerImplementation} from "../src/token-bridge-relayer/TokenBridgeRelayerImplementation.sol";
+import {TokenBridgeRelayer} from "../src/token-bridge-relayer/TokenBridgeRelayer.sol";
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -23,11 +21,10 @@ import "../src/libraries/BytesLib.sol";
 /**
  * @title A Test Suite for the EVM Token Bridge Relayer Messages module
  */
-contract TokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
+contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
     using BytesLib for bytes;
 
     // contract instances
-    IWormhole wormhole;
     ITokenBridgeRelayer avaxRelayer;
 
     // random wallet for pranks
@@ -38,38 +35,21 @@ contract TokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
     address ethUsdc = vm.envAddress("TESTING_ETH_USDC_ADDRESS");
 
     function setupTokenBridgeRelayer() internal {
-        // deploy Setup
-        TokenBridgeRelayerSetup setup = new TokenBridgeRelayerSetup();
-
-        // deploy Implementation
-        TokenBridgeRelayerImplementation implementation =
-            new TokenBridgeRelayerImplementation();
-
-        // cache avax chain ID
+        // cache avax chain ID and wormhole address
         uint16 avaxChainId = 6;
-
-        // wormhole address
         address wormholeAddress = vm.envAddress("TESTING_AVAX_WORMHOLE_ADDRESS");
 
-        // deploy Proxy
-        TokenBridgeRelayerProxy proxy = new TokenBridgeRelayerProxy(
-            address(setup),
-            abi.encodeWithSelector(
-                bytes4(
-                    keccak256("setup(address,uint16,address,address,uint256,uint256)")
-                ),
-                address(implementation),
-                avaxChainId,
-                wormholeAddress,
-                vm.envAddress("TESTING_AVAX_BRIDGE_ADDRESS"),
-                1e8, // initial swap rate precision
-                1e8 // initial relayer fee precision
-            )
+        // deploy the relayer contract
+        TokenBridgeRelayer deployedRelayer = new TokenBridgeRelayer(
+            avaxChainId,
+            wormholeAddress,
+            vm.envAddress("TESTING_AVAX_BRIDGE_ADDRESS"),
+            1e8, // initial swap rate precision
+            1e8 // initial relayer fee precision
         );
-        avaxRelayer = ITokenBridgeRelayer(address(proxy));
+        avaxRelayer = ITokenBridgeRelayer(address(deployedRelayer));
 
         // verify initial state
-        assertEq(avaxRelayer.isInitialized(address(implementation)), true);
         assertEq(avaxRelayer.chainId(), avaxChainId);
         assertEq(address(avaxRelayer.wormhole()), wormholeAddress);
         assertEq(
@@ -85,106 +65,6 @@ contract TokenBridgeRelayerGovernance is Helpers, ForgeHelpers, Test {
      */
     function setUp() public {
         setupTokenBridgeRelayer();
-    }
-
-    /**
-     * @notice This test confirms that the owner can correctly upgrade the
-     * contract implementation.
-     */
-    function testUpgrade() public {
-        // hashed slot of implementation
-        bytes32 implementationSlot =
-            0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
-
-        // grap current implementation
-        bytes32 implementationBefore = vm.load(
-            address(avaxRelayer),
-            implementationSlot
-        );
-
-         // deploy implementation and upgrade the contract
-        TokenBridgeRelayerImplementation implementation =
-            new TokenBridgeRelayerImplementation();
-
-        // upgrade the contract and fetch the new implementation slot
-        avaxRelayer.upgrade(avaxRelayer.chainId(), address(implementation));
-        bytes32 implementationAfter = vm.load(
-            address(avaxRelayer),
-            implementationSlot
-        );
-
-        // confirm state changes
-        assertEq(implementationAfter != implementationBefore, true);
-        assertEq(
-            implementationAfter == addressToBytes32(address(implementation)),
-            true
-        );
-
-        // confirm the new implementation is initialized
-        assertEq(avaxRelayer.isInitialized(address(implementation)), true);
-    }
-
-    /**
-     * @notice This test confirms that the owner cannot upgrade the
-     * contract implementation to the wrong chain.
-     */
-    function testUpgradeWrongChain() public {
-        uint16 wrongChainId_ = 69;
-
-        // deploy implementation and upgrade the contract
-        TokenBridgeRelayerImplementation implementation =
-            new TokenBridgeRelayerImplementation();
-
-        // expect the upgrade call to fail
-        vm.expectRevert("wrong chain");
-        avaxRelayer.upgrade(wrongChainId_, address(implementation));
-    }
-
-    /**
-     * @notice This test confirms that ONLY the owner can upgrade the contract.
-     */
-    function testUpgradeOnlyOwner() public {
-        // deploy implementation and upgrade the contract
-        TokenBridgeRelayerImplementation implementation =
-            new TokenBridgeRelayerImplementation();
-
-        // prank the caller address to something different than the owner's
-        vm.startPrank(wallet);
-
-        // expect the upgrade call to fail
-        bytes memory encodedSignature = abi.encodeWithSignature(
-            "upgrade(uint16,address)",
-            avaxRelayer.chainId(),
-            address(implementation)
-        );
-        expectRevert(
-            address(avaxRelayer),
-            encodedSignature,
-            "caller not the owner"
-        );
-
-        vm.stopPrank();
-    }
-
-    /**
-     * @notice This test confirms that the owner cannot update the
-     * implementation to the zero address.
-     */
-    function testUpgradeOnlyInvalidImplementation() public {
-        // deploy implementation and upgrade the contract
-        address implementation = address(0);
-
-        // expect the upgrade call to fail
-        bytes memory encodedSignature = abi.encodeWithSignature(
-            "upgrade(uint16,address)",
-            avaxRelayer.chainId(),
-            implementation
-        );
-        expectRevert(
-            address(avaxRelayer),
-            encodedSignature,
-            "invalid implementation"
-        );
     }
 
     /**

@@ -18,7 +18,7 @@ export function readTokenBridgeRelayerContractAddress(
       `${__dirname}/../../${broadcastType}/deploy_contracts.sol/${chain}/run-latest.json`,
       "utf-8"
     )
-  ).transactions[2].contractAddress;
+  ).transactions[0].contractAddress;
 }
 
 export function readWormUSDContractAddress(chain: number): string {

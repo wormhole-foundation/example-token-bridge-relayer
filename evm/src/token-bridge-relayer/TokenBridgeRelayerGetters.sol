@@ -10,10 +10,6 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./TokenBridgeRelayerSetters.sol";
 
 contract TokenBridgeRelayerGetters is TokenBridgeRelayerSetters {
-    function isInitialized(address impl) public view returns (bool) {
-        return _state.initializedImplementations[impl];
-    }
-
     function owner() public view returns (address) {
         return _state.owner;
     }
