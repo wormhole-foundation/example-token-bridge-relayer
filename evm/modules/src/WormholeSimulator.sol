@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache 2
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.17;
 
 import {IWormhole} from "../../src/interfaces/IWormhole.sol";
 import "../../src/libraries/BytesLib.sol";

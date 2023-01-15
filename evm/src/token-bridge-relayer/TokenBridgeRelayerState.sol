@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache 2
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.17;
 
 import {IWormhole} from "../interfaces/IWormhole.sol";
 
-contract TokenBridgeRelayerStorage {
+abstract contract TokenBridgeRelayerStorage {
     struct State {
         // Wormhole chain ID of this contract
         uint16 chainId;
@@ -29,9 +29,6 @@ contract TokenBridgeRelayerStorage {
         // precision of the relayerFee, this value should NEVER be set to zero
         uint256 relayerFeePrecision;
 
-        // mapping of initialized implementation (logic) contracts
-        mapping(address => bool) initializedImplementations;
-
         // Wormhole chain ID to known relayer contract address mapping
         mapping(uint16 => bytes32) registeredContracts;
 
@@ -52,9 +49,6 @@ contract TokenBridgeRelayerStorage {
 
         // list of accepted token addresses
         address[] acceptedTokensList;
-
-        // storage gap for additional state variables in future versions
-        uint256[50] ______gap;
     }
 }
 

@@ -1,44 +1,16 @@
 // SPDX-License-Identifier: Apache 2
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.17;
 
 import {IWormhole} from "../interfaces/IWormhole.sol";
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {ERC1967Upgrade} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Upgrade.sol";
 
 import "./TokenBridgeRelayerGetters.sol";
 
-contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgrade {
-    event ContractUpgraded(address indexed oldContract, address indexed newContract);
-    event WormholeFinalityUpdated(uint8 indexed oldLevel, uint8 indexed newFinality);
+abstract contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters {
     event OwnershipTransfered(address indexed oldOwner, address indexed newOwner);
     event SwapRateUpdated(address indexed token, uint256 indexed swapRate);
-
-    /**
-     * @notice Upgrades the contract implementation (logic contract).
-     * @param chainId_ Wormhole chain ID.
-     * @param newImplementation Address of the new implementation (logic) contract.
-     */
-    function upgrade(
-        uint16 chainId_,
-        address newImplementation
-    ) public onlyOwner checkChain(chainId_) {
-        require(newImplementation != address(0), "invalid implementation");
-
-        address currentImplementation = _getImplementation();
-
-        _upgradeTo(newImplementation);
-
-        // call initialize function of the new implementation
-        (bool success, bytes memory reason) = newImplementation.delegatecall(
-            abi.encodeWithSignature("initialize()")
-        );
-
-        require(success, string(reason));
-
-        emit ContractUpgraded(currentImplementation, newImplementation);
-    }
 
     /**
      * @notice Starts the ownership transfer process of the contracts. It saves
@@ -49,10 +21,20 @@ contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgra
     function submitOwnershipTransferRequest(
         uint16 chainId_,
         address newOwner
-    ) public onlyOwner checkChain(chainId_) {
+    ) public onlyOwner onlyCurrentChain(chainId_) {
         require(newOwner != address(0), "newOwner cannot equal address(0)");
 
         setPendingOwner(newOwner);
+    }
+
+    /**
+     * @notice Cancels the ownership transfer process.
+     * @dev Sets the pending owner state variable to the zero address.
+     */
+    function cancelOwnershipTransferRequest(
+        uint16 chainId_
+    ) public onlyOwner onlyCurrentChain(chainId_) {
+        setPendingOwner(address(0));
     }
 
     /**
@@ -109,9 +91,8 @@ contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgra
     function registerToken(
         uint16 chainId_,
         address token
-    ) public onlyOwner checkChain(chainId_) {
+    ) public onlyOwner onlyCurrentChain(chainId_) {
         require(token != address(0), "invalid token");
-        require(!isAcceptedToken(token), "token already registered");
 
         addAcceptedToken(token);
     }
@@ -126,7 +107,7 @@ contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgra
     function deregisterToken(
         uint16 chainId_,
         address token
-    ) public onlyOwner checkChain(chainId_) {
+    ) public onlyOwner onlyCurrentChain(chainId_) {
         require(token != address(0), "invalid token");
 
         removeAcceptedToken(token);
@@ -161,7 +142,7 @@ contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgra
     function updateRelayerFeePrecision(
         uint16 chainId_,
         uint256 relayerFeePrecision_
-    ) public onlyOwner checkChain(chainId_) {
+    ) public onlyOwner onlyCurrentChain(chainId_) {
         require(relayerFeePrecision_ > 0, "precision must be > 0");
 
         setRelayerFeePrecision(relayerFeePrecision_);
@@ -181,7 +162,7 @@ contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgra
         uint16 chainId_,
         address token,
         uint256 swapRate
-    ) public onlyOwner checkChain(chainId_) {
+    ) public onlyOwner onlyCurrentChain(chainId_) {
         require(isAcceptedToken(token), "token not accepted");
         require(swapRate > 0, "swap rate must be nonzero");
 
@@ -198,7 +179,7 @@ contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgra
     function updateSwapRatePrecision(
         uint16 chainId_,
         uint256 swapRatePrecision_
-    ) public onlyOwner checkChain(chainId_) {
+    ) public onlyOwner onlyCurrentChain(chainId_) {
         require(swapRatePrecision_ > 0, "precision must be > 0");
 
         setSwapRatePrecision(swapRatePrecision_);
@@ -215,7 +196,7 @@ contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgra
         uint16 chainId_,
         address token,
         uint256 maxAmount
-    ) public onlyOwner checkChain(chainId_) {
+    ) public onlyOwner onlyCurrentChain(chainId_) {
         require(isAcceptedToken(token), "token not accepted");
 
         setMaxNativeSwapAmount(token, maxAmount);
@@ -226,7 +207,7 @@ contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters, ERC1967Upgra
         _;
     }
 
-    modifier checkChain(uint16 chainId_) {
+    modifier onlyCurrentChain(uint16 chainId_) {
         require(chainId() == chainId_, "wrong chain");
         _;
     }
