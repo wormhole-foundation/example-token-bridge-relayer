@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache 2
 
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.17;
 
 import {IWETH} from "./IWETH.sol";
 import {IWormhole} from "./IWormhole.sol";
@@ -48,11 +48,11 @@ interface ITokenBridgeRelayer {
 
     function bytes32ToAddress(bytes32 address_) external pure returns (address);
 
-    function upgrade(uint16 chainId_, address newImplementation) external;
-
     function updateWormholeFinality(uint16 chainId_, uint8 newWormholeFinality) external;
 
     function submitOwnershipTransferRequest(uint16 chainId_, address newOwner) external;
+
+    function cancelOwnershipTransferRequest(uint16 chainId_) external;
 
     function confirmOwnershipTransferRequest() external;
 
@@ -75,8 +75,6 @@ interface ITokenBridgeRelayer {
     function owner() external view returns (address);
 
     function pendingOwner() external view returns (address);
-
-    function isInitialized(address impl) external view returns (bool);
 
     function tokenBridge() external view returns (ITokenBridge);
 

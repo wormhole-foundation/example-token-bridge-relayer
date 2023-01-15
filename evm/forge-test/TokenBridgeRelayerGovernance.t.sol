@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache 2
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.17;
 
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
@@ -139,6 +139,86 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
         );
 
         vm.stopPrank();
+    }
+
+    /**
+     * @notice This test confirms that the owner can cancel the ownership-transfer
+     * process.
+     */
+    function testCancelOwnershipTransferRequest(address newOwner) public {
+        vm.assume(newOwner != address(this) && newOwner != address(0));
+
+        // set the pending owner
+        avaxRelayer.submitOwnershipTransferRequest(
+            avaxRelayer.chainId(),
+            newOwner
+        );
+        assertEq(avaxRelayer.pendingOwner(), newOwner);
+
+        // cancel the request to change ownership of the contract
+        avaxRelayer.cancelOwnershipTransferRequest(avaxRelayer.chainId());
+
+        // confirm that the pending owner was set to the zero address
+        assertEq(avaxRelayer.pendingOwner(), address(0));
+
+        vm.startPrank(newOwner);
+
+        // expect the confirmOwnershipTransferRequest call to revert
+        vm.expectRevert("caller must be pendingOwner");
+        avaxRelayer.confirmOwnershipTransferRequest();
+
+        vm.stopPrank();
+    }
+
+    /**
+     * @notice This test confirms that the owner cannot submit a request to
+     * cancel the ownership-transfer process on the wrong chain.
+     */
+    function testCancelOwnershipTransferRequestWrongChain(uint16 chainId_) public {
+        vm.assume(chainId_ != avaxRelayer.chainId());
+
+        // set the pending owner
+        avaxRelayer.submitOwnershipTransferRequest(
+            avaxRelayer.chainId(),
+            wallet // random input
+        );
+
+        // expect the cancelOwnershipTransferRequest call to revert
+        vm.expectRevert("wrong chain");
+        avaxRelayer.cancelOwnershipTransferRequest(chainId_);
+
+        // confirm pending owner is still set to address(this)
+        assertEq(avaxRelayer.pendingOwner(), wallet);
+    }
+
+    /**
+     * @notice This test confirms that ONLY the owner can submit a request
+     * to cancel the ownership-transfer process of the contract.
+     */
+    function testCancelOwnershipTransferRequestOwnerOnly() public {
+        // set the pending owner
+        avaxRelayer.submitOwnershipTransferRequest(
+            avaxRelayer.chainId(),
+            wallet // random input
+        );
+
+        vm.startPrank(wallet);
+
+        // expect the cancelOwnershipTransferRequest call to revert
+        bytes memory encodedSignature = abi.encodeWithSignature(
+            "cancelOwnershipTransferRequest(uint16)",
+            avaxRelayer.chainId()
+        );
+        expectRevert(
+            address(avaxRelayer),
+            encodedSignature,
+            "caller not the owner"
+        );
+
+        vm.stopPrank();
+
+        // confirm pending owner is still set to address(this)
+        assertEq(avaxRelayer.pendingOwner(), wallet);
     }
 
     /**
@@ -396,8 +476,7 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
     }
 
     /**
-     * @notice This test confirms that the owner can correctly deregister a token
-     * when it's the only token registered.
+     * @notice This test confirms that the owner can correctly deregister a token.
      */
     function testDeregisterToken(
         uint8 numTokens
@@ -411,8 +490,18 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
                 keccak256(abi.encodePacked(block.number, i))
             );
 
-            // register the token
+            // register the token and set token state
             avaxRelayer.registerToken(avaxRelayer.chainId(), tokens[i]);
+            avaxRelayer.updateSwapRate(
+                avaxRelayer.chainId(),
+                tokens[i],
+                (i + 1) * 1e8
+            );
+            avaxRelayer.updateMaxNativeSwapAmount(
+                avaxRelayer.chainId(),
+                tokens[i],
+                (i + 1) * 2 * 1e8
+            );
         }
 
         // confirm that all tokens were registered
@@ -421,9 +510,21 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
 
         // deregister each token
         for (uint256 i = 0; i < numTokens; i++) {
+            // verify initial token state
             assertEq(avaxRelayer.isAcceptedToken(tokens[i]), true);
+            assertEq(avaxRelayer.swapRate(tokens[i]), (i + 1) * 1e8);
+            assertEq(
+                avaxRelayer.maxNativeSwapAmount(tokens[i]),
+                (i + 1) * 2 * 1e8
+            );
+
+            // deregister the token
             avaxRelayer.deregisterToken(avaxRelayer.chainId(), tokens[i]);
+
+            // validate state changes
             assertEq(avaxRelayer.isAcceptedToken(tokens[i]), false);
+            assertEq(avaxRelayer.swapRate(tokens[i]), 0);
+            assertEq(avaxRelayer.maxNativeSwapAmount(tokens[i]), 0);
         }
 
         // confirm all tokens were removed
@@ -438,14 +539,28 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
     function testDeregisterTokenOnlyTokenRegistered() public {
         // test variables
         address token = wavax;
+        uint256 swapRate = 6.9e10;
+        uint256 maxNativeAmount = 1e18;
 
-        // register the token
+        // register the token and set initial state
         avaxRelayer.registerToken(avaxRelayer.chainId(), token);
+        avaxRelayer.updateSwapRate(
+            avaxRelayer.chainId(),
+            token,
+            swapRate
+        );
+        avaxRelayer.updateMaxNativeSwapAmount(
+            avaxRelayer.chainId(),
+            token,
+            maxNativeAmount
+        );
 
         // verify that the state was updated correctly
         address[] memory tokenList = avaxRelayer.getAcceptedTokensList();
         assertEq(tokenList[0], token);
         assertEq(avaxRelayer.isAcceptedToken(token), true);
+        assertEq(avaxRelayer.swapRate(token), swapRate);
+        assertEq(avaxRelayer.maxNativeSwapAmount(token), maxNativeAmount);
 
         // deregister the token
         avaxRelayer.deregisterToken(avaxRelayer.chainId(), token);
@@ -454,6 +569,8 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
         tokenList = avaxRelayer.getAcceptedTokensList();
         assertEq(tokenList.length, 0);
         assertEq(avaxRelayer.isAcceptedToken(token), false);
+        assertEq(avaxRelayer.swapRate(token), 0);
+        assertEq(avaxRelayer.maxNativeSwapAmount(token), 0);
     }
 
     /// @notice This test confirms that the contract cannot deregister address(0).

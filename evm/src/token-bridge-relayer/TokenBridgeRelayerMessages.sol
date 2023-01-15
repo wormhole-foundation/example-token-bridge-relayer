@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache 2
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.17;
 
 import "../libraries/BytesLib.sol";
 
 import "./TokenBridgeRelayerStructs.sol";
 
-contract TokenBridgeRelayerMessages is TokenBridgeRelayerStructs {
+abstract contract TokenBridgeRelayerMessages is TokenBridgeRelayerStructs {
     using BytesLib for bytes;
 
     /**

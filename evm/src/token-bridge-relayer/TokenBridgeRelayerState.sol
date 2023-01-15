@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache 2
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.17;
 
 import {IWormhole} from "../interfaces/IWormhole.sol";
 
-contract TokenBridgeRelayerStorage {
+abstract contract TokenBridgeRelayerStorage {
     struct State {
         // Wormhole chain ID of this contract
         uint16 chainId;

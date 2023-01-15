@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache 2
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.17;
 
 import {IWormhole} from "../interfaces/IWormhole.sol";
 
@@ -41,7 +41,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         setSwapRatePrecision(swapRatePrecision);
         setRelayerFeePrecision(relayerFeePrecision);
 
-        // set the wethAddress based on the token bridges WETH getter
+        // set the wethAddress based on the token bridge's WETH getter
         setWethAddress(address(tokenBridge().WETH()));
     }
 
@@ -338,14 +338,12 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
             uint256 maxToNativeAllowed = calculateMaxSwapAmountIn(token);
             if (transferWithRelay.toNativeTokenAmount > maxToNativeAllowed) {
                 transferWithRelay.toNativeTokenAmount = maxToNativeAllowed;
-                nativeAmountForRecipient = maxNativeSwapAmount(token);
-            } else {
-                // compute amount of native asset to pay the recipient
-                nativeAmountForRecipient = calculateNativeSwapAmountOut(
-                    token,
-                    transferWithRelay.toNativeTokenAmount
-                );
             }
+            // compute amount of native asset to pay the recipient
+            nativeAmountForRecipient = calculateNativeSwapAmountOut(
+                token,
+                transferWithRelay.toNativeTokenAmount
+            );
 
             /**
              * The nativeAmountForRecipient can be zero if the user specifed

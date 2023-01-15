@@ -6,7 +6,7 @@ import {
   tryUint8ArrayToNative,
 } from "@certusone/wormhole-sdk";
 import {Contract, ethers, Wallet} from "ethers";
-import {Config, readPriceConfig, RelayerConfig} from "./config";
+import {PriceConfig, readPriceConfig, RelayerConfig} from "./config";
 import {ITokenBridge__factory} from "@certusone/wormhole-sdk/lib/cjs/ethers-contracts";
 const axios = require("axios"); // import breaks
 import * as fs from "fs";
@@ -80,7 +80,7 @@ function relayerContract(
   return contract;
 }
 
-function createCoingeckoString(relayerConfig: Config): string {
+function createCoingeckoString(relayerConfig: PriceConfig): string {
   // cache variables from relayer config
   let uniqueIds: string[] = [];
   for (const config of relayerConfig.relayers) {

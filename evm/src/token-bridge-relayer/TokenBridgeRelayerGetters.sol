@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache 2
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.17;
 
 import {IWormhole} from "../interfaces/IWormhole.sol";
 import {ITokenBridge} from "../interfaces/ITokenBridge.sol";
@@ -9,7 +9,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import "./TokenBridgeRelayerSetters.sol";
 
-contract TokenBridgeRelayerGetters is TokenBridgeRelayerSetters {
+abstract contract TokenBridgeRelayerGetters is TokenBridgeRelayerSetters {
     function owner() public view returns (address) {
         return _state.owner;
     }

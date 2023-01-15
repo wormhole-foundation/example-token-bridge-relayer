@@ -1351,12 +1351,21 @@ describe("Token Bridge Relayer", () => {
         local.tokenDecimals
       );
 
-      // compute the relayer fee in the token's denomination
-      local.tokenRelayerFee = await ethRelayer.calculateRelayerFee(
-        CHAIN_ID_AVAX,
-        local.wrappedTokenContract.address,
-        local.tokenDecimals
-      );
+      // the calculateRelayerFee call to should revert
+      {
+        let failed = false;
+        try {
+          local.tokenRelayerFee = await ethRelayer.calculateRelayerFee(
+            CHAIN_ID_AVAX,
+            local.wrappedTokenContract.address,
+            local.tokenDecimals
+          );
+        } catch (e: any) {
+          failed = true;
+        }
+
+        expect(failed).is.true;
+      }
 
       // increase allowance of the wrapped wavax token for the eth wallet
       {
@@ -1377,7 +1386,7 @@ describe("Token Bridge Relayer", () => {
       );
 
       // try to redeem the transfer again
-      let failed: boolean = false;
+      let failed = false;
       try {
         // call transferTokensWithRelay
         const receipt = await ethRelayer

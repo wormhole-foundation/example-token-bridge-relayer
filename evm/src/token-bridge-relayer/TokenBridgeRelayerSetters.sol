@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache 2
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.17;
 
 import "./TokenBridgeRelayerState.sol";
 
-contract TokenBridgeRelayerSetters is TokenBridgeRelayerState {
+abstract contract TokenBridgeRelayerSetters is TokenBridgeRelayerState {
     function setOwner(address owner_) internal {
         _state.owner = owner_;
     }
@@ -41,6 +41,10 @@ contract TokenBridgeRelayerSetters is TokenBridgeRelayerState {
     }
 
     function addAcceptedToken(address token) internal {
+        require(
+            _state.acceptedTokens[token] == false,
+            "token already registered"
+        );
         _state.acceptedTokens[token] = true;
         _state.acceptedTokensList.push(token);
     }
@@ -51,8 +55,11 @@ contract TokenBridgeRelayerSetters is TokenBridgeRelayerState {
             "token not registered"
         );
 
-        // set bool in acceptedTokens to false
+        // Remove the token from the acceptedTokens mapping, and
+        // clear the token's swapRate and maxNativeSwapAmount.
         _state.acceptedTokens[token] = false;
+        _state.swapRates[token] = 0;
+        _state.maxNativeSwapAmount[token] = 0;
 
         // cache array length
         uint256 length_ = _state.acceptedTokensList.length;
