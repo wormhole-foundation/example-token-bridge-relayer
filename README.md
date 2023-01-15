@@ -1,5 +1,9 @@
 # Example-Token-Bridge-Relayer
 
+## Wormhole-Scaffolding
+
+This repository was generated from the [wormhole-scaffolding](https://github.com/wormhole-foundation/wormhole-scaffolding) template. We recommend using this template as a starting point for cross-chain development on Wormhole.
+
 ## Prerequisites
 
 ### EVM

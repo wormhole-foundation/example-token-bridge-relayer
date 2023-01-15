@@ -1,9 +1,5 @@
 # EVM
 
-## Wormhole-Scaffolding
-
-This repository was generated from the [wormhole-scaffolding](https://github.com/wormhole-foundation/wormhole-scaffolding) template. We recommend using this template as a starting point for cross-chain development on Wormhole.
-
 ## Build
 
 Run the following commands to install necessary dependencies and to build the smart contracts:
@@ -49,5 +45,5 @@ export RELEASE_WORMHOLE_CHAIN_ID=
 Then deploy the contracts by executing the following command:
 
 ```
-. env/your_environment_file.env && PRIVATE_KEY=your_private_key_here bash shell-scripts/deploy_circle_relayer.sh
+. env/your_environment_file.env && PRIVATE_KEY=your_private_key_here bash shell-scripts/deploy_token_bridge_relayer.sh
 ```
