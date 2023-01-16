@@ -47,3 +47,24 @@ Then deploy the contracts by executing the following command:
 ```
 . env/your_environment_file.env && PRIVATE_KEY=your_private_key_here bash shell-scripts/deploy_token_bridge_relayer.sh
 ```
+
+## Test Transfer
+
+You can interact with deployed Token Bridge Relayer contracts and send a test transfer by executing the forge script `forge-scripts/test_transfer.sol`. Before sending a test transfer, set the following environment variables in the environment file that was used to deploy the contract you wish to interact with:
+
+```
+export TEST_RELAYER_CONTRACT=
+export TEST_IS_NATIVE=
+export TEST_TOKEN=
+export TEST_TOKEN_CHAIN=
+export TEST_AMOUNT=
+export TEST_TO_NATIVE_AMOUNT=
+export TEST_TARGET_CHAIN_ID=
+export TEST_SHOULD_WRAP=
+```
+
+Then execute the `test_transfer.sol` script by running the following command:
+
+```
+. env/your_environment_file.env && PRIVATE_KEY=your_private_key bash shell-scripts/test_transfer.sh
+```
