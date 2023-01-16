@@ -260,11 +260,23 @@ function handleRelayerEvent(
       );
 
       // query for native amount to swap with contract
-      const nativeSwapQuote: ethers.BigNumber =
+      let nativeSwapQuote: ethers.BigNumber =
         await relayer.calculateNativeSwapAmountOut(
           localTokenAddress,
           denormalizedToNativeAmount
         );
+
+      // Fetch the max native swap amount from the contract. Override
+      // the nativeSwapQuote with the max if the maxNativeSwapAllowed
+      // is less than the nativeSwapQuote. This will reduce the cost
+      // of the transaction.
+      const maxNativeSwapAllowed = await relayer.maxNativeSwapAmount(
+        localTokenAddress
+      );
+      if (maxNativeSwapAllowed.lt(nativeSwapQuote)) {
+        nativeSwapQuote = maxNativeSwapAllowed;
+      }
+
       console.log(
         `Native amount to swap with contract: ${ethers.utils.formatEther(
           nativeSwapQuote
