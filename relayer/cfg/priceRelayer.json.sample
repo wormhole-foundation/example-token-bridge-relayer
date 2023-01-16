@@ -27,6 +27,12 @@
       "pricePrecision": 8
     },
     {
+      "chainId": 6,
+      "tokenId": "usd-coin",
+      "tokenContract": "0000000000000000000000005425890298aed601595a70AB815c96711a31Bc65",
+      "pricePrecision": 8
+    },
+    {
       "chainId": 10,
       "tokenId": "fantom",
       "tokenContract": "000000000000000000000000f1277d1Ed8AD466beddF92ef448A132661956621",
