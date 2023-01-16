@@ -52,7 +52,7 @@ contract ContractScript is Script {
         // begin sending transactions
         vm.startBroadcast();
 
-        // CircleRelayer.sol
+        // TokenBridgeRelayer.sol
         console.log("Deploying relayer contracts");
         deployTokenBridgeRelayer();
 
