@@ -280,10 +280,10 @@ async function main() {
           );
         }
       }
-
-      console.log(await relayer.getAcceptedTokensList());
     }
   }
+
+  console.log(await relayer.getAcceptedTokensList());
 }
 
 main();
