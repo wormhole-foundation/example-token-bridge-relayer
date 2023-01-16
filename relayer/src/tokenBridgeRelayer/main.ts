@@ -316,27 +316,19 @@ function subscribeToEvents(
   );
 }
 
-async function main(sleepMs: number) {
-  let run = true;
-  while (run) {
-    // resubscribe to contract events every 5 minutes
-    for (const chainId of SUPPORTED_CHAINS) {
-      try {
-        subscribeToEvents(
-          wormholeContract(
-            CONFIG[chainId.toString()].wormhole,
-            SIGNERS[chainId]
-          ),
-          chainId
-        );
-      } catch (e: any) {
-        console.log(e);
-        run = false;
-      }
+async function main() {
+  // resubscribe to contract events every 5 minutes
+  for (const chainId of SUPPORTED_CHAINS) {
+    try {
+      subscribeToEvents(
+        wormholeContract(CONFIG[chainId.toString()].wormhole, SIGNERS[chainId]),
+        chainId
+      );
+    } catch (e: any) {
+      console.log(e);
     }
-    await sleep(sleepMs);
   }
 }
 
 // start the process
-main(30000000);
+main();
