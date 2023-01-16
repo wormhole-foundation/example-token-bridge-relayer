@@ -132,11 +132,6 @@ contract ContractScript is Script {
         uint16 targetChain = uint16(vm.envUint("TEST_TARGET_CHAIN_ID"));
         bytes32 targetRecipient = bytes32(uint256(uint160(msg.sender)));
 
-        // wrap weth if specified
-        if (shouldWrap) {
-            wrap(amount);
-        }
-
         // transfer tokens
         if (isNative) {
             transferEthWithRelay(
@@ -147,6 +142,12 @@ contract ContractScript is Script {
                 0
             );
         } else {
+            // wrap weth if specified
+            if (shouldWrap) {
+                console.log("Wrapping amount: %s", amount);
+                wrap(amount);
+            }
+
             transferTokensWithRelay(
                 token,
                 tokenChain,
