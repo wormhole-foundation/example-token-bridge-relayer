@@ -31,7 +31,7 @@ make test
 
 ## Contract Deployment
 
-Before deploying the contracts, create an environment file in the `env/` directory for each target blockchain. Each file should contain the following environment variables:
+Before deploying the contracts, create an environment file in the `env/` directory (there are subdirectories for `testnet` and `mainnet`) for each target blockchain. Each file should contain the following environment variables:
 
 ```
 export RPC=""
@@ -45,7 +45,7 @@ export RELEASE_WORMHOLE_CHAIN_ID=
 Then deploy the contracts by executing the following command:
 
 ```
-. env/your_environment_file.env && PRIVATE_KEY=your_private_key_here bash shell-scripts/deploy_token_bridge_relayer.sh
+. env/network_subdirectory/your_environment_file.env && PRIVATE_KEY=your_private_key_here bash shell-scripts/deploy_token_bridge_relayer.sh
 ```
 
 ## Test Transfer
@@ -66,5 +66,5 @@ export TEST_SHOULD_WRAP=
 Then execute the `test_transfer.sol` script by running the following command:
 
 ```
-. env/your_environment_file.env && PRIVATE_KEY=your_private_key bash shell-scripts/test_transfer.sh
+. env/network_subdirectory/your_environment_file.env && PRIVATE_KEY=your_private_key bash shell-scripts/test_transfer.sh
 ```
