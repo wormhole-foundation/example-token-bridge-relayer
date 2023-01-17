@@ -96,6 +96,7 @@ function relayerContract(
       "function completeTransferWithRelay(bytes) payable",
       "function calculateNativeSwapAmountOut(address,uint256) view returns (uint256)",
       "function maxNativeSwapAmount(address) view returns (uint256)",
+      "function WETH() view returns (address)",
     ],
     signer
   );
@@ -259,22 +260,33 @@ function handleRelayerEvent(
         SIGNERS[toChain as SupportedChainId]
       );
 
-      // query for native amount to swap with contract
-      let nativeSwapQuote: ethers.BigNumber =
-        await relayer.calculateNativeSwapAmountOut(
+      // fetch weth address from the contract
+      const targetWethAddress = await relayer.WETH();
+
+      // determine how much native asset to supply to the relayer contract
+      let nativeSwapQuote: ethers.BigNumber;
+      if (
+        ethers.utils.getAddress(targetWethAddress) ===
+        ethers.utils.getAddress(localTokenAddress)
+      ) {
+        console.log("WETH transfer detected, setting nativeSwapQuote to zero.");
+        nativeSwapQuote = ethers.BigNumber.from("0");
+      } else {
+        nativeSwapQuote = await relayer.calculateNativeSwapAmountOut(
           localTokenAddress,
           denormalizedToNativeAmount
         );
 
-      // Fetch the max native swap amount from the contract. Override
-      // the nativeSwapQuote with the max if the maxNativeSwapAllowed
-      // is less than the nativeSwapQuote. This will reduce the cost
-      // of the transaction.
-      const maxNativeSwapAllowed = await relayer.maxNativeSwapAmount(
-        localTokenAddress
-      );
-      if (maxNativeSwapAllowed.lt(nativeSwapQuote)) {
-        nativeSwapQuote = maxNativeSwapAllowed;
+        // Fetch the max native swap amount from the contract. Override
+        // the nativeSwapQuote with the max if the maxNativeSwapAllowed
+        // is less than the nativeSwapQuote. This will reduce the cost
+        // of the transaction.
+        const maxNativeSwapAllowed = await relayer.maxNativeSwapAmount(
+          localTokenAddress
+        );
+        if (maxNativeSwapAllowed.lt(nativeSwapQuote)) {
+          nativeSwapQuote = maxNativeSwapAllowed;
+        }
       }
 
       console.log(

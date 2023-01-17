@@ -85,6 +85,14 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         uint256 wormholeFee = wormhole().messageFee();
         require(msg.value == wormholeFee, "insufficient value");
 
+        // Cache token decimals, and remove dust from the amount argument. This
+        // ensures that the dust is never transferred to this contract.
+        uint8 tokenDecimals = getDecimals(token);
+        amount = denormalizeAmount(
+            normalizeAmount(amount, tokenDecimals),
+            tokenDecimals
+        );
+
         // Transfer tokens from user to the this contract, and
         // override amount with actual amount received.
         amount = custodyTokens(token, amount);
@@ -94,6 +102,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
             InternalTransferParams({
                 token: token,
                 amount: amount,
+                tokenDecimals: tokenDecimals,
                 toNativeTokenAmount: toNativeTokenAmount,
                 targetChain: targetChain,
                 targetRecipient: targetRecipient
@@ -149,6 +158,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         messageSequence = _transferTokensWithRelay(
             InternalTransferParams({
                 token: address(weth),
+                tokenDecimals: 18,
                 amount: amountLessDust,
                 toNativeTokenAmount: toNativeTokenAmount,
                 targetChain: targetChain,
@@ -172,20 +182,20 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         );
 
         /**
-         * Compute the normalized amount to verify that it's nonzero.
+         * Cache the normalized amount and verify that it's nonzero.
          * The token bridge peforms the same operation before encoding
          * the amount in the `TransferWithPayload` message.
          */
-        uint8 tokenDecimals = getDecimals(params.token);
-        require(
-            normalizeAmount(params.amount, tokenDecimals) > 0,
-            "normalized amount must be > 0"
+        uint256 normalizedAmount = normalizeAmount(
+            params.amount,
+            params.tokenDecimals
         );
+        require(normalizedAmount > 0, "normalized amount must be > 0");
 
         // normalized toNativeTokenAmount should be nonzero
         uint256 normalizedToNativeTokenAmount = normalizeAmount(
             params.toNativeTokenAmount,
-            tokenDecimals
+            params.tokenDecimals
         );
         require(
             params.toNativeTokenAmount == 0 || normalizedToNativeTokenAmount > 0,
@@ -199,13 +209,16 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
 
         // Confirm that the user has sent enough tokens to cover the native swap
         // on the target chain and to pay the relayer fee.
-        uint256 targetRelayerFee = calculateRelayerFee(
-            params.targetChain,
-            params.token,
-            tokenDecimals
+        uint256 normalizedRelayerFee = normalizeAmount(
+            calculateRelayerFee(
+                params.targetChain,
+                params.token,
+                params.tokenDecimals
+            ),
+            params.tokenDecimals
         );
         require(
-            params.amount > targetRelayerFee + params.toNativeTokenAmount,
+            normalizedAmount > normalizedRelayerFee + normalizedToNativeTokenAmount,
             "insufficient amount"
         );
 
@@ -215,16 +228,13 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
          * support non-evm smart contracts that have addresses that are longer
          * than 20 bytes.
          *
-         * We normalize the targetRelayerFee and toNativeTokenAmount to support
+         * We normalize the relayerFee and toNativeTokenAmount to support
          * non-evm smart contracts that can only handle uint64.max values.
          */
         bytes memory messagePayload = encodeTransferWithRelay(
             TransferWithRelay({
                 payloadId: 1,
-                targetRelayerFee: normalizeAmount(
-                    targetRelayerFee,
-                    tokenDecimals
-                ),
+                targetRelayerFee: normalizedRelayerFee,
                 toNativeTokenAmount: normalizedToNativeTokenAmount,
                 targetRecipient: params.targetRecipient
             })
@@ -499,6 +509,9 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         address recipient,
         uint256 relayerFee
     ) internal {
+        // revert if the relayer sends ether to this contract
+        require(msg.value == 0, "value must be zero");
+
         // withdraw eth
         WETH().withdraw(amount);
 
