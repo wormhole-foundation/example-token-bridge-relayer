@@ -20,7 +20,7 @@ contract ContractScript is Script {
     ITokenBridge tokenBridge;
 
     function setUp() public {
-        relayer = ITokenBridgeRelayer(vm.envAddress("TEST_RELAYER_CONTRACT"));
+        relayer = ITokenBridgeRelayer(vm.envAddress("RELAYER_CONTRACT_ADDRESS"));
         tokenBridge = ITokenBridge(vm.envAddress("RELEASE_BRIDGE_ADDRESS"));
     }
 
