@@ -132,6 +132,8 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         bytes32 targetRecipient,
         uint32 batchId
     ) public payable returns (uint64 messageSequence) {
+        require(unwrapWeth(), "WETH functionality not supported");
+
         // Cache wormhole fee and confirm that the user has passed enough
         // value to cover the wormhole protocol fee.
         uint256 wormholeFee = wormhole().messageFee();
@@ -549,7 +551,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
             if (relayerFee > 0) {
                 SafeERC20.safeTransfer(
                     IERC20(address(weth)),
-                    recipient,
+                    msg.sender,
                     relayerFee
                 );
             }
