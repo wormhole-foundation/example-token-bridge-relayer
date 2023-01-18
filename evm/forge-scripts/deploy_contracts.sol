@@ -50,6 +50,8 @@ contract ContractScript is Script {
         require(address(relayer.tokenBridge()) == tokenBridgeAddress);
         require(relayer.swapRatePrecision() == swapRatePrecision);
         require(relayer.relayerFeePrecision() == relayerFeePrecision);
+        require(address(relayer.WETH()) == wethAddress);
+        require(relayer.unwrapWeth() == shouldUnwrapWeth);
     }
 
     function run() public {
