@@ -283,6 +283,64 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
     }
 
     /**
+     * @notice This test confirms that the owner can update the unwrapWeth flag.
+     */
+    function testUpdateUnwrapWethFlag(bool unwrapWeth_) public {
+        vm.assume(avaxRelayer.unwrapWeth() != unwrapWeth_);
+
+        // update the unwrap weth flag
+        avaxRelayer.updateUnwrapWethFlag(
+            avaxRelayer.chainId(),
+            unwrapWeth_
+        );
+
+        // confirm state changes
+        assertEq(avaxRelayer.unwrapWeth(), unwrapWeth_);
+    }
+
+    /**
+     * @notice This test confirms that the owner cannot update the unwrapWeth
+     * flag with the wrong chainId.
+     */
+    function testUpdateUnwrapWethFlagThisChainId(uint16 chainId_) public {
+        vm.assume(chainId_ != avaxRelayer.chainId());
+
+        bool unwrapWeth_ = false;
+
+        // expect the update unwrap call to revert
+        vm.expectRevert("wrong chain");
+        avaxRelayer.updateUnwrapWethFlag(
+            chainId_,
+            unwrapWeth_
+        );
+    }
+
+    /**
+     * @notice This test confirms that ONLY the owner can update the
+     * unwrapWeth_ flag.
+     */
+    function testUpdateUnwrapWethFlagThisOwnerOnly() public {
+        bool unwrapWeth_ = false;
+
+        // prank the caller
+        vm.startPrank(wallet);
+
+        // expect the update unwrap call to revert
+        bytes memory encodedSignature = abi.encodeWithSignature(
+            "updateUnwrapWethFlag(uint16,bool)",
+            avaxRelayer.chainId(),
+            unwrapWeth_
+        );
+        expectRevert(
+            address(avaxRelayer),
+            encodedSignature,
+            "caller not the owner"
+        );
+
+        vm.stopPrank();
+    }
+
+    /**
      * @notice This test confirms that the owner can correctly register a foreign
      * TokenBridgeRelayer contract.
      */

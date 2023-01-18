@@ -56,6 +56,8 @@ interface ITokenBridgeRelayer {
 
     function confirmOwnershipTransferRequest() external;
 
+    function updateUnwrapWethFlag(uint16 chainId_, bool unwrapWeth_) external;
+
     function registerContract(uint16 chainId_, bytes32 contractAddress) external;
 
     function registerToken(uint16 chainId_, address token) external;
@@ -81,6 +83,8 @@ interface ITokenBridgeRelayer {
     function wormhole() external view returns (IWormhole);
 
     function WETH() external view returns (IWETH);
+
+    function unwrapWeth() external view returns (bool);
 
     function chainId() external view returns (uint16);
 
