@@ -99,6 +99,8 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
             uint16(wormhole.chainId()),
             address(wormhole),
             vm.envAddress("TESTING_AVAX_BRIDGE_ADDRESS"),
+            address(wavax),
+            true, // should unwrap flag
             1e8, // initial swap rate precision
             1e8 // initial relayer fee precision
         );

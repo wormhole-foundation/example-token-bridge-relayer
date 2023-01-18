@@ -16,7 +16,6 @@ import "./TokenBridgeRelayerMessages.sol";
  * @notice This contract composes on Wormhole's Token Bridge contracts to faciliate
  * one-click transfers of Token Bridge supported assets cross chain.
  */
-
 contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerMessages, ReentrancyGuard {
     using BytesLib for bytes;
 
@@ -24,12 +23,15 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         uint16 chainId,
         address wormhole,
         address tokenBridge_,
+        address wethAddress,
+        bool unwrapWeth_,
         uint256 swapRatePrecision,
         uint256 relayerFeePrecision
     ) {
         require(chainId > 0, "invalid chainId");
         require(wormhole != address(0), "invalid wormhole address");
         require(tokenBridge_ != address(0), "invalid token bridge address");
+        require(wethAddress != address(0), "invalid weth address");
         require(swapRatePrecision != 0, "swap rate precision must be > 0");
         require(relayerFeePrecision != 0, "relayer fee precision must be > 0");
 
@@ -38,11 +40,10 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         setChainId(chainId);
         setWormhole(wormhole);
         setTokenBridge(tokenBridge_);
+        setWethAddress(wethAddress);
+        setUnwrapWethFlag(unwrapWeth_);
         setSwapRatePrecision(swapRatePrecision);
         setRelayerFeePrecision(relayerFeePrecision);
-
-        // set the wethAddress based on the token bridge's WETH getter
-        setWethAddress(address(tokenBridge().WETH()));
     }
 
     /**
@@ -257,13 +258,13 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
          * ITokenBridge.sol interface file in this repo).
          */
         messageSequence = bridge.transferTokensWithPayload{value: wormholeFee}(
-                params.token,
-                params.amount,
-                params.targetChain,
-                targetContract,
-                batchId,
-                messagePayload
-            );
+            params.token,
+            params.amount,
+            params.targetChain,
+            targetContract,
+            batchId,
+            messagePayload
+        );
     }
 
     /**
@@ -291,15 +292,17 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
             payload
         );
 
-        // cache the recipient address
+        // cache the recipient address and unwrap weth flag
         address recipient = bytes32ToAddress(transferWithRelay.targetRecipient);
+        bool unwrapWeth = unwrapWeth();
 
         // handle self redemptions
         if (msg.sender == recipient) {
             _completeSelfRedemption(
                 token,
                 recipient,
-                amount
+                amount,
+                unwrapWeth
             );
 
             // bail out
@@ -317,10 +320,11 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
 
         // unwrap and transfer ETH
         if (token == address(WETH())) {
-            _completeUnwrap(
+            _completeWethTransfer(
                 amount,
                 recipient,
-                transferWithRelay.targetRelayerFee
+                transferWithRelay.targetRelayerFee,
+                unwrapWeth
             );
 
             // bail out
@@ -482,7 +486,8 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
     function _completeSelfRedemption(
         address token,
         address recipient,
-        uint256 amount
+        uint256 amount,
+        bool unwrapWeth
     ) internal {
         // revert if the caller sends ether to this contract
         require(msg.value == 0, "recipient cannot swap native assets");
@@ -491,7 +496,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         IWETH weth = WETH();
 
         // transfer the full amount to the recipient
-        if (token == address(weth)) {
+        if (token == address(weth) && unwrapWeth) {
             // withdraw weth and send to the recipient
             weth.withdraw(amount);
             payable(recipient).transfer(amount);
@@ -504,23 +509,50 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         }
     }
 
-    function _completeUnwrap(
+    function _completeWethTransfer(
         uint256 amount,
         address recipient,
-        uint256 relayerFee
+        uint256 relayerFee,
+        bool unwrapWeth
     ) internal {
         // revert if the relayer sends ether to this contract
         require(msg.value == 0, "value must be zero");
 
-        // withdraw eth
-        WETH().withdraw(amount);
+        /**
+         * Check if the weth is unwrappable. Some wrapped native assets
+         * are not unwrappable (e.g. CELO) and must be transferred via
+         * the ERC20 interface.
+         */
+        if (unwrapWeth) {
+            // withdraw eth
+            WETH().withdraw(amount);
 
-        // transfer eth to recipient
-        payable(recipient).transfer(amount - relayerFee);
+            // transfer eth to recipient
+            payable(recipient).transfer(amount - relayerFee);
 
-        // transfer relayer fee to the caller
-        if (relayerFee > 0) {
-            payable(msg.sender).transfer(relayerFee);
+            // transfer relayer fee to the caller
+            if (relayerFee > 0) {
+                payable(msg.sender).transfer(relayerFee);
+            }
+        } else {
+            // cache WETH instance
+            IWETH weth = WETH();
+
+            // transfer the native asset to the caller
+            SafeERC20.safeTransfer(
+                IERC20(address(weth)),
+                recipient,
+                amount - relayerFee
+            );
+
+            // transfer relayer fee to the caller
+            if (relayerFee > 0) {
+                SafeERC20.safeTransfer(
+                    IERC20(address(weth)),
+                    recipient,
+                    relayerFee
+                );
+            }
         }
     }
 

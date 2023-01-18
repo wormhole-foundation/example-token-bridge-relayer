@@ -8,6 +8,9 @@ abstract contract TokenBridgeRelayerStorage {
         // Wormhole chain ID of this contract
         uint16 chainId;
 
+        // boolean to determine if weth is unwrappable
+        bool unwrapWeth;
+
         // address of WETH on this chain
         address wethAddress;
 
