@@ -597,9 +597,19 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
     function calculateMaxSwapAmountIn(
         address token
     ) public view returns (uint256 maxAllowed) {
-        maxAllowed =
-            (maxNativeSwapAmount(token) * nativeSwapRate(token)) /
-            (10 ** (18 - getDecimals(token)) * swapRatePrecision());
+        // fetch the decimals for the token and native token
+        uint8 tokenDecimals = getDecimals(token);
+        uint8 nativeDecimals = getDecimals(address(WETH()));
+
+        if (tokenDecimals > nativeDecimals) {
+            maxAllowed =
+                maxNativeSwapAmount(token) * nativeSwapRate(token) *
+                10 ** (tokenDecimals - nativeDecimals) / swapRatePrecision();
+        } else {
+            maxAllowed =
+                (maxNativeSwapAmount(token) * nativeSwapRate(token)) /
+                (10 ** (nativeDecimals - tokenDecimals) * swapRatePrecision());
+        }
     }
 
     /**
@@ -614,9 +624,20 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         address token,
         uint256 toNativeAmount
     ) public view returns (uint256 nativeAmount) {
-        nativeAmount =
-            swapRatePrecision() * toNativeAmount /
-            nativeSwapRate(token) * 10 ** (18 - getDecimals(token));
+        // fetch the decimals for the token and native token
+        uint8 tokenDecimals = getDecimals(token);
+        uint8 nativeDecimals = getDecimals(address(WETH()));
+
+        if (tokenDecimals > nativeDecimals) {
+            nativeAmount =
+                swapRatePrecision() * toNativeAmount /
+                (nativeSwapRate(token) * 10 ** (tokenDecimals - nativeDecimals));
+        } else {
+            nativeAmount =
+                swapRatePrecision() * toNativeAmount *
+                10 ** (nativeDecimals - tokenDecimals) /
+                nativeSwapRate(token);
+        }
     }
 
     /**
