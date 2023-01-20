@@ -55,7 +55,7 @@ abstract contract TokenBridgeRelayerStorage {
     }
 }
 
-contract TokenBridgeRelayerState {
+abstract contract TokenBridgeRelayerState {
     TokenBridgeRelayerStorage.State _state;
 }
 
