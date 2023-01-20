@@ -18,6 +18,10 @@ Each directory represents Wormhole integrations for specific blockchain networks
 
 See the relayer [README.md](./relayer/README.md) file.
 
+<<<<<<< HEAD
 ## Design
+=======
+## System Design
+>>>>>>> 3da00cc (add design diagram)
 
 ![alt text](./docs/design.png)
