@@ -8,10 +8,14 @@ Before starting the off-chain message relayer process, copy the sample environme
 cp .env.sample .env
 ```
 
-Copy the sample `tokenBridgeRelayer.json` file. This file contains the deployed contracts addresses of the Wormhole Core, Wormhole Token Bridge, and Token Bridge Relayer smart contracts. The sample file contains contracts addresses that are deployed to a select number of testnets:
+Copy one of the sample `tokenBridgeRelayer.json` files (depending on the target environment). These files contain the deployed contracts addresses of the Wormhole Core, Wormhole Token Bridge, and Token Bridge Relayer smart contracts.
 
 ```
-cp cfg/tokenBridgeRelayer.json.sample cfg/tokenBridgeRelayer.json
+# copy the testnet message relayer file
+cp cfg/testnetTokenBridgeRelayer.json.sample cfg/tokenBridgeRelayer.json
+
+# or copy the mainnet message relayer file
+cp cfg/mainnetTokenBridgeRelayer.json.sample cfg/tokenBridgeRelayer.json
 ```
 
 Before starting the off-chain message relayer process, open the [source file](./relayer/src/tokenBridgeRelayer/main.ts) and check that the `SUPPORTED_CHAINS` and `SIGNERS` variables reflect the configured networks in the `.env` and `tokenBridgeRelayer.json` files.
@@ -23,6 +27,8 @@ npm ci && npm run build
 npm run start-relayer
 ```
 
+Note: The `tokenBridgeRelayer.json` file is also used by the Off-Chain Price Relayer process.
+
 ## Price Relayer
 
 Before starting the off-chain price relayer process, copy the sample environment file (this `.env` file is shared with the off-chain message relayer process):
@@ -31,10 +37,14 @@ Before starting the off-chain price relayer process, copy the sample environment
 cp .env.sample .env
 ```
 
-Copy the sample `priceRelayer.json` file.
+Copy one of the sample `priceRelayer.json` files.
 
 ```
-cp cfg/priceRelayer.json.sample cfg/priceRelayer.json
+# copy the testnet price relayer file
+cp cfg/testnetPriceRelayer.json.sample cfg/priceRelayer.json
+
+# or copy the mainnet price relayer file
+cp cfg/mainnetPriceRelayer.json.sample cfg/priceRelayer.json
 ```
 
 The following table describes each parameter in the `priceRelayer.json` configuration file:
