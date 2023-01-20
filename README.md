@@ -17,3 +17,7 @@ Each directory represents Wormhole integrations for specific blockchain networks
 ## Off-Chain Relayers
 
 See the relayer [README.md](./relayer/README.md) file.
+
+## Design
+
+![alt text](./docs/design.png)
