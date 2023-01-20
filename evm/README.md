@@ -50,11 +50,14 @@ Then deploy the contracts by executing the following command:
 
 ## Initial Contract Setup
 
-Once the contracts have been deployed, the deployment configuration file needs to be created. Navigate to the shared `cfg` directory in the root of the repo, and run the following command:
+Once the contracts have been deployed, the deployment configuration file needs to be created. Navigate to the shared `cfg` directory in the root of the repo, and run one of the following commands (depending on the target environment):
 
 ```
-# copy the sample config
-cp deploymentConfig.json.sample deploymentConfig.json
+# copy the testnet sample config
+cp testnetDeploymentConfig.json.sample deploymentConfig.json
+
+# or copy the mainnet sample config
+cp mainnetDeploymentConfig.json.sample deploymentConfig.json
 ```
 
 Replace the sample `deployedContracts` with your deployed contract addresses (32-byte format) keyed by Wormhole Chain ID.
