@@ -50,7 +50,7 @@ Then deploy the contracts by executing the following command:
 
 ## Initial Contract Setup
 
-Before performing the initial contract setup, please read about the EVM State Variables [docs](../docs/EVM_STATE_VARIABLES.md).
+Before performing the initial contract setup, please read the EVM State Variables [doc](../docs/EVM_STATE_VARIABLES.md).
 
 Once the contracts have been deployed, the deployment configuration file needs to be created. Navigate to the shared `cfg` directory in the root of the repo, and run one of the following commands (depending on the target environment):
 
