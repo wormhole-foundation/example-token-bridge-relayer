@@ -51,7 +51,7 @@ This document defines each of the EVM state variables in the Token Bridge Relaye
 
 - The precision of the relayer fee.
 - This value MUST be set to the same value on each deployed smart contract.
-- The `relayerFeePrecision` determines the `relayerFee` minimum. For example, if the `relayerFeePrecision` is set to 1e3 (1000), the `relayerFee` minimum is 0.001 (see [relayerFee](#relayerfee) for more info).
+- The `relayerFeePrecision` determines the `relayerFee` minimum. For example, if the `relayerFeePrecision` is set to 1e3 (1000), the `relayerFee` minimum is 0.001 (see [relayerFee](#relayerfees) for more info).
 - The `owner` can update this state variable by invoking the `updateRelayerFeePrecision` method.
 
 ### registeredContracts
