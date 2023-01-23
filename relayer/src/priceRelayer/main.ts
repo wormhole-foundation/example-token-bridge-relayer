@@ -190,6 +190,11 @@ async function main() {
     `Price update minimum percentage change: ${minPriceChangePercentage}%`
   );
 
+  const maxPriceChangePercentage = relayerConfig.maxPriceChangePercentage;
+  console.log(
+    `Price update maximum percentage change: ${maxPriceChangePercentage}%`
+  );
+
   // native -> local token address mapping per chain
   const nativeTokenMap = await generateTokenMap(
     relayerConfig.relayers,
@@ -250,8 +255,13 @@ async function main() {
             );
 
             try {
+              const pricePercentageChange = Math.abs(percentageChange);
+
               // update prices if they have changed by the minPriceChangePercentage
-              if (Math.abs(percentageChange) > minPriceChangePercentage) {
+              if (
+                pricePercentageChange > minPriceChangePercentage &&
+                pricePercentageChange < maxPriceChangePercentage
+              ) {
                 const receipt = await relayer
                   .updateSwapRate(supportedChainId, token, newPrice)
                   .then((tx: ethers.ContractTransaction) => tx.wait())
@@ -266,6 +276,12 @@ async function main() {
                   );
                 } else {
                   throw Error("Failed to update the swap rate");
+                }
+              } else {
+                if (pricePercentageChange >= maxPriceChangePercentage) {
+                  console.warn(
+                    `Price change larger than max, chainId: ${supportedChainId}, token: ${token}`
+                  );
                 }
               }
             } catch (e) {

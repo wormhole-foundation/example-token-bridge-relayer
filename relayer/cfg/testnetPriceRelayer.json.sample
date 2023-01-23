@@ -1,6 +1,7 @@
 {
   "fetchPricesInterval": 60000,
   "updatePriceChangePercentage": 2,
+  "maxPriceChangePercentage": 25,
   "pricePrecision": 8,
   "relayers": [
     {

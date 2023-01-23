@@ -9,6 +9,7 @@ export interface RelayerConfig {
 export interface PriceConfig {
   fetchPricesInterval: number;
   updatePriceChangePercentage: number;
+  maxPriceChangePercentage: number;
   pricePrecision: number;
   relayers: RelayerConfig[];
 }
