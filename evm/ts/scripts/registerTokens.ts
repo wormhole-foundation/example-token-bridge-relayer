@@ -68,7 +68,7 @@ async function registerToken(
         return null;
       });
     console.log(
-      `Token registered for chainId=${chainId}, token=${contract}, txHash=${receipt.transactionHash}`
+      `Success: token registered, chainId=${chainId}, token=${contract}, txHash=${receipt.transactionHash}`
     );
   } catch (e: any) {
     console.log(e);
@@ -108,7 +108,7 @@ async function updateSwapRate(
         return null;
       });
     console.log(
-      `Token swapRate updated for chainId=${chainId}, token=${contract}, swapRate=${swapRate}, txHash=${receipt.transactionHash}`
+      `Success: swap rate updated, chainId=${chainId}, token=${contract}, swapRate=${swapRate}, txHash=${receipt.transactionHash}`
     );
   } catch (e: any) {
     console.log(e);
@@ -146,7 +146,7 @@ async function updateMaxNativeSwapAmount(
         return null;
       });
     console.log(
-      `Native swap amount updated for chainId=${chainId}, token=${contract}, max=${maxNativeSwapAmount}, txHash=${receipt.transactionHash}`
+      `Success: max swap amount updated, chainId=${chainId}, token=${contract}, max=${maxNativeSwapAmount}, txHash=${receipt.transactionHash}`
     );
   } catch (e: any) {
     console.log(e);
@@ -199,6 +199,8 @@ async function main() {
   for (const chainIdString of Object.keys(tokenConfig)) {
     // chainId as a number
     const chainIdToRegister = Number(chainIdString);
+    console.log("\n");
+    console.log(`ChainId ${chainIdToRegister}`);
 
     // array of tokens to register
     const tokens = tokenConfig[chainIdString];
@@ -225,7 +227,7 @@ async function main() {
         );
         if (localTokenAddress == ZERO_ADDRESS) {
           console.log(
-            `Token not attested: chainId=${chainIdString}, token=${tokenContract}`
+            `Failed: token not attested, chainId=${chainIdString}, token=${tokenContract}`
           );
           continue;
         }
@@ -245,7 +247,9 @@ async function main() {
         );
 
         if (result === false) {
-          console.log(`Failed to register chainId=${chainIdToRegister}`);
+          console.log(
+            `Failed: could not register token, chainId=${chainIdToRegister}`
+          );
         }
       }
 
@@ -260,7 +264,7 @@ async function main() {
 
         if (result === false) {
           console.log(
-            `Failed to update swap rates: chainId=${chainIdToRegister}, token=${tokenContract}`
+            `Failed: could not update swap rates, chainId=${chainIdToRegister}, token=${tokenContract}`
           );
         }
       }
@@ -276,7 +280,7 @@ async function main() {
 
         if (result === false) {
           console.log(
-            `Failed to update max native swap amount: chainId=${chainIdToRegister}, token=${tokenContract}`
+            `Failed: could not update max native swap amount, chainId=${chainIdToRegister}, token=${tokenContract}`
           );
         }
       }
