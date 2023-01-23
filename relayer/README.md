@@ -52,7 +52,8 @@ The following table describes each parameter in the `priceRelayer.json` configur
 | :--- | :--- |
 | fetchPricesInterval | Determines how often (in milliseconds) the off-chain price relayer will pull prices from CoinGecko and update the swap rate for each token accepted by the Token Bridge Relayer contracts.|
 | updatePriceChangePercentage | The minimum price change (in percentage terms) that a token must realize before the off-chain price relayer will update the swap rate in the Token Bridge Relayer contract's state.
-| relayers | Array of tokens that the relayer will fetch swap rates for. Each relayer object must contain the following parameters: <br /> - `chainId` The Wormhole Chain ID of token. <br /> - `tokenId` The Token ID used to pull swap rates from the CoinGecko API. <br /> - `tokenContract` The Origin-chain token address (bytes32 format). <br /> - `pricePrecision` The swap rate precision. This is a state variable set when the Token Bridge Relayer smart contracts are deployed. This should be the same on each chain. It is very important that this variable is set correctly.
+|pricePrecision| The swap rate precision. This is a state variable set when the Token Bridge Relayer smart contracts are deployed. See the EVM State Variables [doc](../docs/EVM_STATE_VARIABLES.md) for more information.|
+| relayers | Array of tokens that the relayer will fetch swap rates for. Each relayer object must contain the following parameters: <br /> - `chainId` The Wormhole Chain ID of token. <br /> - `tokenId` The Token ID used to pull swap rates from the CoinGecko API. <br /> - `tokenContract` The Origin-chain token address (bytes32 format).
 
 Before starting the off-chain price relayer process, open the [source file](./relayer/src/priceRelayer/main.ts) and check that the `SUPPORTED_CHAINS` and `SIGNERS` variables reflect the configured networks in the `.env`.
 

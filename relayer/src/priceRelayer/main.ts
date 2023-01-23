@@ -80,10 +80,38 @@ function relayerContract(
     [
       "function swapRate(address) public view returns (uint256)",
       "function updateSwapRate(uint16,address,uint256) public",
+      "function swapRatePrecision() public view returns (uint256)",
     ],
     signer
   );
   return contract;
+}
+
+async function confirmPricePrecision(
+  expectedPrecision: number,
+  contractConfig: any
+) {
+  const pricePrecisionBN = ethers.utils.parseUnits("1", expectedPrecision);
+
+  for (const chainId of SUPPORTED_CHAINS) {
+    const relayer = relayerContract(
+      contractConfig[chainId.toString()].relayer,
+      SIGNERS[chainId]
+    );
+
+    // fetch the contracts swap rate precision
+    const swapRatePrecision: ethers.BigNumber =
+      await relayer.swapRatePrecision();
+    console.log(swapRatePrecision, pricePrecisionBN);
+
+    // compare it to the configured precision
+    if (!swapRatePrecision.eq(pricePrecisionBN)) {
+      console.error(
+        `Swap Rate Precision does not match config chainId=${chainId}`
+      );
+      process.exit(1);
+    }
+  }
 }
 
 function createCoingeckoString(relayerConfig: PriceConfig): string {
@@ -171,6 +199,9 @@ async function main() {
   console.log("Relayer Config");
   console.log(relayerConfig);
 
+  // confirm the price precision on each contract
+  await confirmPricePrecision(relayerConfig.pricePrecision, contractConfig);
+
   // get er done
   while (true) {
     // fetch native and token prices
@@ -183,7 +214,8 @@ async function main() {
         // format price updates
         const priceUpdates = formatPriceUpdates(
           relayerConfig.relayers,
-          coingeckoPrices
+          coingeckoPrices,
+          relayerConfig.pricePrecision
         );
 
         // update contract prices for each supported chain / token
@@ -253,7 +285,8 @@ async function main() {
 
 function formatPriceUpdates(
   relayerConfigs: RelayerConfig[],
-  coingeckoPrices: any
+  coingeckoPrices: any,
+  pricePrecision: number
 ) {
   // price mapping
   const priceUpdates = new Map<string, ethers.BigNumber>();
@@ -263,10 +296,6 @@ function formatPriceUpdates(
     const config = relayerConfigs.at(i)!;
     const tokenId = config.tokenId;
 
-    // NOTE: it is very important that the precision is set to the same value
-    // as the swapRatePrecision variable in the smart contract.
-    const precision = config.pricePrecision;
-
     if (tokenId in coingeckoPrices) {
       // cache prices
       const tokenPrice = coingeckoPrices[tokenId].usd;
@@ -274,7 +303,10 @@ function formatPriceUpdates(
       // push native -> token swap rate
       priceUpdates.set(
         tokenId,
-        ethers.utils.parseUnits(tokenPrice.toFixed(3), precision)
+        ethers.utils.parseUnits(
+          tokenPrice.toFixed(pricePrecision),
+          pricePrecision
+        )
       );
     }
   }

@@ -4,12 +4,12 @@ export interface RelayerConfig {
   chainId: number;
   tokenId: string;
   tokenContract: string;
-  pricePrecision: number;
 }
 
 export interface PriceConfig {
   fetchPricesInterval: number;
   updatePriceChangePercentage: number;
+  pricePrecision: number;
   relayers: RelayerConfig[];
 }
 
