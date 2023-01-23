@@ -27,8 +27,6 @@ contract ContractScript is Script {
         address tokenBridgeAddress = vm.envAddress("RELEASE_BRIDGE_ADDRESS");
         address wethAddress = vm.envAddress("RELEASE_WETH_ADDRESS");
         bool shouldUnwrapWeth = vm.envBool("RELEASE_UNWRAP_WETH");
-        uint256 swapRatePrecision = vm.envUint("RELEASE_SWAP_RATE_PRECISION");
-        uint256 relayerFeePrecision = vm.envUint("RELEASE_RELAYER_FEE_PRECISION");
 
         // deploy the contract and set up the contract
         TokenBridgeRelayer deployedRelayer = new TokenBridgeRelayer(
@@ -36,9 +34,7 @@ contract ContractScript is Script {
             address(wormhole),
             tokenBridgeAddress,
             wethAddress,
-            shouldUnwrapWeth,
-            swapRatePrecision,
-            relayerFeePrecision
+            shouldUnwrapWeth
         );
 
         // check the contract getters
@@ -48,8 +44,6 @@ contract ContractScript is Script {
         require(relayer.chainId() == wormhole.chainId());
         require(address(relayer.wormhole()) == address(wormhole));
         require(address(relayer.tokenBridge()) == tokenBridgeAddress);
-        require(relayer.swapRatePrecision() == swapRatePrecision);
-        require(relayer.relayerFeePrecision() == relayerFeePrecision);
         require(address(relayer.WETH()) == wethAddress);
         require(relayer.unwrapWeth() == shouldUnwrapWeth);
     }

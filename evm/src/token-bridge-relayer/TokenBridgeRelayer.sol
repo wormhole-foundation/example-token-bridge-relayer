@@ -24,16 +24,12 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         address wormhole,
         address tokenBridge_,
         address wethAddress,
-        bool unwrapWeth_,
-        uint256 swapRatePrecision,
-        uint256 relayerFeePrecision
+        bool unwrapWeth_
     ) {
         require(chainId > 0, "invalid chainId");
         require(wormhole != address(0), "invalid wormhole address");
         require(tokenBridge_ != address(0), "invalid token bridge address");
         require(wethAddress != address(0), "invalid weth address");
-        require(swapRatePrecision != 0, "swap rate precision must be > 0");
-        require(relayerFeePrecision != 0, "relayer fee precision must be > 0");
 
         // set initial state
         setOwner(msg.sender);
@@ -42,8 +38,10 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         setTokenBridge(tokenBridge_);
         setWethAddress(wethAddress);
         setUnwrapWethFlag(unwrapWeth_);
-        setSwapRatePrecision(swapRatePrecision);
-        setRelayerFeePrecision(relayerFeePrecision);
+
+        // set the initial swapRate/relayer precisions to 1e8
+        setSwapRatePrecision(1e8);
+        setRelayerFeePrecision(1e8);
     }
 
     /**

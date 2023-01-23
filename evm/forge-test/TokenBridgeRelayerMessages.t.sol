@@ -38,9 +38,7 @@ contract TestTokenBridgeRelayerMessagesTest is Helpers, ForgeHelpers, Test {
             wormholeAddress,
             vm.envAddress("TESTING_AVAX_BRIDGE_ADDRESS"),
             vm.envAddress("TESTING_WRAPPED_AVAX_ADDRESS"),
-            true, // should unwrap flag
-            1e8, // initial swap rate precision
-            1e8 // initial relayer fee precision
+            true // should unwrap flag
         );
         avaxRelayer = ITokenBridgeRelayer(address(deployedRelayer));
 
@@ -51,8 +49,6 @@ contract TestTokenBridgeRelayerMessagesTest is Helpers, ForgeHelpers, Test {
             address(avaxRelayer.tokenBridge()),
             vm.envAddress("TESTING_AVAX_BRIDGE_ADDRESS")
         );
-        assertEq(avaxRelayer.swapRatePrecision(), 1e8);
-        assertEq(avaxRelayer.relayerFeePrecision(), 1e8);
     }
 
     /**
