@@ -8,6 +8,8 @@ import {
   tryUint8ArrayToNative,
   CHAIN_ID_BSC,
   CHAIN_ID_FANTOM,
+  CHAIN_ID_CELO,
+  CHAIN_ID_POLYGON,
   ChainId,
   tryNativeToHexString,
 } from "@certusone/wormhole-sdk";
@@ -54,6 +56,8 @@ const SUPPORTED_CHAINS = [
   CHAIN_ID_AVAX,
   CHAIN_ID_BSC,
   CHAIN_ID_FANTOM,
+  CHAIN_ID_CELO,
+  CHAIN_ID_POLYGON,
 ];
 type SupportedChainId = typeof SUPPORTED_CHAINS[number];
 
@@ -63,6 +67,8 @@ const SIGNERS = {
   [CHAIN_ID_AVAX]: new Wallet(PK, getRpc(process.env.AVAX_RPC)),
   [CHAIN_ID_BSC]: new Wallet(PK, getRpc(process.env.BSC_RPC)),
   [CHAIN_ID_FANTOM]: new Wallet(PK, getRpc(process.env.FTM_RPC)),
+  [CHAIN_ID_CELO]: new Wallet(PK, getRpc(process.env.CELO_RPC)),
+  [CHAIN_ID_POLYGON]: new Wallet(PK, getRpc(process.env.POLYGON_RPC)),
 };
 
 // testnet guardian host
