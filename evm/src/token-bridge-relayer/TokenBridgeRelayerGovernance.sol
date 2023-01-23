@@ -60,6 +60,23 @@ abstract contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters {
     }
 
     /**
+     * @notice Updates the unwrapWeth state variable.
+     * @dev This variable should only be set to true for chains that
+     * support a WETH contract. Some chains (e.g. Celo, Karura, Acala)
+     * do not support a WETH contract, and the address is set as a placeholder
+     * for the native asset address for swapRate lookups.
+     * @param chainId_ Wormhole chain ID.
+     * @param unwrapWeth_ Boolean that determines if WETH is unwrapped
+     * when transferred back to its native blockchain.
+     */
+    function updateUnwrapWethFlag(
+        uint16 chainId_,
+        bool unwrapWeth_
+    ) public onlyOwner onlyCurrentChain(chainId_) {
+        setUnwrapWethFlag(unwrapWeth_);
+    }
+
+    /**
      * @notice Registers foreign Token Bridge Relayer contracts.
      * @param chainId_ Wormhole chain ID of the foreign contract.
      * @param contractAddress Address of the foreign contract in bytes32 format

@@ -20,6 +20,10 @@ abstract contract TokenBridgeRelayerSetters is TokenBridgeRelayerState {
         _state.tokenBridge = payable(tokenBridge_);
     }
 
+    function setUnwrapWethFlag(bool unwrapWeth_) internal {
+        _state.unwrapWeth = unwrapWeth_;
+    }
+
     function setWethAddress(address weth_) internal {
         _state.wethAddress = weth_;
     }

@@ -25,6 +25,8 @@ contract ContractScript is Script {
     function deployTokenBridgeRelayer() public {
         // read environment variables
         address tokenBridgeAddress = vm.envAddress("RELEASE_BRIDGE_ADDRESS");
+        address wethAddress = vm.envAddress("RELEASE_WETH_ADDRESS");
+        bool shouldUnwrapWeth = vm.envBool("RELEASE_UNWRAP_WETH");
         uint256 swapRatePrecision = vm.envUint("RELEASE_SWAP_RATE_PRECISION");
         uint256 relayerFeePrecision = vm.envUint("RELEASE_RELAYER_FEE_PRECISION");
 
@@ -33,6 +35,8 @@ contract ContractScript is Script {
             wormhole.chainId(),
             address(wormhole),
             tokenBridgeAddress,
+            wethAddress,
+            shouldUnwrapWeth,
             swapRatePrecision,
             relayerFeePrecision
         );
@@ -46,6 +50,8 @@ contract ContractScript is Script {
         require(address(relayer.tokenBridge()) == tokenBridgeAddress);
         require(relayer.swapRatePrecision() == swapRatePrecision);
         require(relayer.relayerFeePrecision() == relayerFeePrecision);
+        require(address(relayer.WETH()) == wethAddress);
+        require(relayer.unwrapWeth() == shouldUnwrapWeth);
     }
 
     function run() public {

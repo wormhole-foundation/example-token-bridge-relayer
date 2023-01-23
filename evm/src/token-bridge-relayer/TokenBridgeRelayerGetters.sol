@@ -26,8 +26,12 @@ abstract contract TokenBridgeRelayerGetters is TokenBridgeRelayerSetters {
         return ITokenBridge(payable(_state.tokenBridge));
     }
 
-    function WETH() public view returns (IWETH){
+    function WETH() public view returns (IWETH) {
         return IWETH(_state.wethAddress);
+    }
+
+    function unwrapWeth() public view returns (bool) {
+        return _state.unwrapWeth;
     }
 
     function chainId() public view returns (uint16) {
