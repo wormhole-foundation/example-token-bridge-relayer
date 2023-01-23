@@ -656,7 +656,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         require(tokenSwapRate != 0, "swap rate not set");
         feeInTokenDenomination =
             10 ** decimals * relayerFee(targetChainId) * swapRatePrecision() /
-            tokenSwapRate / relayerFeePrecision();
+            (tokenSwapRate * relayerFeePrecision());
     }
 
     function custodyTokens(
