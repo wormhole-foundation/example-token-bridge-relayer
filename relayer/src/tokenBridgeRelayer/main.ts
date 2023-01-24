@@ -204,8 +204,23 @@ function handleRelayerEvent(
         return;
       }
 
-      // fetch the chainId from the sender name
-      const fromChain = getBridgeChainId(CONFIG, _sender);
+      // fetch the chainId from the sender name and parse the fromAddress from the payload
+      const fromChain = getBridgeChainId(CONFIG, _sender)!;
+      const fromAddress = tryUint8ArrayToNative(
+        payloadArray.subarray(101, 133),
+        fromChain as ChainId
+      );
+
+      // confirm the sender is a relayer contract
+      if (
+        ethers.utils.getAddress(fromAddress) !=
+        ethers.utils.getAddress(CONFIG[fromChain.toString()].relayer)
+      ) {
+        console.warn(
+          `Unknown sender: ${fromAddress} for chainId: ${fromChain}, terminating relay`
+        );
+        return;
+      }
 
       // confirm we were able to get the chainId
       if (fromChain === null) {
