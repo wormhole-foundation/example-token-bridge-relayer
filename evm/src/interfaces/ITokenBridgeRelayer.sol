@@ -20,6 +20,14 @@ interface ITokenBridgeRelayer {
         uint64 indexed sequence
     );
 
+    event SwapExecuted(
+        address indexed recipient,
+        address indexed relayer,
+        address indexed token,
+        uint256 tokenAmount,
+        uint256 nativeAmount
+    );
+
     function transferTokensWithRelay(
         address token,
         uint256 amount,

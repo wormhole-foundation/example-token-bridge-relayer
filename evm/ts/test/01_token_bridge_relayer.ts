@@ -30,6 +30,7 @@ import {
   readWormUSDContractAddress,
   tokenBridgeTransform,
   findTransferCompletedEventInLogs,
+  findSwapExecutedEventInLogs,
 } from "../helpers/utils";
 import {
   ITokenBridgeRelayer__factory,
@@ -875,6 +876,21 @@ describe("Token Bridge Relayer", () => {
             .sub(relayerEthBalanceAfter)
             .gte(expectedEthBalanceChange)
         ).is.true;
+
+        // confirm swap event was emitted correctly
+        const event = findSwapExecutedEventInLogs(
+          receipt!.logs,
+          ethRelayer.address
+        );
+        expect(event.recipient).to.equal(ethWallet.address);
+        expect(event.relayer).to.equal(ethRelayerWallet.address);
+        expect(event.token).to.equal(wrappedTokenContract.address);
+        expect(event.tokenAmount.toString()).to.equal(
+          local.toNativeTokenAmount.toString()
+        );
+        expect(event.nativeAmount.toString()).to.equal(
+          expectedEthBalanceChange.toString()
+        );
       }
 
       // clear localVariables

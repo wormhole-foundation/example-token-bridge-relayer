@@ -9,20 +9,20 @@ fi
 # avalanche mainnet fork
 anvil \
     -m "myth like bonus scare over problem client lizard pioneer submit female collect" \
-    --port 8545 \
+    --port 8546 \
     --fork-url $TESTING_AVAX_FORK_RPC > anvil_avax.log &
 
 # ethereum mainnet fork
 anvil \
     -m "myth like bonus scare over problem client lizard pioneer submit female collect" \
-    --port 8546 \
+    --port 8547 \
     --fork-url $TESTING_ETH_FORK_RPC > anvil_eth.log &
 
 sleep 10
 
 ## anvil's rpc
-AVAX_RPC="http://localhost:8545"
-ETH_RPC="http://localhost:8546"
+AVAX_RPC="http://localhost:8546"
+ETH_RPC="http://localhost:8547"
 
 ## first key from mnemonic above
 export PRIVATE_KEY=$WALLET_PRIVATE_KEY

@@ -1,6 +1,13 @@
 import {ethers} from "ethers";
 import {ChainId, tryNativeToHexString} from "@certusone/wormhole-sdk";
-import {WORMHOLE_MESSAGE_EVENT_ABI, WORMHOLE_TOPIC} from "./consts";
+import {
+  WORMHOLE_MESSAGE_EVENT_ABI,
+  WORMHOLE_TOPIC,
+  SWAP_TOPIC,
+  SWAP_EVENT_ABI,
+  TRANSFER_EVENT_ABI,
+  TRANSFER_EVENT_TOPIC,
+} from "./consts";
 import * as fs from "fs";
 
 export function readTokenBridgeRelayerContractAddress(
@@ -97,10 +104,30 @@ export function findTransferCompletedEventInLogs(
 ): ethers.utils.Result {
   let result: ethers.utils.Result = {} as ethers.utils.Result;
   for (const log of logs) {
-    if (log.address == ethers.utils.getAddress(contract)) {
-      const iface = new ethers.utils.Interface([
-        "event TransferRedeemed(uint16 indexed emitterChainId, bytes32 indexed emitterAddress, uint64 indexed sequence)",
-      ]);
+    if (
+      log.address == ethers.utils.getAddress(contract) &&
+      log.topics.includes(TRANSFER_EVENT_TOPIC)
+    ) {
+      const iface = new ethers.utils.Interface(TRANSFER_EVENT_ABI);
+
+      result = iface.parseLog(log).args;
+      break;
+    }
+  }
+  return result;
+}
+
+export function findSwapExecutedEventInLogs(
+  logs: ethers.providers.Log[],
+  contract: string
+): ethers.utils.Result {
+  let result: ethers.utils.Result = {} as ethers.utils.Result;
+  for (const log of logs) {
+    if (
+      log.address == ethers.utils.getAddress(contract) &&
+      log.topics.includes(SWAP_TOPIC)
+    ) {
+      const iface = new ethers.utils.Interface(SWAP_EVENT_ABI);
 
       result = iface.parseLog(log).args;
       break;
