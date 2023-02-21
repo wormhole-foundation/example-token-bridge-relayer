@@ -38,11 +38,6 @@
         "contract": "000000000000000000000000bb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
         "swapRate": ""
       },
-      {
-        "symbol": "BUSD",
-        "contract": "000000000000000000000000e9e7CEA3DedcA5984780Bafc599bD69ADd087D56",
-        "swapRate": ""
-      }
     ],
     "5": [
       {
@@ -97,6 +92,5 @@
     "10": "",
     "14": "",
     "16": ""
-
   }
 }
