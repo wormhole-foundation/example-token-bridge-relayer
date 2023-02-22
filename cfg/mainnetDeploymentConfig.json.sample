@@ -6,8 +6,7 @@
     "6": "",
     "10": "",
     "14": "",
-    "16": "",
-
+    "16": ""
   },
   "acceptedTokensList": {
     "2": [
@@ -37,7 +36,7 @@
         "symbol": "WBNB",
         "contract": "000000000000000000000000bb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
         "swapRate": ""
-      },
+      }
     ],
     "5": [
       {
@@ -45,7 +44,7 @@
         "contract": "0000000000000000000000000d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270",
         "swapRate": ""
       }
-    ]
+    ],
     "6": [
       {
         "symbol": "WAVAX",
@@ -71,7 +70,7 @@
       {
         "symbol": "WGLMR",
         "contract": "000000000000000000000000Acc15dC74880C9944775448304B263D191c6077F",
-        "swapRate"
+        "swapRate": ""
       }
     ]
   },
