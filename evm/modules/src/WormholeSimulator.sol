@@ -268,7 +268,7 @@ contract WormholeSimulator {
 
         signedMessage = abi.encodePacked(
             vm_.version,
-            wormhole.getCurrentGuardianSetIndex(),
+            uint32(0),
             uint8(sigs.length),
             sigs[0].guardianIndex,
             sigs[0].r,

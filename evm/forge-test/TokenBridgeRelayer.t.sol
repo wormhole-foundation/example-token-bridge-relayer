@@ -3646,4 +3646,45 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
         vm.expectRevert("value must be zero");
         avaxRelayer.completeTransferWithRelay{value: nativeGasQuote}(signedMessage);
     }
+
+    function testCanVaa() public {
+        bytes memory addressHex = hex"000000000000000000000000000000000000BEEF";
+
+        address toAddress;
+        assembly {
+            toAddress := mload(add(addressHex, 20))
+        }
+
+        // encode the message by calling the encodeTransferWithRelay method
+        bytes memory payload = abi.encodePacked(
+            uint8(1),
+            addressToBytes32(toAddress)
+        );
+
+        // Create a simulated version of the wormhole message that the
+        // relayer contract will emit.
+        ITokenBridge.TransferWithPayload memory transfer =
+            ITokenBridge.TransferWithPayload({
+                payloadID: uint8(3), // payload3 transfer
+                amount: type(uint64).max - 1,
+                tokenAddress: bytes32(uint256(uint8(1))),
+                tokenChain: 21,
+                to: bytes32(uint256(uint8(3))),
+                toChain: 21,
+                fromAddress: bytes32(uint256(uint8(89))),
+                payload: payload
+            });
+
+        console.logBytes32(transfer.tokenAddress);
+
+        // Encode the TransferWithPayload struct and simulate signing
+        // the message with the devnet guardian key.
+        bytes memory signedMessage = getTransferWithPayloadMessage(
+            transfer,
+            ethereumChainId,
+            bytes32(uint256(uint8(69)))
+        );
+
+        console.logBytes(signedMessage);
+    }
 }
