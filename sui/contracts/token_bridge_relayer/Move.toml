@@ -1,0 +1,32 @@
+[package]
+name = "TokenBridgeRelayer"
+version = "0.1.0"
+
+[dependencies.Sui]
+git = "https://github.com/MystenLabs/sui.git"
+subdir = "crates/sui-framework"
+rev = "0fe3e5c237f2f6410c66617cede5733015a17a36"
+
+[dependencies.Wormhole]
+local = "../../dependencies/wormhole"
+
+[dependencies.TokenBridge]
+local = "../../dependencies/token_bridge"
+
+[addresses]
+token_bridge_relayer = "_"
+
+[dev-dependencies.Wormhole]
+local = "../../dependencies/wormhole"
+
+[dev-dependencies.TokenBridge]
+local = "../../dependencies/token_bridge"
+
+[dev-dependencies.ExampleCoins]
+local = "../example_coins"
+
+[dev-addresses]
+wormhole = "0x69"
+token_bridge = "0x420"
+token_bridge_relayer = "0x0"
+example_coins = "0x89"
