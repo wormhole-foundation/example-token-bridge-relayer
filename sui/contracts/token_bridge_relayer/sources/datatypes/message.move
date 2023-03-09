@@ -1,128 +1,222 @@
 module token_bridge_relayer::message {
-    use std::vector::{Self};
+    use std::vector;
 
-    use token_bridge_relayer::bytes32::{Self, Bytes32};
+    use wormhole::cursor;
+    use wormhole::external_address::{Self, ExternalAddress};
+    use wormhole::bytes::{Self};
+
+    use token_bridge::normalized_amount::{Self, NormalizedAmount};
 
     // Errors.
     const E_INVALID_RECIPIENT: u64 = 0;
     const E_INVALID_MESSAGE: u64 = 1;
 
     // Payload IDs.
-    const MESSAGE_HELLO_TOKEN: u8 = 1;
+    const MESSAGE_TRANSFER_WITH_RELAY: u8 = 1;
 
-    struct Message has drop {
+    struct TransferWithRelay has drop {
+        /// Relayer fee.
+        target_relayer_fee: NormalizedAmount,
+
+        /// Quantity of transferred tokens to swap for native tokens.
+        to_native_token_amount: NormalizedAmount,
+
         /// The recipient of the token transfer on the target chain.
-        recipient: Bytes32,
+        recipient: ExternalAddress,
     }
 
-    public fun new(recipient: &Bytes32): Message {
-        assert!(bytes32::is_nonzero(recipient), E_INVALID_RECIPIENT);
-        Message {
-            recipient: *recipient
+    public fun new(
+        target_relayer_fee: NormalizedAmount,
+        to_native_token_amount: NormalizedAmount,
+        recipient: ExternalAddress
+    ): TransferWithRelay {
+        TransferWithRelay {
+            target_relayer_fee,
+            to_native_token_amount,
+            recipient
         }
     }
 
-    public fun from_bytes(buf: vector<u8>): Message {
-        new(&bytes32::new(buf))
+    public fun target_relayer_fee(
+        self: &TransferWithRelay
+    ): NormalizedAmount {
+        self.target_relayer_fee
     }
 
-    public fun recipient(self: &Message): &Bytes32 {
-        &self.recipient
+    public fun to_native_token_amount(
+        self: &TransferWithRelay
+    ): NormalizedAmount {
+        self.to_native_token_amount
     }
 
-    public fun encode(self: &Message): vector<u8> {
-        let serialized = vector::empty<u8>();
-        vector::push_back(&mut serialized, MESSAGE_HELLO_TOKEN);
-        vector::append(&mut serialized, bytes32::data(&self.recipient));
-
-        serialized
+    public fun recipient(self: &TransferWithRelay): ExternalAddress {
+        self.recipient
     }
 
-    public fun decode(buf: vector<u8>): Message {
+    public fun serialize(transfer_with_relay: TransferWithRelay): vector<u8> {
+        let encoded = vector::empty<u8>();
+
+        // Message payload ID.
+        bytes::serialize_u8(&mut encoded, MESSAGE_TRANSFER_WITH_RELAY);
+
+        // Target relayer fee.
+        normalized_amount::serialize_be(
+            &mut encoded,
+            transfer_with_relay.target_relayer_fee
+        );
+
+        // To native token amount.
+        normalized_amount::serialize_be(
+            &mut encoded,
+            transfer_with_relay.to_native_token_amount
+        );
+
+        // Recipient.
+        external_address::serialize(
+            &mut encoded,
+            transfer_with_relay.recipient
+        );
+
+        // Return.
+        encoded
+    }
+
+    public fun deserialize(buf: vector<u8>): TransferWithRelay {
+        let cur = cursor::new(buf);
+
+        // Verify the message type.
         assert!(
-            vector::remove(&mut buf, 0) == MESSAGE_HELLO_TOKEN,
+            bytes::deserialize_u8(&mut cur) == MESSAGE_TRANSFER_WITH_RELAY,
             E_INVALID_MESSAGE
         );
-        new(&bytes32::new(buf))
+
+        // Deserialize the rest of the payload.
+        let target_relayer_fee = normalized_amount::deserialize_be(&mut cur);
+        let to_native_token_amount =
+            normalized_amount::deserialize_be(&mut cur);
+        let recipient = external_address::deserialize(&mut cur);
+
+        // Destory the cursor.
+        cursor::destroy_empty(cur);
+
+        // Return the deserialized struct.
+        new(
+            target_relayer_fee,
+            to_native_token_amount,
+            recipient
+        )
     }
 }
 
 #[test_only]
 module token_bridge_relayer::message_tests {
-    use token_bridge_relayer::bytes32::{Self};
     use token_bridge_relayer::message::{Self};
+
+    use wormhole::external_address::{Self};
+
+    use token_bridge::normalized_amount::{Self};
+
+    // Test consts.
+    // Encoded TransferWithRelay message.
+    const TEST_TRANSFER_WITH_RELAY: vector<u8> = x"0100000000000000000000000000000000000000000000000000000000000035b900000000000000000000000000000000000000000000000000000000000032530000000000000000000000000000000000000000000000000000000000003bf0";
+    const TEST_TARGET_RELAYER_FEE: u64 = 13753;
+    const TEST_TO_NATIVE_TOKEN_AMOUNT: u64 = 12883;
+    const TEST_RECIPIENT: vector<u8> = x"3bf0";
 
     #[test]
     public fun new() {
-        let recipient =
-            bytes32::new(
-                x"deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
-            );
-
-        let msg = message::new(&recipient);
-        assert!(bytes32::equals(message::recipient(&msg), &recipient), 0);
-    }
-
-    #[test]
-    public fun from_bytes() {
-        let buf =
-            x"deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
-
-        let msg = message::from_bytes(buf);
-        assert!(bytes32::data(message::recipient(&msg)) == buf, 0);
-    }
-
-    #[test]
-    #[expected_failure(abort_code = 0, location=message)]
-    public fun cannot_new_zero_address() {
-        message::new(
-            &bytes32::new(
-                x"0000000000000000000000000000000000000000000000000000000000000000"
-            )
+        let target_relayer_fee = normalized_amount::new(
+            TEST_TARGET_RELAYER_FEE
         );
-    }
+        let to_native_token_amount = normalized_amount::new(
+            TEST_TO_NATIVE_TOKEN_AMOUNT
+        );
+        let recipient = external_address::from_bytes(TEST_RECIPIENT);
 
-    #[test]
-    public fun encode() {
-        let recipient =
-            bytes32::new(
-                x"deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
-            );
+        // Create a TransferWithRelay struct.
+        let transfer_with_relay = message::new(
+            target_relayer_fee,
+            to_native_token_amount,
+            recipient
+        );
 
-        let serialized = message::encode(&message::new(&recipient));
-        let expected =
-            x"01deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
-        assert!(serialized == expected, 0);
-    }
-
-    #[test]
-    public fun decode() {
-        let recipient =
-            bytes32::new(
-                x"deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
-            );
-
-        let serialized = message::encode(&message::new(&recipient));
+        // Confirm that the struct is correct.
         assert!(
-            bytes32::equals(
-                message::recipient(&message::decode(serialized)),
-                &recipient,
+            target_relayer_fee == message::target_relayer_fee(
+                &transfer_with_relay
             ),
+            0
+        );
+        assert!(
+            to_native_token_amount == message::to_native_token_amount(
+                &transfer_with_relay
+            ),
+            0
+        );
+        assert!(
+            recipient == message::recipient(&transfer_with_relay),
             0
         );
     }
 
     #[test]
-    #[expected_failure(abort_code = 1, location=message)]
-    public fun cannot_decode_invalid_payload_id() {
-        message::decode(
-            x"02deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+    public fun serialize() {
+        let target_relayer_fee = normalized_amount::new(
+            TEST_TARGET_RELAYER_FEE
         );
+        let to_native_token_amount = normalized_amount::new(
+            TEST_TO_NATIVE_TOKEN_AMOUNT
+        );
+        let recipient = external_address::from_bytes(TEST_RECIPIENT);
+
+        // Create a TransferWithRelay struct.
+        let transfer_with_relay = message::new(
+            target_relayer_fee,
+            to_native_token_amount,
+            recipient
+        );
+
+        // Serialize the struct and confirm it was serialized correctly.
+        let serialized_transfer_with_relay = message::serialize(
+            transfer_with_relay
+        );
+
+        assert!(serialized_transfer_with_relay == TEST_TRANSFER_WITH_RELAY, 0);
     }
 
     #[test]
-    #[expected_failure(abort_code = 0, location=bytes32)]
-    public fun cannot_decode_invalid_recipient() {
-        message::decode(x"01deadbeef");
+    public fun deserialize() {
+        // Expected output from parsing the encoded message above.
+        let target_relayer_fee = normalized_amount::new(
+            TEST_TARGET_RELAYER_FEE
+        );
+        let to_native_token_amount = normalized_amount::new(
+            TEST_TO_NATIVE_TOKEN_AMOUNT
+        );
+        let recipient = external_address::from_bytes(TEST_RECIPIENT);
+
+        // Deserialize the TransferWithRelay struct.
+        let deserialized_transfer_with_relay =
+            message::deserialize(TEST_TRANSFER_WITH_RELAY);
+
+        // Confirm that the deserialized struct is correct.
+        assert!(
+            target_relayer_fee == message::target_relayer_fee(
+                &deserialized_transfer_with_relay
+            ),
+            0
+        );
+        assert!(
+            to_native_token_amount == message::to_native_token_amount(
+                &deserialized_transfer_with_relay
+            ),
+            0
+        );
+        assert!(
+            recipient == message::recipient(
+                &deserialized_transfer_with_relay
+            ),
+            0
+        );
     }
 }
