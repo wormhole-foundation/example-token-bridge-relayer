@@ -86,6 +86,16 @@ module token_bridge_relayer::owner {
         state::update_relayer_fee(t_state, chain, relayer_fee)
     }
 
+    /// Only owner. This method updates the relayer fee precision for this
+    /// chain.
+    public entry fun update_relayer_fee_precision(
+        _: &OwnerCap,
+        t_state: &mut State,
+        relayer_fee_precision: u64
+    ) {
+        state::update_relayer_fee_precision(t_state, relayer_fee_precision);
+    }
+
     /// Only owner. This method registers a token, and sets the initial swap
     /// rate and max native swap amount for the registered token.
     public entry fun register_token<C>(
@@ -118,6 +128,15 @@ module token_bridge_relayer::owner {
         swap_rate: u64
     ) {
         state::update_swap_rate<C>(t_state, swap_rate);
+    }
+
+    /// Only owner. This method updates the swap rate precision for this chain.
+    public entry fun update_swap_rate_precision(
+        _: &OwnerCap,
+        t_state: &mut State,
+        swap_rate_precision: u64
+    ) {
+        state::update_swap_rate_precision(t_state, swap_rate_precision);
     }
 
     /// Only owner. This method updates the max native swap amount for a
@@ -833,6 +852,82 @@ module token_bridge_relayer::init_tests {
         test_scenario::end(my_scenario);
     }
 
+    // Update relayer fee precision tests.
+
+    #[test]
+    public fun update_relayer_fee_precision() {
+        let (creator, _) = people();
+        let (my_scenario, _) = set_up(creator);
+        let scenario = &mut my_scenario;
+
+        // Fetch the TokenBridgeRelayer state object and owner capability.
+        let state = test_scenario::take_shared<RelayerState>(scenario);
+        let owner_cap =
+                test_scenario::take_from_sender<OwnerCap>(scenario);
+
+        // Fetch the initial relayer fee precision.
+        let initial_relayer_fee_precision =
+            relayer_state::relayer_fee_precision(
+                &state
+            );
+
+        // Update the relayer fee precision to a new value.
+        let new_relayer_fee_precision: u64 = 200000000;
+        assert!(new_relayer_fee_precision != initial_relayer_fee_precision, 0);
+
+        owner::update_relayer_fee_precision(
+            &owner_cap,
+            &mut state,
+            new_relayer_fee_precision
+        );
+
+        // Confirm that the state was updated accordingly.
+        let relayer_fee_precision_in_state =
+            relayer_state::relayer_fee_precision(
+                &state
+            );
+        assert!(
+            relayer_fee_precision_in_state == new_relayer_fee_precision,
+            0
+        );
+
+        // Bye bye.
+        test_scenario::return_shared<RelayerState>(state);
+        test_scenario::return_to_sender<OwnerCap>(scenario, owner_cap);
+
+        // Done.
+        test_scenario::end(my_scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = relayer_state::E_PRECISION_CANNOT_BE_ZERO)]
+    public fun cannot_update_relayer_fee_precision_to_zero() {
+        let (creator, _) = people();
+        let (my_scenario, _) = set_up(creator);
+        let scenario = &mut my_scenario;
+
+        // Fetch the TokenBridgeRelayer state object and owner capability.
+        let state = test_scenario::take_shared<RelayerState>(scenario);
+        let owner_cap =
+                test_scenario::take_from_sender<OwnerCap>(scenario);
+
+        // Update the relayer fee precision to a new value.
+        let new_relayer_fee_precision: u64 = 0;
+
+        owner::update_relayer_fee_precision(
+            &owner_cap,
+            &mut state,
+            new_relayer_fee_precision
+        );
+
+        // Bye bye.
+        test_scenario::return_shared<RelayerState>(state);
+        test_scenario::return_to_sender<OwnerCap>(scenario, owner_cap);
+
+        // Done.
+        test_scenario::end(my_scenario);
+    }
+
     // Token registration tests.
 
     #[test]
@@ -1374,9 +1469,10 @@ module token_bridge_relayer::init_tests {
         test_scenario::end(my_scenario);
     }
 
-    #[test]
-    #[expected_failure(abort_code = registered_tokens::E_UNREGISTERED)]
-    public fun cannot_update_max_native_swap_amount_token_not_registered() {
+    // Update swap rate precision tests.
+
+     #[test]
+    public fun update_swap_rate_precision() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
@@ -1386,16 +1482,60 @@ module token_bridge_relayer::init_tests {
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
 
-        // Try to update the swap for an unregistered token. This call should
-        // fail.
-        owner::update_max_native_swap_amount<COIN_8>(
+        // Fetch the initial relayer fee precision.
+        let initial_swap_rate_precision =
+            relayer_state::swap_rate_precision(
+                &state
+            );
+
+        // Update the relayer fee precision to a new value.
+        let new_swap_rate_precision: u64 = 200000000;
+        assert!(new_swap_rate_precision != initial_swap_rate_precision, 0);
+
+        owner::update_swap_rate_precision(
             &owner_cap,
             &mut state,
-            1234567
+            new_swap_rate_precision
         );
 
-        // Proceed.
-        test_scenario::next_tx(scenario, creator);
+        // Confirm that the state was updated accordingly.
+        let swap_rate_precision_in_state =
+            relayer_state::swap_rate_precision(
+                &state
+            );
+        assert!(
+            swap_rate_precision_in_state == new_swap_rate_precision,
+            0
+        );
+
+        // Bye bye.
+        test_scenario::return_shared<RelayerState>(state);
+        test_scenario::return_to_sender<OwnerCap>(scenario, owner_cap);
+
+        // Done.
+        test_scenario::end(my_scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = relayer_state::E_PRECISION_CANNOT_BE_ZERO)]
+    public fun cannot_update_swap_rate_precision_to_zero() {
+        let (creator, _) = people();
+        let (my_scenario, _) = set_up(creator);
+        let scenario = &mut my_scenario;
+
+        // Fetch the TokenBridgeRelayer state object and owner capability.
+        let state = test_scenario::take_shared<RelayerState>(scenario);
+        let owner_cap =
+                test_scenario::take_from_sender<OwnerCap>(scenario);
+
+        // Update the relayer fee precision to a new value.
+        let new_swap_rate_precision: u64 = 0;
+
+        owner::update_swap_rate_precision(
+            &owner_cap,
+            &mut state,
+            new_swap_rate_precision
+        );
 
         // Bye bye.
         test_scenario::return_shared<RelayerState>(state);
@@ -1479,6 +1619,37 @@ module token_bridge_relayer::init_tests {
             // Proceed.
             test_scenario::next_tx(scenario, creator);
         };
+
+        // Bye bye.
+        test_scenario::return_shared<RelayerState>(state);
+        test_scenario::return_to_sender<OwnerCap>(scenario, owner_cap);
+
+        // Done.
+        test_scenario::end(my_scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = registered_tokens::E_UNREGISTERED)]
+    public fun cannot_update_max_native_swap_amount_token_not_registered() {
+        let (creator, _) = people();
+        let (my_scenario, _) = set_up(creator);
+        let scenario = &mut my_scenario;
+
+        // Fetch the TokenBridgeRelayer state object and owner capability.
+        let state = test_scenario::take_shared<RelayerState>(scenario);
+        let owner_cap =
+                test_scenario::take_from_sender<OwnerCap>(scenario);
+
+        // Try to update the swap for an unregistered token. This call should
+        // fail.
+        owner::update_max_native_swap_amount<COIN_8>(
+            &owner_cap,
+            &mut state,
+            1234567
+        );
+
+        // Proceed.
+        test_scenario::next_tx(scenario, creator);
 
         // Bye bye.
         test_scenario::return_shared<RelayerState>(state);
