@@ -15,6 +15,7 @@ module token_bridge_relayer::state {
     // Errors.
     const E_INVALID_CHAIN: u64 = 0;
     const E_INVALID_CONTRACT_ADDRESS: u64 = 1;
+    const E_PRECISION_CANNOT_BE_ZERO: u64 = 2;
 
     /// Object that holds this contract's state. Foreign contracts are
     /// stored as dynamic object fields of `State`.
@@ -99,6 +100,14 @@ module token_bridge_relayer::state {
         }
     }
 
+    public(friend) fun update_relayer_fee_precision(
+        self: &mut State,
+        new_relayer_fee_precision: u64
+    ) {
+        assert!(new_relayer_fee_precision > 0, E_PRECISION_CANNOT_BE_ZERO);
+        self.relayer_fee_precision = new_relayer_fee_precision;
+    }
+
     public(friend) fun register_token<C>(
         self: &mut State,
         decimals: u8,
@@ -129,6 +138,14 @@ module token_bridge_relayer::state {
             &mut self.registered_tokens,
             swap_rate
         );
+    }
+
+    public(friend) fun update_swap_rate_precision(
+        self: &mut State,
+        new_swap_rate_precision: u64
+    ) {
+        assert!(new_swap_rate_precision > 0, E_PRECISION_CANNOT_BE_ZERO);
+        self.swap_rate_precision = new_swap_rate_precision;
     }
 
     public(friend) fun update_max_native_swap_amount<C>(
