@@ -101,13 +101,11 @@ module token_bridge_relayer::owner {
     public entry fun register_token<C>(
         _: &OwnerCap,
         t_state: &mut State,
-        decimals: u8,
         swap_rate: u64,
         max_native_swap_amount: u64
     ) {
         state::register_token<C>(
             t_state,
-            decimals,
             swap_rate,
             max_native_swap_amount
         )
@@ -196,8 +194,6 @@ module token_bridge_relayer::init_tests {
     const TEST_INITIAL_RELAYER_FEE_USD: u64 = 5;
     const TEST_INITIAL_MAX_SWAP_AMOUNT: u64 = 69420;
     const TEST_INITIAL_SWAP_RATE: u64 = 69; // $69
-    const TEST_COIN_8_DECIMALS: u8 = 8;
-    const TEST_COIN_9_DECIMALS: u8 = 9;
 
     #[test]
     public fun init_test() {
@@ -615,7 +611,7 @@ module token_bridge_relayer::init_tests {
 
         // Verify that the state was updated correctly.
         {
-            let fee_in_state = relayer_state::relayer_fee(
+            let fee_in_state = relayer_state::usd_relayer_fee(
                 &state,
                 TEST_TARGET_CHAIN
             );
@@ -684,7 +680,7 @@ module token_bridge_relayer::init_tests {
         let new_relayer_fee = 69 * relayer_fee_precision;
         {
             // Confirm that the relayer fee value is set.
-            let fee_in_state = relayer_state::relayer_fee(
+            let fee_in_state = relayer_state::usd_relayer_fee(
                 &state,
                 TEST_TARGET_CHAIN
             );
@@ -707,7 +703,7 @@ module token_bridge_relayer::init_tests {
 
         // Verify that the state was updated correctly.
         {
-            let fee_in_state = relayer_state::relayer_fee(
+            let fee_in_state = relayer_state::usd_relayer_fee(
                 &state,
                 TEST_TARGET_CHAIN
             );
@@ -962,7 +958,6 @@ module token_bridge_relayer::init_tests {
             owner::register_token<COIN_8>(
                 &owner_cap,
                 &mut state,
-                TEST_COIN_8_DECIMALS,
                 initial_swap_rate,
                 TEST_INITIAL_MAX_SWAP_AMOUNT
             );
@@ -1025,7 +1020,6 @@ module token_bridge_relayer::init_tests {
             owner::register_token<COIN_8>(
                 &owner_cap,
                 &mut state,
-                TEST_COIN_8_DECIMALS,
                 initial_swap_rate,
                 TEST_INITIAL_MAX_SWAP_AMOUNT
             );
@@ -1058,7 +1052,6 @@ module token_bridge_relayer::init_tests {
             owner::register_token<COIN_9>(
                 &owner_cap,
                 &mut state,
-                TEST_COIN_9_DECIMALS,
                 initial_swap_rate,
                 TEST_INITIAL_MAX_SWAP_AMOUNT
             );
@@ -1116,7 +1109,6 @@ module token_bridge_relayer::init_tests {
             owner::register_token<COIN_8>(
                 &owner_cap,
                 &mut state,
-                TEST_COIN_8_DECIMALS,
                 swap_rate_precision * TEST_INITIAL_SWAP_RATE,
                 TEST_INITIAL_MAX_SWAP_AMOUNT
             );
@@ -1137,7 +1129,6 @@ module token_bridge_relayer::init_tests {
             owner::register_token<COIN_8>(
                 &owner_cap,
                 &mut state,
-                TEST_COIN_8_DECIMALS,
                 swap_rate_precision * TEST_INITIAL_SWAP_RATE,
                 TEST_INITIAL_MAX_SWAP_AMOUNT
             );
@@ -1173,7 +1164,6 @@ module token_bridge_relayer::init_tests {
         owner::register_token<COIN_8>(
             &owner_cap,
             &mut state,
-            TEST_COIN_8_DECIMALS,
             swap_rate,
             TEST_INITIAL_MAX_SWAP_AMOUNT
         );
@@ -1220,7 +1210,6 @@ module token_bridge_relayer::init_tests {
             owner::register_token<COIN_8>(
                 &owner_cap,
                 &mut state,
-                TEST_COIN_8_DECIMALS,
                 initial_swap_rate,
                 TEST_INITIAL_MAX_SWAP_AMOUNT
             );
@@ -1327,7 +1316,6 @@ module token_bridge_relayer::init_tests {
             owner::register_token<COIN_8>(
                 &owner_cap,
                 &mut state,
-                TEST_COIN_8_DECIMALS,
                 initial_swap_rate,
                 TEST_INITIAL_MAX_SWAP_AMOUNT
             );
@@ -1435,7 +1423,6 @@ module token_bridge_relayer::init_tests {
             owner::register_token<COIN_8>(
                 &owner_cap,
                 &mut state,
-                TEST_COIN_8_DECIMALS,
                 swap_rate_precision * TEST_INITIAL_SWAP_RATE,
                 TEST_INITIAL_MAX_SWAP_AMOUNT
             );
@@ -1569,7 +1556,6 @@ module token_bridge_relayer::init_tests {
             owner::register_token<COIN_8>(
                 &owner_cap,
                 &mut state,
-                TEST_COIN_8_DECIMALS,
                 swap_rate_precision * TEST_INITIAL_SWAP_RATE,
                 TEST_INITIAL_MAX_SWAP_AMOUNT
             );

@@ -1,4 +1,5 @@
 module token_bridge_relayer::relayer_fees {
+    use sui::math::{pow};
     use sui::dynamic_object_field::{Self};
     use sui::object::{UID};
     use sui::table::{Self, Table};
@@ -12,7 +13,12 @@ module token_bridge_relayer::relayer_fees {
     const E_INVALID_CHAIN: u64 = 0;
     const E_FEE_NOT_SET: u64 = 1;
     const E_CHAIN_NOT_REGISTERED: u64 = 2;
+    const E_RELAYER_FEE_OVERFLOW: u64 = 3;
 
+    // Max U64 const.
+    const U64_MAX: u64 = 18446744073709551615;
+
+    // Dynamic field key.
     const KEY: vector<u8> = b"relayer_fees";
 
     /// Creates new dynamic object field using the stateId as the parent. The
@@ -53,11 +59,33 @@ module token_bridge_relayer::relayer_fees {
     }
 
     /// Returns the relayer fee associated with the specified chain ID.
-    public fun fee(parent_uid: &UID, chain: u16): u64 {
+    public fun usd_fee(parent_uid: &UID, chain: u16): u64 {
         assert!(has(parent_uid, chain), E_FEE_NOT_SET);
 
         // TODO: ask Karl if this should return value or reference, and why?
         *table::borrow(borrow_table(parent_uid), chain)
+    }
+
+    public fun token_fee(
+        parent_uid: &UID,
+        chain: u16,
+        decimals: u8,
+        swap_rate: u64,
+        swap_rate_precision: u64,
+        relayer_fee_precision: u64
+    ): u64 {
+        let numerator = (pow(10, decimals) as u256) *
+            (usd_fee(parent_uid, chain) as u256) *
+            (swap_rate_precision as u256);
+        let denominator = (swap_rate as u256) *
+            (relayer_fee_precision as u256);
+        let token_fee = numerator / denominator;
+
+        // Catch overflow.
+        assert!(token_fee < (U64_MAX as u256), E_RELAYER_FEE_OVERFLOW);
+
+        // Return u64 casted relayer fee.
+        (token_fee as u64)
     }
 
     public fun has(parent_uid: &UID, chain: u16): bool {

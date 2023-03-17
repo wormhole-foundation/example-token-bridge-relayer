@@ -31,7 +31,6 @@ module token_bridge_relayer::registered_tokens {
 
     public(friend) fun add_token<C>(
         self: &mut RegisteredTokens,
-        decimals: u8,
         swap_rate: u64,
         max_native_swap_amount: u64
     ) {
@@ -39,7 +38,7 @@ module token_bridge_relayer::registered_tokens {
         assert!(swap_rate > 0, E_SWAP_RATE_IS_ZERO);
         add<C>(
             self,
-            token_info::new(decimals, swap_rate, max_native_swap_amount)
+            token_info::new(swap_rate, max_native_swap_amount)
         )
     }
 
@@ -73,15 +72,13 @@ module token_bridge_relayer::registered_tokens {
         );
     }
 
-    public fun decimals<C>(self: &RegisteredTokens): u8 {
-        token_info::decimals(borrow_token_info<C>(self))
-    }
-
     public fun swap_rate<C>(self: &RegisteredTokens): u64 {
+        assert!(has<C>(self), E_UNREGISTERED);
         token_info::swap_rate(borrow_token_info<C>(self))
     }
 
     public fun max_native_swap_amount<C>(self: &RegisteredTokens): u64 {
+        assert!(has<C>(self), E_UNREGISTERED);
         token_info::max_native_swap_amount(borrow_token_info<C>(self))
     }
 

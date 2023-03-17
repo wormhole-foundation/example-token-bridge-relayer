@@ -110,13 +110,11 @@ module token_bridge_relayer::state {
 
     public(friend) fun register_token<C>(
         self: &mut State,
-        decimals: u8,
         swap_rate: u64,
         max_native_swap_amount: u64
     ) {
         registered_tokens::add_token<C>(
             &mut self.registered_tokens,
-            decimals,
             swap_rate,
             max_native_swap_amount
         );
@@ -190,12 +188,30 @@ module token_bridge_relayer::state {
         registered_tokens::max_native_swap_amount<C>(&self.registered_tokens)
     }
 
-    public fun foreign_contract_address(self: &State, chain: u16): &bytes32::Bytes32 {
+    public fun foreign_contract_address(
+        self: &State,
+        chain: u16
+    ): &bytes32::Bytes32 {
         foreign_contracts::contract_address(&self.id, chain)
     }
 
-    public fun relayer_fee(self: &State, chain: u16): u64 {
-        relayer_fees::fee(&self.id, chain)
+    public fun usd_relayer_fee(self: &State, chain: u16): u64 {
+        relayer_fees::usd_fee(&self.id, chain)
+    }
+
+    public fun token_relayer_fee<C>(
+        self: &State,
+        chain: u16,
+        decimals: u8
+    ): u64 {
+        relayer_fees::token_fee(
+            &self.id,
+            chain,
+            decimals,
+            swap_rate<C>(self),
+            swap_rate_precision(self),
+            relayer_fee_precision(self)
+        )
     }
 
     public fun relayer_fee_precision(self: &State): u64 {

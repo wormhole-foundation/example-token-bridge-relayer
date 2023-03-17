@@ -1,17 +1,14 @@
 module token_bridge_relayer::token_info {
     struct TokenInfo<phantom C> has store {
-        decimals: u8,
         swap_rate: u64,
         max_native_swap_amount: u64
     }
 
     public fun new<C>(
-        decimals: u8,
         swap_rate: u64,
         max_native_swap_amount: u64
     ): TokenInfo<C> {
         TokenInfo {
-            decimals,
             swap_rate,
             max_native_swap_amount
         }
@@ -21,7 +18,6 @@ module token_bridge_relayer::token_info {
         self: TokenInfo<C>
     ) {
         let TokenInfo<C>{
-            decimals: _,
             swap_rate: _,
             max_native_swap_amount: _
         } = self;
@@ -39,10 +35,6 @@ module token_bridge_relayer::token_info {
         max_native_swap_amount: u64
     ) {
         self.max_native_swap_amount = max_native_swap_amount;
-    }
-
-    public fun decimals<C>(self: &TokenInfo<C>): u8 {
-        self.decimals
     }
 
     public fun swap_rate<C>(self: &TokenInfo<C>): u64 {
@@ -64,7 +56,6 @@ module token_bridge_relayer::token_info_tests {
     // Test consts.
     const TEST_MAX_SWAP_AMOUNT: u64 = 69420;
     const TEST_SWAP_RATE: u64 = 6900000000; // $69
-    const TEST_COIN_8_DECIMALS: u8 = 8;
 
     #[test]
     public fun new() {
@@ -72,7 +63,6 @@ module token_bridge_relayer::token_info_tests {
         let info = create_coin_8_info();
 
         // Verify the struct was set up correctly.
-        assert!(TEST_COIN_8_DECIMALS == token_info::decimals<COIN_8>(&info), 0);
         assert!(TEST_SWAP_RATE == token_info::swap_rate<COIN_8>(&info), 0);
         assert!(
             TEST_MAX_SWAP_AMOUNT ==
@@ -141,7 +131,6 @@ module token_bridge_relayer::token_info_tests {
     // Utilities.
     public fun create_coin_8_info(): TokenInfo<COIN_8> {
         token_info::new<COIN_8>(
-            TEST_COIN_8_DECIMALS,
             TEST_SWAP_RATE,
             TEST_MAX_SWAP_AMOUNT
         )
