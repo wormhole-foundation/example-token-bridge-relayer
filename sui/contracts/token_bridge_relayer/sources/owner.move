@@ -5,8 +5,8 @@ module token_bridge_relayer::owner {
     use sui::tx_context::{Self, TxContext};
 
     use wormhole::emitter::{EmitterCapability as EmitterCap};
+    use wormhole::external_address::{Self};
 
-    use token_bridge_relayer::bytes32::{Self};
     use token_bridge_relayer::state::{Self, State};
 
     // Errors.
@@ -72,7 +72,7 @@ module token_bridge_relayer::owner {
         state::register_foreign_contract(
             t_state,
             chain,
-            bytes32::new(contract_address)
+            external_address::left_pad(&contract_address)
         );
     }
 
@@ -160,7 +160,6 @@ module token_bridge_relayer::init_tests {
     use sui::object::{Self};
     use sui::test_scenario::{Self, Scenario, TransactionEffects};
 
-    use token_bridge_relayer::bytes32::{Self};
     use token_bridge_relayer::state::{
         Self as relayer_state,
         State as RelayerState
@@ -330,7 +329,12 @@ module token_bridge_relayer::init_tests {
                     &state,
                     TEST_TARGET_CHAIN
                 );
-            assert!(bytes32::data(registered_contract) == TEST_TARGET_CONTRACT, 0);
+            assert!(
+                external_address::get_bytes(
+                    registered_contract
+                ) == TEST_TARGET_CONTRACT,
+                0
+            );
         };
 
         // Bye bye.
@@ -375,7 +379,12 @@ module token_bridge_relayer::init_tests {
                     &state,
                     TEST_TARGET_CHAIN
                 );
-            assert!(bytes32::data(registered_contract) == TEST_TARGET_CONTRACT, 0);
+            assert!(
+                external_address::get_bytes(
+                    registered_contract
+                ) == TEST_TARGET_CONTRACT,
+                0
+            );
         };
 
         // Proceed.
@@ -396,7 +405,12 @@ module token_bridge_relayer::init_tests {
                     &state,
                     TEST_TARGET_CHAIN
                 );
-            assert!(bytes32::data(registered_contract) == target_contract2, 0);
+            assert!(
+                external_address::get_bytes(
+                    registered_contract
+                ) == target_contract2,
+                0
+            );
         };
 
         // Bye bye.
@@ -538,7 +552,12 @@ module token_bridge_relayer::init_tests {
                     &state,
                     TEST_TARGET_CHAIN
                 );
-            assert!(bytes32::data(registered_contract) == TEST_TARGET_CONTRACT, 0);
+            assert!(
+                external_address::get_bytes(
+                    registered_contract
+                ) == TEST_TARGET_CONTRACT,
+                0
+            );
         };
 
         // Proceed.

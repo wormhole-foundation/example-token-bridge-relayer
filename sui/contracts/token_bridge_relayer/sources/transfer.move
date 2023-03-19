@@ -10,14 +10,12 @@ module token_bridge_relayer::transfer {
     // use token_bridge::complete_transfer_with_payload::{
     //     complete_transfer_with_payload
     // };
-    // use token_bridge::transfer_with_payload::{payload, sender};
 
     use wormhole::external_address::{Self};
     use wormhole::state::{State as WormholeState};
 
     use token_bridge_relayer::message::{Self};
     use token_bridge_relayer::state::{Self as relayer_state, State};
-    use token_bridge_relayer::bytes32::{Self};
 
     // Errors.
     const E_INVALID_TARGET_RECIPIENT: u64 = 0;
@@ -75,8 +73,6 @@ module token_bridge_relayer::transfer {
             relayer_state::contract_registered(t_state, target_chain),
             E_UNREGISTERED_FOREIGN_CONTRACT
         );
-        let foreign_contract =
-            relayer_state::foreign_contract_address(t_state, target_chain);
 
         // Compute the normalized relayer fee and confirm that the user
         // sent enough tokens to cover the relayer fee and to native
@@ -133,7 +129,7 @@ module token_bridge_relayer::transfer {
             coins_to_transfer,
             wormhole_fee,
             target_chain,
-            external_address::left_pad(&bytes32::data(foreign_contract)),
+            *relayer_state::foreign_contract_address(t_state, target_chain),
             nonce,
             msg
         );
@@ -203,8 +199,6 @@ module token_bridge_relayer::transfer {
 
 #[test_only]
 module token_bridge_relayer::transfer_tests {
-    //use std::vector::{Self};
-
     use sui::sui::SUI;
     use sui::test_scenario::{Self, Scenario, TransactionEffects};
     use sui::coin::{Self, Coin, CoinMetadata};

@@ -5,8 +5,7 @@ module token_bridge_relayer::foreign_contracts {
     use sui::tx_context::{TxContext};
 
     use wormhole::state::{chain_id};
-
-    use token_bridge_relayer::bytes32::{Self, Bytes32};
+    use wormhole::external_address::{Self, ExternalAddress};
 
     // Errors.
     const E_INVALID_CHAIN: u64 = 0;
@@ -21,16 +20,16 @@ module token_bridge_relayer::foreign_contracts {
         dynamic_object_field::add(
             parent_uid,
             KEY,
-            table::new<u16, Bytes32>(ctx)
+            table::new<u16, ExternalAddress>(ctx)
         );
     }
 
     public fun has(parent_uid: &UID, chain: u16): bool {
-        table::contains<u16, Bytes32>(borrow_table(parent_uid), chain)
+        table::contains<u16, ExternalAddress>(borrow_table(parent_uid), chain)
     }
 
     /// Returns an address associated with a registered chain ID.
-    public fun contract_address(parent_uid: &UID, chain: u16): &Bytes32 {
+    public fun contract_address(parent_uid: &UID, chain: u16): &ExternalAddress {
         assert!(has(parent_uid, chain), E_CONTRACT_DOES_NOT_EXIST);
         table::borrow(borrow_table(parent_uid), chain)
     }
@@ -39,11 +38,11 @@ module token_bridge_relayer::foreign_contracts {
     public fun add(
         parent_uid: &mut UID,
         chain: u16,
-        contract_address: Bytes32,
+        contract_address: ExternalAddress,
     ) {
         assert!(chain != 0 && chain != chain_id(), E_INVALID_CHAIN);
         assert!(
-            bytes32::is_nonzero(&contract_address),
+            external_address::is_nonzero(&contract_address),
             E_INVALID_CONTRACT_ADDRESS
         );
 
@@ -55,10 +54,10 @@ module token_bridge_relayer::foreign_contracts {
     public fun update(
         parent_uid: &mut UID,
         chain: u16,
-        contract_address: Bytes32
+        contract_address: ExternalAddress
     ) {
         assert!(
-            bytes32::is_nonzero(&contract_address),
+            external_address::is_nonzero(&contract_address),
             E_INVALID_CONTRACT_ADDRESS
         );
 
@@ -68,11 +67,11 @@ module token_bridge_relayer::foreign_contracts {
         ) = contract_address;
     }
 
-    fun borrow_table(parent_uid: &UID): &Table<u16, Bytes32> {
+    fun borrow_table(parent_uid: &UID): &Table<u16, ExternalAddress> {
         dynamic_object_field::borrow(parent_uid, KEY)
     }
 
-    fun borrow_table_mut(parent_uid: &mut UID): &mut Table<u16, Bytes32> {
+    fun borrow_table_mut(parent_uid: &mut UID): &mut Table<u16, ExternalAddress> {
         dynamic_object_field::borrow_mut(parent_uid, KEY)
     }
 }

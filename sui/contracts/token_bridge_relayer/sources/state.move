@@ -3,8 +3,8 @@ module token_bridge_relayer::state {
     use sui::tx_context::{TxContext};
 
     use wormhole::emitter::{EmitterCapability as EmitterCap};
+    use wormhole::external_address::{ExternalAddress};
 
-    use token_bridge_relayer::bytes32::{Self};
     use token_bridge_relayer::foreign_contracts::{Self};
     use token_bridge_relayer::relayer_fees::{Self};
     use token_bridge_relayer::registered_tokens::{Self, RegisteredTokens};
@@ -63,7 +63,7 @@ module token_bridge_relayer::state {
     public(friend) fun register_foreign_contract(
         self: &mut State,
         chain: u16,
-        contract_address: bytes32::Bytes32,
+        contract_address: ExternalAddress,
     ) {
         if (contract_registered(self, chain)) {
             foreign_contracts::update(
@@ -191,7 +191,7 @@ module token_bridge_relayer::state {
     public fun foreign_contract_address(
         self: &State,
         chain: u16
-    ): &bytes32::Bytes32 {
+    ): &ExternalAddress {
         foreign_contracts::contract_address(&self.id, chain)
     }
 
