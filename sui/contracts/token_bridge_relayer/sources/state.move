@@ -1,4 +1,5 @@
 module token_bridge_relayer::state {
+    use sui::sui::SUI;
     use sui::object::{Self, UID, ID};
     use sui::tx_context::{TxContext};
 
@@ -111,12 +112,14 @@ module token_bridge_relayer::state {
     public(friend) fun register_token<C>(
         self: &mut State,
         swap_rate: u64,
-        max_native_swap_amount: u64
+        max_native_swap_amount: u64,
+        enable_swap: bool
     ) {
         registered_tokens::add_token<C>(
             &mut self.registered_tokens,
             swap_rate,
-            max_native_swap_amount
+            max_native_swap_amount,
+            enable_swap
         );
     }
 
@@ -156,6 +159,16 @@ module token_bridge_relayer::state {
         );
     }
 
+    public(friend) fun toggle_swap_enabled<C>(
+        self: &mut State,
+        enable_swap: bool
+    ) {
+        registered_tokens::toggle_swap_enabled<C>(
+            &mut self.registered_tokens,
+            enable_swap
+        );
+    }
+
     public fun emitter_cap(self: &State): &EmitterCap {
         &self.emitter_cap
     }
@@ -184,8 +197,23 @@ module token_bridge_relayer::state {
         registered_tokens::swap_rate<C>(&self.registered_tokens)
     }
 
+    // TODO: does this need an overflow check?
+    public fun native_swap_rate<C>(self: &State): u64 {
+        let native_swap_rate = (
+            (swap_rate_precision(self) as u256) *
+            (swap_rate<SUI>(self) as u256) /
+            (swap_rate<C>(self) as u256)
+        );
+
+        (native_swap_rate as u64)
+    }
+
     public fun max_native_swap_amount<C>(self: &State): u64 {
         registered_tokens::max_native_swap_amount<C>(&self.registered_tokens)
+    }
+
+    public fun is_swap_enabled<C>(self: &State): bool {
+        registered_tokens::is_swap_enabled<C>(&self.registered_tokens)
     }
 
     public fun foreign_contract_address(

@@ -12,4 +12,4 @@ check:
 
 .PHONY: test
 test:
-	sui move test -d
+	sui move test -t 1

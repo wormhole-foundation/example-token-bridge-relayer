@@ -102,12 +102,14 @@ module token_bridge_relayer::owner {
         _: &OwnerCap,
         t_state: &mut State,
         swap_rate: u64,
-        max_native_swap_amount: u64
+        max_native_swap_amount: u64,
+        enable_swap: bool
     ) {
         state::register_token<C>(
             t_state,
             swap_rate,
-            max_native_swap_amount
+            max_native_swap_amount,
+            enable_swap
         )
     }
 
@@ -145,6 +147,16 @@ module token_bridge_relayer::owner {
         max_native_swap_amount: u64
     ) {
         state::update_max_native_swap_amount<C>(t_state, max_native_swap_amount);
+    }
+
+    /// Only owner. This method toggles the swap_enabled boolean for a
+    /// registered token.
+    public entry fun toggle_swap_enabled<C>(
+        _: &OwnerCap,
+        t_state: &mut State,
+        enable_swap: bool
+    ) {
+        state::toggle_swap_enabled<C>(t_state, enable_swap);
     }
 
     #[test_only]
@@ -193,6 +205,7 @@ module token_bridge_relayer::init_tests {
     const TEST_INITIAL_RELAYER_FEE_USD: u64 = 5;
     const TEST_INITIAL_MAX_SWAP_AMOUNT: u64 = 69420;
     const TEST_INITIAL_SWAP_RATE: u64 = 69; // $69
+    const TEST_ENABLE_SWAP: bool = true;
 
     #[test]
     public fun init_test() {
@@ -978,7 +991,8 @@ module token_bridge_relayer::init_tests {
                 &owner_cap,
                 &mut state,
                 initial_swap_rate,
-                TEST_INITIAL_MAX_SWAP_AMOUNT
+                TEST_INITIAL_MAX_SWAP_AMOUNT,
+                TEST_ENABLE_SWAP
             );
 
             // Proceed.
@@ -1017,7 +1031,7 @@ module token_bridge_relayer::init_tests {
     }
 
     #[test]
-    public fun register_multiple_token() {
+    public fun register_multiple_tokens() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
@@ -1040,7 +1054,8 @@ module token_bridge_relayer::init_tests {
                 &owner_cap,
                 &mut state,
                 initial_swap_rate,
-                TEST_INITIAL_MAX_SWAP_AMOUNT
+                TEST_INITIAL_MAX_SWAP_AMOUNT,
+                TEST_ENABLE_SWAP
             );
 
             // Confirm the registration and token count.
@@ -1072,7 +1087,8 @@ module token_bridge_relayer::init_tests {
                 &owner_cap,
                 &mut state,
                 initial_swap_rate,
-                TEST_INITIAL_MAX_SWAP_AMOUNT
+                TEST_INITIAL_MAX_SWAP_AMOUNT,
+                TEST_ENABLE_SWAP
             );
 
             // Confirm the registration and token count.
@@ -1129,7 +1145,8 @@ module token_bridge_relayer::init_tests {
                 &owner_cap,
                 &mut state,
                 swap_rate_precision * TEST_INITIAL_SWAP_RATE,
-                TEST_INITIAL_MAX_SWAP_AMOUNT
+                TEST_INITIAL_MAX_SWAP_AMOUNT,
+                TEST_ENABLE_SWAP
             );
 
             // Confirm that COIN_8 was registered.
@@ -1149,7 +1166,8 @@ module token_bridge_relayer::init_tests {
                 &owner_cap,
                 &mut state,
                 swap_rate_precision * TEST_INITIAL_SWAP_RATE,
-                TEST_INITIAL_MAX_SWAP_AMOUNT
+                TEST_INITIAL_MAX_SWAP_AMOUNT,
+                TEST_ENABLE_SWAP
             );
 
             // Proceed.
@@ -1184,7 +1202,8 @@ module token_bridge_relayer::init_tests {
             &owner_cap,
             &mut state,
             swap_rate,
-            TEST_INITIAL_MAX_SWAP_AMOUNT
+            TEST_INITIAL_MAX_SWAP_AMOUNT,
+            TEST_ENABLE_SWAP
         );
 
         // Confirm that COIN_8 was registered.
@@ -1230,7 +1249,8 @@ module token_bridge_relayer::init_tests {
                 &owner_cap,
                 &mut state,
                 initial_swap_rate,
-                TEST_INITIAL_MAX_SWAP_AMOUNT
+                TEST_INITIAL_MAX_SWAP_AMOUNT,
+                TEST_ENABLE_SWAP
             );
 
             // Confirm that COIN_8 was registered.
@@ -1336,7 +1356,8 @@ module token_bridge_relayer::init_tests {
                 &owner_cap,
                 &mut state,
                 initial_swap_rate,
-                TEST_INITIAL_MAX_SWAP_AMOUNT
+                TEST_INITIAL_MAX_SWAP_AMOUNT,
+                TEST_ENABLE_SWAP
             );
 
             // Confirm that COIN_8 was registered.
@@ -1443,7 +1464,8 @@ module token_bridge_relayer::init_tests {
                 &owner_cap,
                 &mut state,
                 swap_rate_precision * TEST_INITIAL_SWAP_RATE,
-                TEST_INITIAL_MAX_SWAP_AMOUNT
+                TEST_INITIAL_MAX_SWAP_AMOUNT,
+                TEST_ENABLE_SWAP
             );
 
             // Proceed.
@@ -1576,7 +1598,8 @@ module token_bridge_relayer::init_tests {
                 &owner_cap,
                 &mut state,
                 swap_rate_precision * TEST_INITIAL_SWAP_RATE,
-                TEST_INITIAL_MAX_SWAP_AMOUNT
+                TEST_INITIAL_MAX_SWAP_AMOUNT,
+                TEST_ENABLE_SWAP
             );
 
             // Confirm that COIN_8 was registered.
@@ -1664,10 +1687,81 @@ module token_bridge_relayer::init_tests {
         test_scenario::end(my_scenario);
     }
 
+    // Update swap_enabled boolean tests.
+
+    #[test]
+    public fun toggle_swap_enabled() {
+        let (creator, _) = people();
+        let (my_scenario, _) = set_up(creator);
+        let scenario = &mut my_scenario;
+
+        // Fetch the TokenBridgeRelayer state object and owner capability.
+        let state = test_scenario::take_shared<RelayerState>(scenario);
+        let owner_cap =
+                test_scenario::take_from_sender<OwnerCap>(scenario);
+
+        // Swap rate precision.
+        let swap_rate_precision = relayer_state::swap_rate_precision(
+                &state
+            );
+
+        // Register COIN_8 and set swap_enabled to true.
+        {
+            // Do the thing.
+            owner::register_token<COIN_8>(
+                &owner_cap,
+                &mut state,
+                swap_rate_precision * TEST_INITIAL_SWAP_RATE,
+                TEST_INITIAL_MAX_SWAP_AMOUNT,
+                TEST_ENABLE_SWAP
+            );
+
+            // Confirm that COIN_8 was registered.
+            let is_registered =
+                relayer_state::is_registered_token<COIN_8>(
+                    &state
+                );
+            assert!(is_registered, 0);
+
+            // Confirm that the token has swaps enabled.
+            let is_swap_enabled = relayer_state::is_swap_enabled<COIN_8>(&state);
+            assert!(is_swap_enabled, 0);
+
+            // Proceed.
+            test_scenario::next_tx(scenario, creator);
+        };
+
+        // Toggle the swap_enabled to false and confirm the state changes.
+        {
+            // Do the thing.
+            owner::toggle_swap_enabled<COIN_8>(
+                &owner_cap,
+                &mut state,
+                false
+            );
+
+            // Confirm that the token has swaps enabled.
+            let is_swap_enabled = relayer_state::is_swap_enabled<COIN_8>(&state);
+            assert!(!is_swap_enabled, 0);
+
+            // Proceed.
+            test_scenario::next_tx(scenario, creator);
+        };
+
+        // Bye bye.
+        test_scenario::return_shared<RelayerState>(state);
+        test_scenario::return_to_sender<OwnerCap>(scenario, owner_cap);
+
+        // Done.
+        test_scenario::end(my_scenario);
+    }
+
     // Utility functions.
 
     /// Returns two unique test addresses.
-    public fun people(): (address, address) { (@0xBEEF, @0x1337) }
+    public fun people(): (address, address) {
+        (@0x9f082e1bE326e8863BAc818F0c08ae28a8D47C99, @0x1337)
+    }
 
     /// This function sets up the test scenario for Hello Token by
     /// initializing the wormhole, token bridge and Hello Token contracts.
@@ -1785,7 +1879,7 @@ module token_bridge_relayer::init_tests {
             bridge_state::register_emitter_test_only(
                 &mut state,
                 2, // Ethereum chain ID
-                external_address::from_bytes(x"45"),
+                external_address::from_bytes(x"3ee18B2214AFF97000D974cf647E7C347E8fa585"),
             );
             test_scenario::return_shared<BridgeState>(state);
 

@@ -1,5 +1,5 @@
 module token_bridge_relayer::relayer_fees {
-    use sui::math::{pow};
+    use sui::math::{Self};
     use sui::dynamic_object_field::{Self};
     use sui::object::{UID};
     use sui::table::{Self, Table};
@@ -61,8 +61,6 @@ module token_bridge_relayer::relayer_fees {
     /// Returns the relayer fee associated with the specified chain ID.
     public fun usd_fee(parent_uid: &UID, chain: u16): u64 {
         assert!(has(parent_uid, chain), E_FEE_NOT_SET);
-
-        // TODO: ask Karl if this should return value or reference, and why?
         *table::borrow(borrow_table(parent_uid), chain)
     }
 
@@ -74,7 +72,7 @@ module token_bridge_relayer::relayer_fees {
         swap_rate_precision: u64,
         relayer_fee_precision: u64
     ): u64 {
-        let numerator = (pow(10, decimals) as u256) *
+        let numerator = (math::pow(10, decimals) as u256) *
             (usd_fee(parent_uid, chain) as u256) *
             (swap_rate_precision as u256);
         let denominator = (swap_rate as u256) *

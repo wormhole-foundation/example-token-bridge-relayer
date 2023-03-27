@@ -7,9 +7,6 @@ module token_bridge_relayer::transfer {
     use token_bridge::normalized_amount::{Self};
     use token_bridge::state::{Self as bridge_state, State as TokenBridgeState};
     use token_bridge::transfer_tokens_with_payload::{transfer_tokens_with_payload};
-    // use token_bridge::complete_transfer_with_payload::{
-    //     complete_transfer_with_payload
-    // };
 
     use wormhole::external_address::{Self};
     use wormhole::state::{State as WormholeState};
@@ -134,67 +131,6 @@ module token_bridge_relayer::transfer {
             msg
         );
     }
-
-    // /// Consumes `transfer_with_payload` Wormhole message from a registered
-    // /// foreign contract. Sends the transferred tokens to the recipient encoded
-    // /// in the additional payload, and pays the relayer a fee if the user is
-    // /// not self redeeming the transfer.
-    // public entry fun redeem_transfer_with_payload<C>(
-    //     t_state: &State,
-    //     wormhole_state: &mut WormholeState,
-    //     token_bridge_state: &mut TokenBridgeState,
-    //     vaa: vector<u8>,
-    //     ctx: &mut TxContext
-    //  ) {
-    //     // Complete the transfer on the Token Bridge. This call returns the
-    //     // coin object for the amount transferred via the Token Bridge. It
-    //     // also returns the chain ID of the message sender.
-    //     let (coins, transfer_payload, emitter_chain_id) =
-    //         complete_transfer_with_payload<C>(
-    //             token_bridge_state,
-    //             state::emitter_cap(t_state),
-    //             wormhole_state,
-    //             vaa,
-    //             ctx
-    //         );
-
-    //     // Confirm that the emitter is a registered contract.
-    //     assert!(
-    //         *state::foreign_contract_address(
-    //             t_state,
-    //             emitter_chain_id
-    //         ) == bytes32::from_external_address(
-    //             &sender(&transfer_payload)
-    //         ),
-    //         E_UNREGISTERED_FOREIGN_CONTRACT
-    //     );
-
-    //     // Parse the additional payload.
-    //     let msg = message::decode(payload(&transfer_payload));
-
-    //     // Parse the recipient field.
-    //     let recipient = to_address(
-    //         &make_external(&bytes32::data(message::recipient(&msg)))
-    //     );
-
-    //     // Calculate the relayer fee.
-    //     let relayer_fee = 0; /*state::compute_relayer_fee(
-    //         t_state,
-    //         coin::value(&coins)
-    //     );*/
-
-    //     // If the relayer fee is nonzero and the user is not self redeeming,
-    //     // split the coins object and transfer the relayer fee to the signer.
-    //     if (relayer_fee > 0 && recipient != tx_context::sender(ctx)) {
-    //         let coins_for_relayer = coin::split(&mut coins, relayer_fee, ctx);
-
-    //         // Send the caller the relayer fee.
-    //         transfer::transfer(coins_for_relayer, tx_context::sender(ctx));
-    //     };
-
-    //     // Send the coins to the target recipient.
-    //     transfer::transfer(coins, recipient);
-    // }
 }
 
 #[test_only]
@@ -217,7 +153,7 @@ module token_bridge_relayer::transfer_tests {
         State as WormholeState
     };
 
-    use token_bridge::state::{State as BridgeState};//, deposit_test_only};
+    use token_bridge::state::{State as BridgeState};
     use token_bridge::attest_token::{Self};
 
     // Example coins.
@@ -1153,7 +1089,8 @@ module token_bridge_relayer::transfer_tests {
                     &owner_cap,
                     &mut token_bridge_relayer_state,
                     swap_rate,
-                    max_swap_amount
+                    max_swap_amount,
+                    true // Enable swap.
                 );
 
                 // Proceed.
@@ -1165,7 +1102,7 @@ module token_bridge_relayer::transfer_tests {
         };
 
         // Send a test transfer.
-        transfer::transfer_tokens_with_relay<C>(
+        transfer::transfer_tokens_with_relay(
             &token_bridge_relayer_state,
             &mut wormhole_state,
             &mut bridge_state,
@@ -1179,10 +1116,10 @@ module token_bridge_relayer::transfer_tests {
         );
 
         // Return the goods.
-        test_scenario::return_shared<State>(token_bridge_relayer_state);
-        test_scenario::return_shared<BridgeState>(bridge_state);
-        test_scenario::return_shared<WormholeState>(wormhole_state);
-        test_scenario::return_to_sender<OwnerCap>(scenario, owner_cap);
+        test_scenario::return_shared(token_bridge_relayer_state);
+        test_scenario::return_shared(bridge_state);
+        test_scenario::return_shared(wormhole_state);
+        test_scenario::return_to_sender(scenario, owner_cap);
         native_transfer::transfer(coin_metadata, @0x0);
 
         let effects = test_scenario::next_tx(scenario, creator);

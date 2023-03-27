@@ -32,13 +32,14 @@ module token_bridge_relayer::registered_tokens {
     public(friend) fun add_token<C>(
         self: &mut RegisteredTokens,
         swap_rate: u64,
-        max_native_swap_amount: u64
+        max_native_swap_amount: u64,
+        swap_enabled: bool
     ) {
         assert!(!has<C>(self), E_ALREADY_REGISTERED);
         assert!(swap_rate > 0, E_SWAP_RATE_IS_ZERO);
         add<C>(
             self,
-            token_info::new(swap_rate, max_native_swap_amount)
+            token_info::new(swap_rate, max_native_swap_amount, swap_enabled)
         )
     }
 
@@ -72,6 +73,17 @@ module token_bridge_relayer::registered_tokens {
         );
     }
 
+    public(friend) fun toggle_swap_enabled<C>(
+        self: &mut RegisteredTokens,
+        enable_swap: bool
+    ) {
+        if (enable_swap) {
+            token_info::enable_swap(borrow_token_info_mut<C>(self));
+        } else {
+            token_info::disable_swap(borrow_token_info_mut<C>(self));
+        }
+    }
+
     public fun swap_rate<C>(self: &RegisteredTokens): u64 {
         assert!(has<C>(self), E_UNREGISTERED);
         token_info::swap_rate(borrow_token_info<C>(self))
@@ -80,6 +92,10 @@ module token_bridge_relayer::registered_tokens {
     public fun max_native_swap_amount<C>(self: &RegisteredTokens): u64 {
         assert!(has<C>(self), E_UNREGISTERED);
         token_info::max_native_swap_amount(borrow_token_info<C>(self))
+    }
+
+    public fun is_swap_enabled<C>(self: &RegisteredTokens): bool {
+        token_info::is_swap_enabled(borrow_token_info<C>(self))
     }
 
     public fun has<C>(self: &RegisteredTokens): bool {

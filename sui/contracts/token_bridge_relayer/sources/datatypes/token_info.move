@@ -1,16 +1,19 @@
 module token_bridge_relayer::token_info {
     struct TokenInfo<phantom C> has store {
         swap_rate: u64,
-        max_native_swap_amount: u64
+        max_native_swap_amount: u64,
+        swap_enabled: bool
     }
 
     public fun new<C>(
         swap_rate: u64,
-        max_native_swap_amount: u64
+        max_native_swap_amount: u64,
+        swap_enabled: bool
     ): TokenInfo<C> {
         TokenInfo {
             swap_rate,
-            max_native_swap_amount
+            max_native_swap_amount,
+            swap_enabled
         }
     }
 
@@ -19,7 +22,8 @@ module token_bridge_relayer::token_info {
     ) {
         let TokenInfo<C>{
             swap_rate: _,
-            max_native_swap_amount: _
+            max_native_swap_amount: _,
+            swap_enabled: _
         } = self;
     }
 
@@ -37,12 +41,24 @@ module token_bridge_relayer::token_info {
         self.max_native_swap_amount = max_native_swap_amount;
     }
 
+    public fun enable_swap<C>(self: &mut TokenInfo<C>) {
+        self.swap_enabled = true;
+    }
+
+    public fun disable_swap<C>(self: &mut TokenInfo<C>) {
+        self.swap_enabled = false;
+    }
+
     public fun swap_rate<C>(self: &TokenInfo<C>): u64 {
         self.swap_rate
     }
 
     public fun max_native_swap_amount<C>(self: &TokenInfo<C>): u64 {
         self.max_native_swap_amount
+    }
+
+    public fun is_swap_enabled<C>(self: &TokenInfo<C>): bool {
+        self.swap_enabled
     }
 }
 
@@ -60,7 +76,7 @@ module token_bridge_relayer::token_info_tests {
     #[test]
     public fun new() {
         // Create coin 8 info struct.
-        let info = create_coin_8_info();
+        let info = create_coin_8_info(false);
 
         // Verify the struct was set up correctly.
         assert!(TEST_SWAP_RATE == token_info::swap_rate<COIN_8>(&info), 0);
@@ -77,7 +93,7 @@ module token_bridge_relayer::token_info_tests {
     #[test]
     public fun update_swap_rate() {
         // Create coin 8 info struct.
-        let info = create_coin_8_info();
+        let info = create_coin_8_info(false);
 
         // Verify the initial swap rate.
         assert!(TEST_SWAP_RATE == token_info::swap_rate<COIN_8>(&info), 0);
@@ -100,7 +116,7 @@ module token_bridge_relayer::token_info_tests {
     #[test]
     public fun update_max_native_swap_amount() {
         // Create coin 8 info struct.
-        let info = create_coin_8_info();
+        let info = create_coin_8_info(false);
 
         // Verify the initial swap rate.
         assert!(
@@ -128,11 +144,51 @@ module token_bridge_relayer::token_info_tests {
         token_info::destroy<COIN_8>(info);
     }
 
+    #[test]
+    public fun enable_swap() {
+        // Create coin 8 info struct.
+        let info = create_coin_8_info(false);
+
+        // Verify that swappping is disabled.
+        let is_swap_enabled = token_info::is_swap_enabled<COIN_8>(&info);
+        assert!(!is_swap_enabled, 0);
+
+        // Enable swapping.
+        token_info::enable_swap<COIN_8>(&mut info);
+
+        // Verify that swappping is enabled.
+        let is_swap_enabled = token_info::is_swap_enabled<COIN_8>(&info);
+        assert!(is_swap_enabled, 0);
+
+        // Destroy.
+        token_info::destroy<COIN_8>(info);
+    }
+
+    public fun disable_swap() {
+        // Create coin 8 info struct.
+        let info = create_coin_8_info(true);
+
+        // Verify that swappping is enabled.
+        let is_swap_enabled = token_info::is_swap_enabled<COIN_8>(&info);
+        assert!(is_swap_enabled, 0);
+
+        // Enable swapping.
+        token_info::enable_swap<COIN_8>(&mut info);
+
+        // Verify that swappping is disabled.
+        let is_swap_enabled = token_info::is_swap_enabled<COIN_8>(&info);
+        assert!(!is_swap_enabled, 0);
+
+        // Destroy.
+        token_info::destroy<COIN_8>(info);
+    }
+
     // Utilities.
-    public fun create_coin_8_info(): TokenInfo<COIN_8> {
+    public fun create_coin_8_info(enable_swap: bool): TokenInfo<COIN_8> {
         token_info::new<COIN_8>(
             TEST_SWAP_RATE,
-            TEST_MAX_SWAP_AMOUNT
+            TEST_MAX_SWAP_AMOUNT,
+            enable_swap
         )
     }
 }
