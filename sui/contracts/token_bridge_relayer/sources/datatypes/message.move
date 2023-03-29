@@ -57,7 +57,7 @@ module token_bridge_relayer::message {
         let encoded = vector::empty<u8>();
 
         // Message payload ID.
-        bytes::serialize_u8(&mut encoded, MESSAGE_TRANSFER_WITH_RELAY);
+        bytes::push_u8(&mut encoded, MESSAGE_TRANSFER_WITH_RELAY);
 
         // Target relayer fee.
         normalized_amount::serialize_be(
@@ -72,9 +72,9 @@ module token_bridge_relayer::message {
         );
 
         // Recipient.
-        external_address::serialize(
+        vector::append(
             &mut encoded,
-            transfer_with_relay.recipient
+            external_address::to_bytes(transfer_with_relay.recipient)
         );
 
         // Return.
@@ -86,7 +86,7 @@ module token_bridge_relayer::message {
 
         // Verify the message type.
         assert!(
-            bytes::deserialize_u8(&mut cur) == MESSAGE_TRANSFER_WITH_RELAY,
+            bytes::take_u8(&mut cur) == MESSAGE_TRANSFER_WITH_RELAY,
             E_INVALID_MESSAGE
         );
 
@@ -94,7 +94,7 @@ module token_bridge_relayer::message {
         let target_relayer_fee = normalized_amount::deserialize_be(&mut cur);
         let to_native_token_amount =
             normalized_amount::deserialize_be(&mut cur);
-        let recipient = external_address::deserialize(&mut cur);
+        let recipient = external_address::take_bytes(&mut cur);
 
         // Destory the cursor.
         cursor::destroy_empty(cur);
@@ -121,7 +121,7 @@ module token_bridge_relayer::message_tests {
     const TEST_TRANSFER_WITH_RELAY: vector<u8> = x"0100000000000000000000000000000000000000000000000000000000000035b900000000000000000000000000000000000000000000000000000000000032530000000000000000000000000000000000000000000000000000000000003bf0";
     const TEST_TARGET_RELAYER_FEE: u64 = 13753;
     const TEST_TO_NATIVE_TOKEN_AMOUNT: u64 = 12883;
-    const TEST_RECIPIENT: vector<u8> = x"3bf0";
+    const TEST_RECIPIENT: address = @0x3bf0;
 
     #[test]
     public fun new() {
@@ -131,7 +131,7 @@ module token_bridge_relayer::message_tests {
         let to_native_token_amount = normalized_amount::new(
             TEST_TO_NATIVE_TOKEN_AMOUNT
         );
-        let recipient = external_address::from_bytes(TEST_RECIPIENT);
+        let recipient = external_address::from_address(TEST_RECIPIENT);
 
         // Create a TransferWithRelay struct.
         let transfer_with_relay = message::new(
@@ -167,7 +167,7 @@ module token_bridge_relayer::message_tests {
         let to_native_token_amount = normalized_amount::new(
             TEST_TO_NATIVE_TOKEN_AMOUNT
         );
-        let recipient = external_address::from_bytes(TEST_RECIPIENT);
+        let recipient = external_address::from_address(TEST_RECIPIENT);
 
         // Create a TransferWithRelay struct.
         let transfer_with_relay = message::new(
@@ -193,7 +193,7 @@ module token_bridge_relayer::message_tests {
         let to_native_token_amount = normalized_amount::new(
             TEST_TO_NATIVE_TOKEN_AMOUNT
         );
-        let recipient = external_address::from_bytes(TEST_RECIPIENT);
+        let recipient = external_address::from_address(TEST_RECIPIENT);
 
         // Deserialize the TransferWithRelay struct.
         let deserialized_transfer_with_relay =

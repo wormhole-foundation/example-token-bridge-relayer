@@ -4,8 +4,8 @@ module token_bridge_relayer::owner {
     use sui::transfer::{Self};
     use sui::tx_context::{Self, TxContext};
 
-    use wormhole::emitter::{EmitterCapability as EmitterCap};
     use wormhole::external_address::{Self};
+    use wormhole::state::{State as WormholeState};
 
     use token_bridge_relayer::state::{Self, State};
 
@@ -40,8 +40,8 @@ module token_bridge_relayer::owner {
     /// Only owner. This creates a new state object that also acts as dynamic
     /// storage.
     public entry fun create_state(
+        wormhole_state: &mut WormholeState,
         owner_cap: &mut OwnerCap,
-        emitter_cap: EmitterCap,
         ctx: &mut TxContext
     ) {
         assert!(
@@ -57,8 +57,8 @@ module token_bridge_relayer::owner {
         let relayer_fee_precision: u64 = 10000000;
 
         // Create and share state.
-        transfer::share_object(
-            state::new(emitter_cap, swap_rate_precision, relayer_fee_precision, ctx)
+        transfer::public_share_object(
+            state::new(wormhole_state, swap_rate_precision, relayer_fee_precision, ctx)
         )
     }
 
@@ -72,7 +72,7 @@ module token_bridge_relayer::owner {
         state::register_foreign_contract(
             t_state,
             chain,
-            external_address::left_pad(&contract_address)
+            external_address::from_bytes(contract_address)
         );
     }
 
@@ -181,17 +181,14 @@ module token_bridge_relayer::init_tests {
     use token_bridge_relayer::relayer_fees::{Self};
     use token_bridge_relayer::registered_tokens::{Self};
 
-    use wormhole::emitter::{EmitterCapability as EmitterCap};
-    use wormhole::state::{
-        DeployerCapability as WormholeDeployerCap,
-        State as WormholeState
-    };
+    use wormhole::state::{State as WormholeState};
+    use wormhole::wormhole_scenario::{Self};
     use wormhole::external_address::{Self};
 
     use token_bridge::state::{
         Self as bridge_state,
         State as BridgeState,
-        DeployerCapability as BridgeDeployerCap
+        DeployerCap as BridgeDeployerCap
     };
 
     // Example coins.
@@ -259,12 +256,9 @@ module token_bridge_relayer::init_tests {
         // Bye bye.
         test_scenario::return_shared<RelayerState>(state);
 
-        // We expect one objects to be deleted:
-        // 1. emitter_cap
+        // Check the deleted ids length.
         let deleted_ids = test_scenario::deleted(&effects);
-
-        // TODO(Drew): Why is this two now?
-        assert!(vector::length(&deleted_ids) == 2, 0);
+        assert!(vector::length(&deleted_ids) == 6, 0);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -277,16 +271,16 @@ module token_bridge_relayer::init_tests {
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
 
-        // Fetch the owner and emitter caps.
+        // Fetch the owner and wormhole state.
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
-        let emitter_cap =
-            test_scenario::take_from_sender<EmitterCap>(scenario);
+        let wormhole_state =
+            test_scenario::take_shared<WormholeState>(scenario);
 
         // The call to create the state should fail.
         owner::create_state(
+            &mut wormhole_state,
             &mut owner_cap,
-            emitter_cap,
             test_scenario::ctx(scenario)
         );
 
@@ -295,6 +289,7 @@ module token_bridge_relayer::init_tests {
             scenario,
             owner_cap
         );
+        test_scenario::return_shared(wormhole_state);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -343,8 +338,8 @@ module token_bridge_relayer::init_tests {
                     TEST_TARGET_CHAIN
                 );
             assert!(
-                external_address::get_bytes(
-                    registered_contract
+                external_address::to_bytes(
+                    *registered_contract
                 ) == TEST_TARGET_CONTRACT,
                 0
             );
@@ -393,8 +388,8 @@ module token_bridge_relayer::init_tests {
                     TEST_TARGET_CHAIN
                 );
             assert!(
-                external_address::get_bytes(
-                    registered_contract
+                external_address::to_bytes(
+                    *registered_contract
                 ) == TEST_TARGET_CONTRACT,
                 0
             );
@@ -419,8 +414,8 @@ module token_bridge_relayer::init_tests {
                     TEST_TARGET_CHAIN
                 );
             assert!(
-                external_address::get_bytes(
-                    registered_contract
+                external_address::to_bytes(
+                    *registered_contract
                 ) == target_contract2,
                 0
             );
@@ -566,8 +561,8 @@ module token_bridge_relayer::init_tests {
                     TEST_TARGET_CHAIN
                 );
             assert!(
-                external_address::get_bytes(
-                    registered_contract
+                external_address::to_bytes(
+                    *registered_contract
                 ) == TEST_TARGET_CONTRACT,
                 0
             );
@@ -1771,61 +1766,19 @@ module token_bridge_relayer::init_tests {
         let my_scenario = test_scenario::begin(@0x0);
         let scenario = &mut my_scenario;
 
-        // Proceed.
+        // Set up Wormhole.
+        wormhole_scenario::set_up_wormhole(scenario, 100);
+
+        // Ignore effects.
         test_scenario::next_tx(scenario, creator);
-
-        // Set up Wormhole contract.
-        {
-            wormhole::state::test_init(test_scenario::ctx(scenario));
-
-            // Proceed.
-            test_scenario::next_tx(scenario, creator);
-
-            let deployer =
-                test_scenario::take_from_sender<WormholeDeployerCap>(
-                    scenario
-                );
-
-            // Share Wormhole state.
-            wormhole::state::init_and_share_state(
-                deployer,
-                1, // governance chain
-                x"0000000000000000000000000000000000000000000000000000000000000004", // governance_contract
-                vector[x"beFA429d57cD18b7F8A4d91A2da9AB4AF05d0FBe"], // initial_guardians
-                100,
-                test_scenario::ctx(scenario)
-            );
-
-            // Proceed.
-            test_scenario::next_tx(scenario, creator);
-        };
-
-        // Create a Wormhole emitter for the Token Bridge.
-        {
-            let wormhole_state =
-                test_scenario::take_shared<WormholeState>(scenario);
-            wormhole::wormhole::get_new_emitter(
-                &mut wormhole_state,
-                test_scenario::ctx(scenario)
-            );
-
-            // Bye bye.
-            test_scenario::return_shared<WormholeState>(wormhole_state);
-
-            // Proceed.
-            test_scenario::next_tx(scenario, creator);
-        };
 
         // Set up Token Bridge contract.
         {
+            // Init the token brigde state.
             bridge_state::init_test_only(test_scenario::ctx(scenario));
 
             // Proceed.
             test_scenario::next_tx(scenario, creator);
-            assert!(
-                test_scenario::has_most_recent_for_sender<BridgeDeployerCap>(scenario),
-                0
-            );
 
             let deployer_cap =
                 test_scenario::take_from_sender<BridgeDeployerCap>(
@@ -1848,22 +1801,6 @@ module token_bridge_relayer::init_tests {
             test_scenario::next_tx(scenario, creator);
         };
 
-        // Create another Wormhole emitter for the TokenBridgeRelayer module.
-        {
-            let wormhole_state =
-                test_scenario::take_shared<WormholeState>(scenario);
-            wormhole::wormhole::get_new_emitter(
-                &mut wormhole_state,
-                test_scenario::ctx(scenario)
-            );
-
-            // Bye bye.
-            test_scenario::return_shared<WormholeState>(wormhole_state);
-
-            // Proceed.
-            test_scenario::next_tx(scenario, creator);
-        };
-
         // Initialize the Hello Token contract.
         {
             // We call `init_test_only` to simulate `init`
@@ -1872,14 +1809,13 @@ module token_bridge_relayer::init_tests {
             // Proceed.
             test_scenario::next_tx(scenario, creator);
         };
-
         // Register a test emitter on the token bridge.
         {
             let state = test_scenario::take_shared<BridgeState>(scenario);
             bridge_state::register_emitter_test_only(
                 &mut state,
                 2, // Ethereum chain ID
-                external_address::from_bytes(x"3ee18B2214AFF97000D974cf647E7C347E8fa585"),
+                external_address::from_address(@0x3ee18B2214AFF97000D974cf647E7C347E8fa585),
             );
             test_scenario::return_shared<BridgeState>(state);
 
@@ -1891,12 +1827,12 @@ module token_bridge_relayer::init_tests {
         {
             let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
-            let emitter_cap =
-                test_scenario::take_from_sender<EmitterCap>(scenario);
+            let wormhole_state =
+                test_scenario::take_shared<WormholeState>(scenario);
 
             owner::create_state(
+                &mut wormhole_state,
                 &mut owner_cap,
-                emitter_cap,
                 test_scenario::ctx(scenario)
             );
 
@@ -1905,6 +1841,7 @@ module token_bridge_relayer::init_tests {
                 scenario,
                 owner_cap
             );
+            test_scenario::return_shared(wormhole_state);
         };
 
         let effects = test_scenario::next_tx(scenario, creator);

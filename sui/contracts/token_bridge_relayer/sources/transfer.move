@@ -113,7 +113,7 @@ module token_bridge_relayer::transfer {
             coins_to_transfer = coin::split(&mut coins, transformed_amount, ctx);
 
             // Return the original object with the dust.
-            transfer::transfer(coins, tx_context::sender(ctx))
+            transfer::public_transfer(coins, tx_context::sender(ctx))
         } else {
             coins_to_transfer = coins;
         };
@@ -121,8 +121,8 @@ module token_bridge_relayer::transfer {
         // Finally transfer tokens via Token Bridge.
         transfer_tokens_with_payload(
             relayer_state::emitter_cap(t_state),
-            wormhole_state,
             token_bridge_state,
+            wormhole_state,
             coins_to_transfer,
             wormhole_fee,
             target_chain,
@@ -965,7 +965,7 @@ module token_bridge_relayer::transfer_tests {
         assert!(coin::value(&test_coin) == amount, 0);
 
         // Bye bye.
-        native_transfer::transfer(treasury_cap, @0x0);
+        native_transfer::public_transfer(treasury_cap, @0x0);
 
         // Return.
         (test_coin, metadata)
@@ -989,7 +989,7 @@ module token_bridge_relayer::transfer_tests {
         assert!(coin::value(&test_coin) == amount, 0);
 
         // Bye bye.
-        native_transfer::transfer(treasury_cap, @0x0);
+        native_transfer::public_transfer(treasury_cap, @0x0);
 
         // Return.
         (test_coin, metadata)
@@ -1033,7 +1033,7 @@ module token_bridge_relayer::transfer_tests {
 
         // Mint SUI token amount based on the wormhole fee.
         let sui_coin = mint_sui(
-            wormhole_state_module::get_message_fee(&wormhole_state),
+            wormhole_state_module::message_fee(&wormhole_state),
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, creator);
@@ -1067,7 +1067,7 @@ module token_bridge_relayer::transfer_tests {
         {
             // Perform the attestation.
             let fee_coin = mint_sui(
-                wormhole_state_module::get_message_fee(&wormhole_state),
+                wormhole_state_module::message_fee(&wormhole_state),
                 test_scenario::ctx(scenario)
             );
 
@@ -1076,8 +1076,7 @@ module token_bridge_relayer::transfer_tests {
                 &mut wormhole_state,
                 &coin_metadata,
                 fee_coin,
-                0, // batch ID
-                test_scenario::ctx(scenario)
+                0 // Nonce.
             );
 
             // Proceed.
@@ -1120,7 +1119,7 @@ module token_bridge_relayer::transfer_tests {
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
         test_scenario::return_to_sender(scenario, owner_cap);
-        native_transfer::transfer(coin_metadata, @0x0);
+        native_transfer::public_transfer(coin_metadata, @0x0);
 
         let effects = test_scenario::next_tx(scenario, creator);
         (effects)
