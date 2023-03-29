@@ -158,7 +158,7 @@ module token_bridge_relayer::transfer_tests {
 
     // Example coins.
     use example_coins::coin_8::{Self, COIN_8};
-    use example_coins::coin_9::{Self, COIN_9};
+    use example_coins::coin_10::{Self, COIN_10};
 
     // Test consts.
     const TEST_MAX_U64: u64 = 18446744073709551614;
@@ -316,9 +316,9 @@ module token_bridge_relayer::transfer_tests {
     }
 
     #[test]
-    /// This test transfers tokens with an additional payload using example coin 9
-    /// (which has 9 decimals).
-    public fun transfer_tokens_with_relay_coin_9() {
+    /// This test transfers tokens with an additional payload using example coin 10
+    /// (which has 10 decimals).
+    public fun transfer_tokens_with_relay_coin_10() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
@@ -327,10 +327,10 @@ module token_bridge_relayer::transfer_tests {
         let target_chain: u16 = 69;
         let target_contract =
             x"0000000000000000000000000000000000000000000000000000000000000069";
-        let coin_supply: u64 = 42069000000009; // 42069.000000000009
-        // Since COIN_9 has 9 decimals, the token bridge will truncate the
+        let coin_supply: u64 = 42069000000019; // 42069.000000000009
+        // Since COIN_10 has 10 decimals, the token bridge will truncate the
         // value. This is the expected amount to be returned by the contract.
-        let expected_dust: u64 = 9;
+        let expected_dust: u64 = 19;
         let to_native_token_amount = 1000000000; // 10
         let target_recipient =
             x"000000000000000000000000beFA429d57cD18b7F8A4d91A2da9AB4AF05d0FBe";
@@ -343,7 +343,7 @@ module token_bridge_relayer::transfer_tests {
         let should_register_token: bool = true;
 
         // Mint token 8, fetch the metadata and store the object ID for later.
-        let (test_coin, test_metadata) = mint_coin_9(
+        let (test_coin, test_metadata) = mint_coin_10(
             coin_supply,
             test_scenario::ctx(scenario)
         );
@@ -352,7 +352,7 @@ module token_bridge_relayer::transfer_tests {
         // Store test coin ID for later use.
         let test_coin_id = object::id(&test_coin);
 
-        // Test transfer with COIN_9.
+        // Test transfer with COIN_10.
         test_transfer_tokens_with_relay(
             target_chain,
             target_contract,
@@ -371,7 +371,7 @@ module token_bridge_relayer::transfer_tests {
 
         // Confirm that the dust object was returned to the caller.
         let dust_object =
-            test_scenario::take_from_sender_by_id<Coin<COIN_9>>(
+            test_scenario::take_from_sender_by_id<Coin<COIN_10>>(
                 scenario,
                 test_coin_id
             );
@@ -387,10 +387,10 @@ module token_bridge_relayer::transfer_tests {
     }
 
     #[test]
-    /// This test transfers tokens with an additional payload using example coin 9
-    /// (which has 9 decimals). The last digit in the coin supply argument is zero
+    /// This test transfers tokens with an additional payload using example coin 10
+    /// (which has 10 decimals). The last digit in the coin supply argument is zero
     /// in this test, so the contract should not return any dust.
-    public fun transfer_tokens_with_relay_coin_9_no_dust() {
+    public fun transfer_tokens_with_relay_coin_10_no_dust() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
@@ -412,13 +412,13 @@ module token_bridge_relayer::transfer_tests {
         let should_register_token: bool = true;
 
         // Mint token 8, fetch the metadata and store the object ID for later.
-        let (test_coin, test_metadata) = mint_coin_9(
+        let (test_coin, test_metadata) = mint_coin_10(
             coin_supply,
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, creator);
 
-        // Test transfer with COIN_9.
+        // Test transfer with COIN_10.
         test_transfer_tokens_with_relay(
             target_chain,
             target_contract,
@@ -437,7 +437,7 @@ module token_bridge_relayer::transfer_tests {
 
         // Confirm that a dust object was not returned to the sender.
         assert!(
-            !test_scenario::has_most_recent_for_sender<Coin<COIN_9>>(scenario),
+            !test_scenario::has_most_recent_for_sender<Coin<COIN_10>>(scenario),
             0
         );
 
@@ -446,7 +446,7 @@ module token_bridge_relayer::transfer_tests {
     }
 
     #[test]
-    public fun transfer_tokens_with_relay_coin_9_maximum_amount() {
+    public fun transfer_tokens_with_relay_coin_10_maximum_amount() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
@@ -456,9 +456,9 @@ module token_bridge_relayer::transfer_tests {
         let target_contract =
             x"0000000000000000000000000000000000000000000000000000000000000069";
         let max_coin_supply: u64 = TEST_MAX_U64; // Maximum amount.
-        // Since COIN_9 has 9 decimals, the token bridge will truncate the
+        // Since COIN_10 has 10 decimals, the token bridge will truncate the
         // value. This is the expected amount to be returned by the contract.
-        let expected_dust: u64 = 4;
+        let expected_dust: u64 = 14;
         let to_native_token_amount = 1000000000; // 10
         let target_recipient =
             x"000000000000000000000000beFA429d57cD18b7F8A4d91A2da9AB4AF05d0FBe";
@@ -471,7 +471,7 @@ module token_bridge_relayer::transfer_tests {
         let should_register_token: bool = true;
 
         // Mint token 8, fetch the metadata and store the object ID for later.
-        let (test_coin, test_metadata) = mint_coin_9(
+        let (test_coin, test_metadata) = mint_coin_10(
             max_coin_supply,
             test_scenario::ctx(scenario)
         );
@@ -480,7 +480,7 @@ module token_bridge_relayer::transfer_tests {
         // Store test coin ID for later use.
         let test_coin_id = object::id(&test_coin);
 
-        // Test transfer with COIN_9.
+        // Test transfer with COIN_10.
         test_transfer_tokens_with_relay(
             target_chain,
             target_contract,
@@ -499,7 +499,7 @@ module token_bridge_relayer::transfer_tests {
 
         // Confirm that the dust object was returned to the caller.
         let dust_object =
-            test_scenario::take_from_sender_by_id<Coin<COIN_9>>(
+            test_scenario::take_from_sender_by_id<Coin<COIN_10>>(
                 scenario,
                 test_coin_id
             );
@@ -515,7 +515,7 @@ module token_bridge_relayer::transfer_tests {
     }
 
     #[test]
-    public fun transfer_tokens_with_relay_coin_9_minimum_amount() {
+    public fun transfer_tokens_with_relay_coin_10_minimum_amount() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
@@ -524,8 +524,8 @@ module token_bridge_relayer::transfer_tests {
         let target_chain: u16 = 69;
         let target_contract =
             x"0000000000000000000000000000000000000000000000000000000000000069";
-        let min_coin_supply: u64 = 10; // Minimum amount.
-        // Since COIN_9 has 9 decimals, the token bridge will truncate the
+        let min_coin_supply: u64 = 100; // Minimum amount.
+        // Since COIN_10 has 10 decimals, the token bridge will truncate the
         // value. This is the expected amount to be returned by the contract.
         let to_native_token_amount = 0;
         let target_recipient =
@@ -539,13 +539,13 @@ module token_bridge_relayer::transfer_tests {
         let should_register_token: bool = true;
 
         // Mint token 8, fetch the metadata and store the object ID for later.
-        let (test_coin, test_metadata) = mint_coin_9(
+        let (test_coin, test_metadata) = mint_coin_10(
             min_coin_supply,
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, creator);
 
-        // Test transfer with COIN_9.
+        // Test transfer with COIN_10.
         test_transfer_tokens_with_relay(
             target_chain,
             target_contract,
@@ -726,7 +726,7 @@ module token_bridge_relayer::transfer_tests {
     #[expected_failure(abort_code = transfer::E_INSUFFICIENT_TO_NATIVE_AMOUNT)]
     /// This test confirms that the contract correctly reverts when the
     /// specified to native token amount is too small and is normalized
-    /// to zero. This test uses coin 9 since it has 9 decimals.
+    /// to zero. This test uses coin 10 since it has 10 decimals.
     public fun cannot_transfer_tokens_with_relay_insufficient_normalized_to_native_amount() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
@@ -751,13 +751,13 @@ module token_bridge_relayer::transfer_tests {
         let should_register_token: bool = true;
 
         // Mint token 8, fetch the metadata and store the object ID for later.
-        let (test_coin, test_metadata) = mint_coin_9(
+        let (test_coin, test_metadata) = mint_coin_10(
             coin_supply,
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, creator);
 
-        // Test transfer with COIN_9.
+        // Test transfer with COIN_10.
         test_transfer_tokens_with_relay(
             target_chain,
             target_contract,
@@ -803,7 +803,7 @@ module token_bridge_relayer::transfer_tests {
         let should_register_token: bool = true;
 
         // Mint token 8, fetch the metadata and store the object ID for later.
-        let (test_coin, test_metadata) = mint_coin_9(
+        let (test_coin, test_metadata) = mint_coin_10(
             coin_supply,
             test_scenario::ctx(scenario)
         );
@@ -971,12 +971,12 @@ module token_bridge_relayer::transfer_tests {
         (test_coin, metadata)
     }
 
-    public fun mint_coin_9(
+    public fun mint_coin_10(
         amount: u64,
         ctx: &mut TxContext
-    ): (Coin<COIN_9>, CoinMetadata<COIN_9>) {
+    ): (Coin<COIN_10>, CoinMetadata<COIN_10>) {
         // Initialize token 8.
-        let (treasury_cap, metadata) = coin_9::create_coin_test_only(ctx);
+        let (treasury_cap, metadata) = coin_10::create_coin_test_only(ctx);
 
         // Mint tokens.
         let test_coin = coin::mint(

@@ -17,6 +17,10 @@ module token_bridge_relayer::state {
     const E_INVALID_CHAIN: u64 = 0;
     const E_INVALID_CONTRACT_ADDRESS: u64 = 1;
     const E_PRECISION_CANNOT_BE_ZERO: u64 = 2;
+    const E_INVALID_NATIVE_SWAP_RATE: u64 = 3;
+
+    // Max U64 const.
+    const U64_MAX: u64 = 18446744073709551614;
 
     /// Object that holds this contract's state. Foreign contracts are
     /// stored as dynamic object fields of `State`.
@@ -203,6 +207,13 @@ module token_bridge_relayer::state {
             (swap_rate_precision(self) as u256) *
             (swap_rate<SUI>(self) as u256) /
             (swap_rate<C>(self) as u256)
+        );
+
+        // Catch overflow.
+        assert!(
+            native_swap_rate > 0 &&
+            native_swap_rate <= (U64_MAX as u256),
+            E_INVALID_NATIVE_SWAP_RATE
         );
 
         (native_swap_rate as u64)

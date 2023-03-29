@@ -53,8 +53,8 @@ module token_bridge_relayer::owner {
         *dynamic_field::borrow_mut(&mut owner_cap.id, b"state_created") = true;
 
         // Hardcode the initial swap rate and relayer fee precision state variables.
-        let swap_rate_precision: u64 = 1000000000;
-        let relayer_fee_precision: u64 = 100000000;
+        let swap_rate_precision: u64 = 100000000;
+        let relayer_fee_precision: u64 = 10000000;
 
         // Create and share state.
         transfer::share_object(
@@ -196,7 +196,7 @@ module token_bridge_relayer::init_tests {
 
     // Example coins.
     use example_coins::coin_8::{COIN_8};
-    use example_coins::coin_9::{COIN_9};
+    use example_coins::coin_10::{COIN_10};
 
     // Test consts.
     const TEST_TARGET_CHAIN: u16 = 69;
@@ -1083,7 +1083,7 @@ module token_bridge_relayer::init_tests {
 
         // Register Coin 9.
         {
-            owner::register_token<COIN_9>(
+            owner::register_token<COIN_10>(
                 &owner_cap,
                 &mut state,
                 initial_swap_rate,
@@ -1093,7 +1093,7 @@ module token_bridge_relayer::init_tests {
 
             // Confirm the registration and token count.
             let is_registered =
-                relayer_state::is_registered_token<COIN_9>(
+                relayer_state::is_registered_token<COIN_10>(
                     &state
                 );
             let num_tokens = relayer_state::registered_token_count(&state);
@@ -1101,9 +1101,9 @@ module token_bridge_relayer::init_tests {
 
             // Confirm that the swap rate and max native swap amount were set
             // in the contract's state properly.
-            let swap_rate_in_state = relayer_state::swap_rate<COIN_9>(&state);
+            let swap_rate_in_state = relayer_state::swap_rate<COIN_10>(&state);
             let max_native_swap_amount_in_state =
-                relayer_state::max_native_swap_amount<COIN_9>(&state);
+                relayer_state::max_native_swap_amount<COIN_10>(&state);
             assert!(
                 swap_rate_in_state == initial_swap_rate &&
                 max_native_swap_amount_in_state == TEST_INITIAL_MAX_SWAP_AMOUNT,
