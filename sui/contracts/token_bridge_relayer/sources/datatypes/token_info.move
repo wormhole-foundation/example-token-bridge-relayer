@@ -149,14 +149,14 @@ module token_bridge_relayer::token_info_tests {
         // Create coin 8 info struct.
         let info = create_coin_8_info(false);
 
-        // Verify that swappping is disabled.
+        // Verify that swapping is disabled.
         let is_swap_enabled = token_info::is_swap_enabled<COIN_8>(&info);
         assert!(!is_swap_enabled, 0);
 
         // Enable swapping.
         token_info::enable_swap<COIN_8>(&mut info);
 
-        // Verify that swappping is enabled.
+        // Verify that swapping is enabled.
         let is_swap_enabled = token_info::is_swap_enabled<COIN_8>(&info);
         assert!(is_swap_enabled, 0);
 
@@ -164,18 +164,19 @@ module token_bridge_relayer::token_info_tests {
         token_info::destroy<COIN_8>(info);
     }
 
+    #[test]
     public fun disable_swap() {
         // Create coin 8 info struct.
         let info = create_coin_8_info(true);
 
-        // Verify that swappping is enabled.
+        // Verify that swapping is enabled.
         let is_swap_enabled = token_info::is_swap_enabled<COIN_8>(&info);
         assert!(is_swap_enabled, 0);
 
-        // Enable swapping.
-        token_info::enable_swap<COIN_8>(&mut info);
+        // Disable swapping.
+        token_info::disable_swap<COIN_8>(&mut info);
 
-        // Verify that swappping is disabled.
+        // Verify that swapping is disabled.
         let is_swap_enabled = token_info::is_swap_enabled<COIN_8>(&info);
         assert!(!is_swap_enabled, 0);
 

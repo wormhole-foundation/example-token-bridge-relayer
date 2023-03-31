@@ -67,12 +67,12 @@ module token_bridge_relayer::owner {
         _: &OwnerCap,
         t_state: &mut State,
         chain: u16,
-        contract_address: vector<u8>,
+        contract_address: address,
     ) {
         state::register_foreign_contract(
             t_state,
             chain,
-            external_address::from_bytes(contract_address)
+            external_address::from_address(contract_address)
         );
     }
 
@@ -182,14 +182,13 @@ module token_bridge_relayer::init_tests {
     use token_bridge_relayer::registered_tokens::{Self};
 
     use wormhole::state::{State as WormholeState};
-    use wormhole::wormhole_scenario::{Self};
     use wormhole::external_address::{Self};
 
     use token_bridge::state::{
         Self as bridge_state,
-        State as BridgeState,
-        DeployerCap as BridgeDeployerCap
+        State as BridgeState
     };
+    use token_bridge::token_bridge_scenario::{Self};
 
     // Example coins.
     use example_coins::coin_8::{COIN_8};
@@ -197,8 +196,8 @@ module token_bridge_relayer::init_tests {
 
     // Test consts.
     const TEST_TARGET_CHAIN: u16 = 69;
-    const TEST_TARGET_CONTRACT: vector<u8> =
-        x"000000000000000000000000beFA429d57cD18b7F8A4d91A2da9AB4AF05d0FBe";
+    const TEST_TARGET_CONTRACT: address =
+        @0x000000000000000000000000beFA429d57cD18b7F8A4d91A2da9AB4AF05d0FBe;
     const TEST_INITIAL_RELAYER_FEE_USD: u64 = 5;
     const TEST_INITIAL_MAX_SWAP_AMOUNT: u64 = 69420;
     const TEST_INITIAL_SWAP_RATE: u64 = 69; // $69
@@ -338,7 +337,7 @@ module token_bridge_relayer::init_tests {
                     TEST_TARGET_CHAIN
                 );
             assert!(
-                external_address::to_bytes(
+                external_address::to_address(
                     *registered_contract
                 ) == TEST_TARGET_CONTRACT,
                 0
@@ -360,8 +359,8 @@ module token_bridge_relayer::init_tests {
         let scenario = &mut my_scenario;
 
         // Create mock target contract address.
-        let target_contract2 =
-            x"0000000000000000000000000000000000000000000000000000000000000069";
+        let target_contract2: address =
+            @0x0000000000000000000000000000000000000000000000000000000000000069;
 
         // Fetch the TokenBridgeRelayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
@@ -388,7 +387,7 @@ module token_bridge_relayer::init_tests {
                     TEST_TARGET_CHAIN
                 );
             assert!(
-                external_address::to_bytes(
+                external_address::to_address(
                     *registered_contract
                 ) == TEST_TARGET_CONTRACT,
                 0
@@ -414,7 +413,7 @@ module token_bridge_relayer::init_tests {
                     TEST_TARGET_CHAIN
                 );
             assert!(
-                external_address::to_bytes(
+                external_address::to_address(
                     *registered_contract
                 ) == target_contract2,
                 0
@@ -469,8 +468,8 @@ module token_bridge_relayer::init_tests {
 
         // Create mock chain ID and address pair.
         let target_chain: u16 = 21;
-        let target_contract =
-            x"000000000000000000000000beFA429d57cD18b7F8A4d91A2da9AB4AF05d0FBe";
+        let target_contract: address =
+            @0x000000000000000000000000beFA429d57cD18b7F8A4d91A2da9AB4AF05d0FBe;
 
         // Fetch the TokenBridgeRelayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
@@ -501,8 +500,8 @@ module token_bridge_relayer::init_tests {
         let scenario = &mut my_scenario;
 
         // Create mock target contract address.
-        let target_contract =
-            x"0000000000000000000000000000000000000000000000000000000000000000";
+        let target_contract: address =
+            @0x0000000000000000000000000000000000000000000000000000000000000000;
 
         // Fetch the TokenBridgeRelayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
@@ -533,8 +532,8 @@ module token_bridge_relayer::init_tests {
         let scenario = &mut my_scenario;
 
         // Create mock target contract address.
-        let target_contract_zero_address =
-            x"0000000000000000000000000000000000000000000000000000000000000000";
+        let target_contract_zero_address: address =
+            @0x0000000000000000000000000000000000000000000000000000000000000000;
 
         // Fetch the TokenBridgeRelayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
@@ -561,7 +560,7 @@ module token_bridge_relayer::init_tests {
                     TEST_TARGET_CHAIN
                 );
             assert!(
-                external_address::to_bytes(
+                external_address::to_address(
                     *registered_contract
                 ) == TEST_TARGET_CONTRACT,
                 0
@@ -1766,53 +1765,28 @@ module token_bridge_relayer::init_tests {
         let my_scenario = test_scenario::begin(@0x0);
         let scenario = &mut my_scenario;
 
-        // Set up Wormhole.
-        wormhole_scenario::set_up_wormhole(scenario, 100);
 
-        // Ignore effects.
-        test_scenario::next_tx(scenario, creator);
-
-        // Set up Token Bridge contract.
+        // Set up Wormhole and the Token Bridge.
         {
-            // Init the token brigde state.
-            bridge_state::init_test_only(test_scenario::ctx(scenario));
+            token_bridge_scenario::set_up_wormhole_and_token_bridge(scenario, 100);
 
-            // Proceed.
-            test_scenario::next_tx(scenario, creator);
-
-            let deployer_cap =
-                test_scenario::take_from_sender<BridgeDeployerCap>(
-                    scenario
-                );
-            let wormhole_state =
-                test_scenario::take_shared<WormholeState>(scenario);
-
-            // Init the bridge state.
-            bridge_state::init_and_share_state(
-                deployer_cap,
-                &mut wormhole_state,
-                test_scenario::ctx(scenario)
-            );
-
-            // Bye bye.
-            test_scenario::return_shared<WormholeState>(wormhole_state);
-
-            // Proceed.
+            // Ignore effects.
             test_scenario::next_tx(scenario, creator);
         };
 
-        // Initialize the Hello Token contract.
+            // Set up the token bridge relayer contract.
         {
-            // We call `init_test_only` to simulate `init`
             owner::init_test_only(test_scenario::ctx(scenario));
 
             // Proceed.
             test_scenario::next_tx(scenario, creator);
         };
+
+
         // Register a test emitter on the token bridge.
         {
             let state = test_scenario::take_shared<BridgeState>(scenario);
-            bridge_state::register_emitter_test_only(
+            bridge_state::register_new_emitter_test_only(
                 &mut state,
                 2, // Ethereum chain ID
                 external_address::from_address(@0x3ee18B2214AFF97000D974cf647E7C347E8fa585),

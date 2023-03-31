@@ -60,15 +60,17 @@ module token_bridge_relayer::message {
         bytes::push_u8(&mut encoded, MESSAGE_TRANSFER_WITH_RELAY);
 
         // Target relayer fee.
-        normalized_amount::serialize_be(
+        vector::append(
             &mut encoded,
-            transfer_with_relay.target_relayer_fee
+            normalized_amount::to_bytes(transfer_with_relay.target_relayer_fee)
         );
 
         // To native token amount.
-        normalized_amount::serialize_be(
+        vector::append(
             &mut encoded,
-            transfer_with_relay.to_native_token_amount
+            normalized_amount::to_bytes(
+                transfer_with_relay.to_native_token_amount
+            )
         );
 
         // Recipient.
@@ -91,9 +93,9 @@ module token_bridge_relayer::message {
         );
 
         // Deserialize the rest of the payload.
-        let target_relayer_fee = normalized_amount::deserialize_be(&mut cur);
+        let target_relayer_fee = normalized_amount::take_bytes(&mut cur);
         let to_native_token_amount =
-            normalized_amount::deserialize_be(&mut cur);
+            normalized_amount::take_bytes(&mut cur);
         let recipient = external_address::take_bytes(&mut cur);
 
         // Destory the cursor.
@@ -122,14 +124,17 @@ module token_bridge_relayer::message_tests {
     const TEST_TARGET_RELAYER_FEE: u64 = 13753;
     const TEST_TO_NATIVE_TOKEN_AMOUNT: u64 = 12883;
     const TEST_RECIPIENT: address = @0x3bf0;
+    const TEST_DECIMALS: u8 = 8;
 
     #[test]
     public fun new() {
-        let target_relayer_fee = normalized_amount::new(
-            TEST_TARGET_RELAYER_FEE
+        let target_relayer_fee = normalized_amount::from_raw(
+            TEST_TARGET_RELAYER_FEE,
+            TEST_DECIMALS
         );
-        let to_native_token_amount = normalized_amount::new(
-            TEST_TO_NATIVE_TOKEN_AMOUNT
+        let to_native_token_amount = normalized_amount::from_raw(
+            TEST_TO_NATIVE_TOKEN_AMOUNT,
+            TEST_DECIMALS
         );
         let recipient = external_address::from_address(TEST_RECIPIENT);
 
@@ -161,11 +166,13 @@ module token_bridge_relayer::message_tests {
 
     #[test]
     public fun serialize() {
-        let target_relayer_fee = normalized_amount::new(
-            TEST_TARGET_RELAYER_FEE
+        let target_relayer_fee = normalized_amount::from_raw(
+            TEST_TARGET_RELAYER_FEE,
+            TEST_DECIMALS
         );
-        let to_native_token_amount = normalized_amount::new(
-            TEST_TO_NATIVE_TOKEN_AMOUNT
+        let to_native_token_amount = normalized_amount::from_raw(
+            TEST_TO_NATIVE_TOKEN_AMOUNT,
+            TEST_DECIMALS
         );
         let recipient = external_address::from_address(TEST_RECIPIENT);
 
@@ -187,11 +194,13 @@ module token_bridge_relayer::message_tests {
     #[test]
     public fun deserialize() {
         // Expected output from parsing the encoded message above.
-        let target_relayer_fee = normalized_amount::new(
-            TEST_TARGET_RELAYER_FEE
+        let target_relayer_fee = normalized_amount::from_raw(
+            TEST_TARGET_RELAYER_FEE,
+            TEST_DECIMALS
         );
-        let to_native_token_amount = normalized_amount::new(
-            TEST_TO_NATIVE_TOKEN_AMOUNT
+        let to_native_token_amount = normalized_amount::from_raw(
+            TEST_TO_NATIVE_TOKEN_AMOUNT,
+            TEST_DECIMALS
         );
         let recipient = external_address::from_address(TEST_RECIPIENT);
 

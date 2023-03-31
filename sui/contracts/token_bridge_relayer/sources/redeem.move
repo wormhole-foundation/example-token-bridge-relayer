@@ -2,13 +2,12 @@ module token_bridge_relayer::redeem {
     use sui::sui::SUI;
     use sui::coin::{Self, Coin};
     use sui::math::{Self};
+    use sui::clock::{Clock};
     use sui::transfer::{Self};
     use sui::tx_context::{Self, TxContext};
 
     use token_bridge::state::{Self as bridge_state, State as TokenBridgeState};
-    use token_bridge::complete_transfer_with_payload::{
-        complete_transfer_with_payload
-    };
+    use token_bridge::complete_transfer_with_payload::{Self as bridge};
     use token_bridge::transfer_with_payload::{Self, TransferWithPayload};
     use token_bridge::normalized_amount::{Self};
 
@@ -34,18 +33,19 @@ module token_bridge_relayer::redeem {
         wormhole_state: &mut WormholeState,
         token_bridge_state: &mut TokenBridgeState,
         vaa: vector<u8>,
+        the_clock: &Clock,
         ctx: &mut TxContext
     ) {
         // Complete the transfer on the Token Bridge. This call returns the
         // coin object for the amount transferred via the Token Bridge. It
         // also returns the chain ID of the message sender.
-        let (coins, transfer_payload, emitter_chain_id) =
-            complete_transfer_with_payload<C>(
+        let (balance, transfer_payload, emitter_chain_id) =
+            bridge::complete_transfer_with_payload<C>(
                 token_bridge_state,
                 relayer_state::emitter_cap(t_state),
                 wormhole_state,
                 vaa,
-                ctx
+                the_clock
             );
 
         // Verify that the token is accepted by this contract and that
@@ -73,7 +73,10 @@ module token_bridge_relayer::redeem {
         );
 
         // Handle self redemptions.
-        transfer::public_transfer(coins, recipient);
+        transfer::public_transfer(
+            coin::from_balance(balance, ctx),
+            recipient
+        );
     }
 
     public entry fun complete_transfer_with_relay<C>(
@@ -82,19 +85,23 @@ module token_bridge_relayer::redeem {
         token_bridge_state: &mut TokenBridgeState,
         vaa: vector<u8>,
         native_coins: Coin<SUI>,
+        the_clock: &Clock,
         ctx: &mut TxContext
      ) {
         // Complete the transfer on the Token Bridge. This call returns the
         // coin object for the amount transferred via the Token Bridge. It
         // also returns the chain ID of the message sender.
-        let (coins, transfer_payload, emitter_chain_id) =
-            complete_transfer_with_payload<C>(
+        let (balance, transfer_payload, emitter_chain_id) =
+            bridge::complete_transfer_with_payload<C>(
                 token_bridge_state,
                 relayer_state::emitter_cap(t_state),
                 wormhole_state,
                 vaa,
-                ctx
+                the_clock
             );
+
+        // Convert the Balance to a Coin object.
+        let coins = coin::from_balance(balance, ctx);
 
         // Verify that the token is accepted by this contract and that
         // the sender of the Wormhole message is a trusted contract.
@@ -456,6 +463,8 @@ module token_bridge_relayer::complete_transfer_tests {
     use token_bridge_relayer::init_tests::{Self, set_up as owner_set_up};
     use token_bridge_relayer::redeem::{Self};
 
+    use token_bridge::token_bridge_scenario::{Self};
+
     // Wormhole.
     use wormhole::state::{
         Self as wormhole_state_module,
@@ -463,7 +472,7 @@ module token_bridge_relayer::complete_transfer_tests {
     };
 
     // Token Bridge.
-    use token_bridge::state::{Self as bridge_state, State as BridgeState};
+    use token_bridge::state::{State as BridgeState};
     use token_bridge::attest_token::{Self};
 
     // Example coins.
@@ -472,8 +481,8 @@ module token_bridge_relayer::complete_transfer_tests {
 
     // Test consts.
     const TEST_FOREIGN_EMITTER_CHAIN: u16 = 2;
-    const TEST_FOREIGN_EMITTER_CONTRACT: vector<u8> =
-        x"0000000000000000000000000000000000000000000000000000000000000069";
+    const TEST_FOREIGN_EMITTER_CONTRACT: address =
+        @0x0000000000000000000000000000000000000000000000000000000000000069;
     const TEST_INITIAL_SUI_SWAP_RATE: u64 = 2000000000; // $20.
     const TEST_INITIAL_COIN_SWAP_RATE: u64 = 100000000; // $1.
     const TEST_INITIAL_MAX_SWAP_AMOUNT: u64 = 1000000000; // 10 SUI.
@@ -482,12 +491,12 @@ module token_bridge_relayer::complete_transfer_tests {
     #[test]
     public fun complete_transfer() {
         // Test variables.
-        let vaa = x"01000000000100d0369ec04349ba0c94e24f65d241c4d6a2af47b686a73585dc3e3eaebd002d9265c7bcb1a0be55f035f6a6eb54dba5ca928299d7d3810aef09ae18ae0d998ac50064249c270000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa5850000000000000000010300000000000000000000000000000000000000000000000000038d7ea4c680000000000000000000000000000000000000000000000000000000000000000001001500000000000000000000000000000000000000000000000000000000000000020015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"0100000000010040d2baf562134e0131bc91aedbb10cdf34c66b950870ab3bea5130a1c844518a1193241366a11bd25239627d2858c5febba6169a0b25cdc7a990b4a643e2e272016425eac00000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa5850000000000000000010300000000000000000000000000000000000000000000000000038d7ea4c68000e4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a070015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = 1000000000000000;
 
         // Test setup.
-        let (creator, _) = init_tests::people();
-        let (my_scenario, _) = owner_set_up(creator);
+        let (recipient, _) = init_tests::people();
+        let (my_scenario, _) = owner_set_up(recipient);
         let scenario = &mut my_scenario;
 
         // Fetch state objects.
@@ -498,28 +507,28 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_8(
-            test_amount,
+        // Fetch the coin 8 metadata.
+        let test_metadata = get_coin_8_metadata(
             test_scenario::ctx(scenario)
         );
-        test_scenario::next_tx(scenario, creator);
+        test_scenario::next_tx(scenario, recipient);
 
         // Set the test up.
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
             &mut wormhole_state,
-            creator,
+            recipient,
             scenario,
             test_metadata
         );
 
-        // Ignore effects.
-        test_scenario::next_tx(scenario, creator);
-
         // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
+        token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, recipient);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer<COIN_8>(
@@ -527,11 +536,12 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut wormhole_state,
             &mut bridge_state,
             vaa,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
         // Proceed.
-        let effects = test_scenario::next_tx(scenario, creator);
+        let effects = test_scenario::next_tx(scenario, recipient);
 
         // Store created object IDs.
         let created_ids = test_scenario::created(&effects);
@@ -553,6 +563,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -561,12 +572,12 @@ module token_bridge_relayer::complete_transfer_tests {
     #[test]
     public fun complete_transfer_minimum_amount() {
         // Test variables.
-        let vaa = x"010000000001000eab97166ba96cb83ec3758ef54300bda75b692891eb5130ae2e5d35cb33204244a71f5b51bea56389d73231229ccf2842e9281842f0e128309ee7d03a7844ae01641b6ef90000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa5850000000000000000010300000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001001500000000000000000000000000000000000000000000000000000000000000030015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"01000000000100e3f809f11f0b89468d9903e417e2141fca530e4c4647a4cef0b5347160c4fcf87e405d4d4e7129efdb2b1f5a5dbc766d95b059f48412efcab128db411ba80c23006425eb330000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa585000000000000000001030000000000000000000000000000000000000000000000000000000000000001e4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a070015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = 1;
 
         // Test setup.
-        let (creator, _) = init_tests::people();
-        let (my_scenario, _) = owner_set_up(creator);
+        let (recipient, _) = init_tests::people();
+        let (my_scenario, _) = owner_set_up(recipient);
         let scenario = &mut my_scenario;
 
         // Fetch state objects.
@@ -577,28 +588,28 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_8(
-            test_amount,
+        // Fetch the coin 8 metadata.
+        let test_metadata = get_coin_8_metadata(
             test_scenario::ctx(scenario)
         );
-        test_scenario::next_tx(scenario, creator);
+        test_scenario::next_tx(scenario, recipient);
 
         // Set the test up.
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
             &mut wormhole_state,
-            creator,
+            recipient,
             scenario,
             test_metadata
         );
 
-        // Ignore effects.
-        test_scenario::next_tx(scenario, creator);
-
         // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
+        token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, recipient);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer<COIN_8>(
@@ -606,11 +617,12 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut wormhole_state,
             &mut bridge_state,
             vaa,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
         // Proceed.
-        let effects = test_scenario::next_tx(scenario, creator);
+        let effects = test_scenario::next_tx(scenario, recipient);
 
         // Store created object IDs.
         let created_ids = test_scenario::created(&effects);
@@ -632,6 +644,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -640,12 +653,12 @@ module token_bridge_relayer::complete_transfer_tests {
     #[test]
     public fun complete_transfer_maximum_amount() {
         // Test variables.
-        let vaa = x"010000000001001b9b842d25abb4cdbc0ddf7883b54f10223f3a4d545b6e049572ec985bbb213a254ad09e6304cb66b9f8c109796fccc85b384343bc771ca1f7e776f5487e986300641b8c0d0000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa58500000000000000000103000000000000000000000000000000000000000000000000fffffffffffffffe000000000000000000000000000000000000000000000000000000000000000100150000000000000000000000000000000000000000000000000000000000000003001500000000000000000000000000000000000000000000000000000000000000690100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000015dca94e7200000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"0100000000010005f6332b5352b67eda5342c30d759a44e99f6140e60708b407ad2e0b5e3aeae57d37c997079f2a698a937f7c93d2fb72ce107e9d1d604e676ef2ba83b4168e5b006425f0d80000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa58500000000000000000103000000000000000000000000000000000000000000000000fffffffffffffffee4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a070015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = U64_MAX;
 
         // Test setup.
-        let (creator, _) = init_tests::people();
-        let (my_scenario, _) = owner_set_up(creator);
+        let (recipient, _) = init_tests::people();
+        let (my_scenario, _) = owner_set_up(recipient);
         let scenario = &mut my_scenario;
 
         // Fetch state objects.
@@ -656,28 +669,28 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_8(
-            test_amount,
+        // Fetch the coin 8 metadata.
+        let test_metadata = get_coin_8_metadata(
             test_scenario::ctx(scenario)
         );
-        test_scenario::next_tx(scenario, creator);
+        test_scenario::next_tx(scenario, recipient);
 
         // Set the test up.
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
             &mut wormhole_state,
-            creator,
+            recipient,
             scenario,
             test_metadata
         );
 
-        // Ignore effects.
-        test_scenario::next_tx(scenario, creator);
-
         // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
+        token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, recipient);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer<COIN_8>(
@@ -685,11 +698,12 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut wormhole_state,
             &mut bridge_state,
             vaa,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
         // Proceed.
-        let effects = test_scenario::next_tx(scenario, creator);
+        let effects = test_scenario::next_tx(scenario, recipient);
 
         // Store created object IDs.
         let created_ids = test_scenario::created(&effects);
@@ -711,6 +725,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -720,12 +735,12 @@ module token_bridge_relayer::complete_transfer_tests {
     #[expected_failure(abort_code = redeem::E_UNREGISTERED_COIN)]
     public fun cannot_complete_transfer_unregistered_coin() {
         // Test variables.
-        let vaa = x"01000000000100e0f4a01001bef353bb9d428b27466bac1d5ed1a5634318d88e73921419c80e737ce22b96e9ef2e1021411bb94ba5a1ba0ef4e2f7451c8d00baab2fc56a8784c401641b8d730000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa5850000000000000000010300000000000000000000000000000000000000000000000000038d7ea4c68000000000000000000000000000000000000000000000000000000000000000000100150000000000000000000000000000000000000000000000000000000000000003001500000000000000000000000000000000000000000000000000000000000000690100000000000000000000000000000000000000000000000000000002540be40000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"010000000001006f8b9f5d82362d75e6a442b4a38ba79bf81610118219bfd8db39b0cf1df4f8a2282845e8061e2db8a57cc466f7f85e1e8650070e07b1868ee0d28b0882cfb0ef016425f7a00000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa5850000000000000000010300000000000000000000000000000000000000000000000000038d7ea4c68000e4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a070015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = 1000000000000000;
 
         // Test setup.
-        let (creator, _) = init_tests::people();
-        let (my_scenario, _) = owner_set_up(creator);
+        let (recipient, _) = init_tests::people();
+        let (my_scenario, _) = owner_set_up(recipient);
         let scenario = &mut my_scenario;
 
         // Fetch state objects.
@@ -736,25 +751,28 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_8(
-            test_amount,
+        // Fetch the coin 8 metadata.
+        let test_metadata = get_coin_8_metadata(
             test_scenario::ctx(scenario)
         );
-        test_scenario::next_tx(scenario, creator);
+        test_scenario::next_tx(scenario, recipient);
 
         // Set the test up.
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
             &mut wormhole_state,
-            creator,
+            recipient,
             scenario,
             test_metadata
         );
 
-        // Ignore effects.
-        test_scenario::next_tx(scenario, creator);
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, recipient);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
 
         // Deregister COIN_8 on the token bridge relayer contract.
         {
@@ -769,25 +787,24 @@ module token_bridge_relayer::complete_transfer_tests {
             test_scenario::return_to_sender(scenario, owner_cap);
         };
 
-        // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
-
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer<COIN_8>(
             &token_bridge_relayer_state,
             &mut wormhole_state,
             &mut bridge_state,
             vaa,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
         // Proceed.
-        test_scenario::next_tx(scenario, creator);
+        test_scenario::next_tx(scenario, recipient);
 
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -797,12 +814,12 @@ module token_bridge_relayer::complete_transfer_tests {
     #[expected_failure(abort_code = redeem::E_UNREGISTERED_FOREIGN_CONTRACT)]
     public fun cannot_complete_transfer_unknown_sender() {
         // Test variables.
-        let vaa = x"01000000000100aa23947200f75f57002ae5d2c318d9c111358cd6b4c7951c2a9de23ab916a09861ec761ea008ba27f7c2d1cca96dd310b231ad4aa4f2bbd1312421600c0cb48701641c5da20000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa5850000000000000000010300000000000000000000000000000000000000000000000000038d7ea4c680000000000000000000000000000000000000000000000000000000000000000001001500000000000000000000000000000000000000000000000000000000000000030015000000000000000000000000000000000000000000000000000000000000beef0100000000000000000000000000000000000000000000000000000002540be40000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"01000000000100617a916a5d74838d014e005b63b5216c9f127bba17badc7424a7f52530630a740ce3eb21193fec127732012561ac9b70494e3ceeebdf858fe8a365e4f4e4824c016425f8200000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa5850000000000000000010300000000000000000000000000000000000000000000000000038d7ea4c68000e4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a070015000000000000000000000000000000000000000000000000000000000000004201000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = 1000000000000000;
 
         // Test setup.
-        let (creator, _) = init_tests::people();
-        let (my_scenario, _) = owner_set_up(creator);
+        let (recipient, _) = init_tests::people();
+        let (my_scenario, _) = owner_set_up(recipient);
         let scenario = &mut my_scenario;
 
         // Fetch state objects.
@@ -813,28 +830,28 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_8(
-            test_amount,
+        // Fetch the coin 8 metadata.
+        let test_metadata = get_coin_8_metadata(
             test_scenario::ctx(scenario)
         );
-        test_scenario::next_tx(scenario, creator);
+        test_scenario::next_tx(scenario, recipient);
 
         // Set the test up.
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
             &mut wormhole_state,
-            creator,
+            recipient,
             scenario,
             test_metadata
         );
 
-        // Ignore effects.
-        test_scenario::next_tx(scenario, creator);
-
         // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
+        token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, recipient);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer<COIN_8>(
@@ -842,16 +859,18 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut wormhole_state,
             &mut bridge_state,
             vaa,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
         // Proceed.
-        test_scenario::next_tx(scenario, creator);
+        test_scenario::next_tx(scenario, recipient);
 
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -861,12 +880,12 @@ module token_bridge_relayer::complete_transfer_tests {
     #[expected_failure(abort_code = redeem::E_INVALID_CALLER_FOR_ACTION)]
     public fun cannot_complete_transfer_invalid_caller() {
         // Test variables.
-        let vaa = x"01000000000100e0f4a01001bef353bb9d428b27466bac1d5ed1a5634318d88e73921419c80e737ce22b96e9ef2e1021411bb94ba5a1ba0ef4e2f7451c8d00baab2fc56a8784c401641b8d730000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa5850000000000000000010300000000000000000000000000000000000000000000000000038d7ea4c68000000000000000000000000000000000000000000000000000000000000000000100150000000000000000000000000000000000000000000000000000000000000003001500000000000000000000000000000000000000000000000000000000000000690100000000000000000000000000000000000000000000000000000002540be40000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"010000000001006f8b9f5d82362d75e6a442b4a38ba79bf81610118219bfd8db39b0cf1df4f8a2282845e8061e2db8a57cc466f7f85e1e8650070e07b1868ee0d28b0882cfb0ef016425f7a00000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa5850000000000000000010300000000000000000000000000000000000000000000000000038d7ea4c68000e4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a070015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = 1000000000000000;
 
         // Test setup.
-        let (creator, relayer) = init_tests::people();
-        let (my_scenario, _) = owner_set_up(creator);
+        let (recipient, relayer) = init_tests::people();
+        let (my_scenario, _) = owner_set_up(recipient);
         let scenario = &mut my_scenario;
 
         // Fetch state objects.
@@ -877,28 +896,31 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_8(
-            test_amount,
+        // Fetch the coin 8 metadata.
+        let test_metadata = get_coin_8_metadata(
             test_scenario::ctx(scenario)
         );
-        test_scenario::next_tx(scenario, creator);
+        test_scenario::next_tx(scenario, recipient);
 
         // Set the test up.
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
             &mut wormhole_state,
-            creator,
+            recipient,
             scenario,
             test_metadata
         );
 
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, recipient);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
+
         // NOTE: Switch the context to the relayer for this test.
         test_scenario::next_tx(scenario, relayer);
-
-        // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer<COIN_8>(
@@ -906,16 +928,18 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut wormhole_state,
             &mut bridge_state,
             vaa,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
         // Proceed.
-        test_scenario::next_tx(scenario, creator);
+        test_scenario::next_tx(scenario, recipient);
 
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -924,7 +948,7 @@ module token_bridge_relayer::complete_transfer_tests {
     #[test]
     public fun complete_transfer_with_relay_coin_8_no_swap_no_fee() {
         // Test variables.
-        let vaa = x"01000000000100d0369ec04349ba0c94e24f65d241c4d6a2af47b686a73585dc3e3eaebd002d9265c7bcb1a0be55f035f6a6eb54dba5ca928299d7d3810aef09ae18ae0d998ac50064249c270000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa5850000000000000000010300000000000000000000000000000000000000000000000000038d7ea4c680000000000000000000000000000000000000000000000000000000000000000001001500000000000000000000000000000000000000000000000000000000000000020015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"010000000001006f8b9f5d82362d75e6a442b4a38ba79bf81610118219bfd8db39b0cf1df4f8a2282845e8061e2db8a57cc466f7f85e1e8650070e07b1868ee0d28b0882cfb0ef016425f7a00000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa5850000000000000000010300000000000000000000000000000000000000000000000000038d7ea4c68000e4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a070015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = 1000000000000000;
         let swap_amount = 0;
 
@@ -941,9 +965,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_8(
-            test_amount,
+        // Fetch the coin 8 metadata.
+        let test_metadata = get_coin_8_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -962,7 +985,11 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, relayer);
 
         // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
+        token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, relayer);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
 
         // Mint sui tokens for the relayer to swap with the contract.
         let (sui_coins_for_swap, _) = mint_sui_for_swap<COIN_8>(
@@ -980,6 +1007,7 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut bridge_state,
             vaa,
             sui_coins_for_swap,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -1007,6 +1035,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -1015,7 +1044,7 @@ module token_bridge_relayer::complete_transfer_tests {
     #[test]
     public fun complete_transfer_with_relay_coin_10_no_swap_no_fee() {
         // Test variables.
-        let vaa = x"01000000000100f15e501dadcb8eb7663442db3ef77d2e05f44df46de302cd0545b93609cb8a4010262c0fc7a7d91e1b56db86bd0a821d823c5b02e4d098ace072433d9e51024600642361740000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa5850000000000000000010300000000000000000000000000000000000000000000000000038d7ea4c680000000000000000000000000000000000000000000000000000000000000000001001500000000000000000000000000000000000000000000000000000000000000030015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"0100000000010053d0f91a25d439afff32b2014d7f709130da7e8d1e89b448a6249e115e34ad714d2923a9f4fa1b5184943bcdb2e0140bd51c8a28789bb7bb21ecdd78078cd7f2016425fa550000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa5850000000000000000010300000000000000000000000000000000000000000000000000038d7ea4c68000e4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a070015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = 100000000000000000;
         let swap_amount = 0;
 
@@ -1032,9 +1061,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 10.
-        let (test_coin, test_metadata) = mint_coin_10(
-            test_amount,
+        // Fetch the coin 10 metadata.
+        let test_metadata = get_coin_10_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -1052,9 +1080,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // NOTE: Switch the context to the relayer for this test.
         test_scenario::next_tx(scenario, relayer);
 
-        // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
-
         // Mint sui tokens for the relayer to swap with the contract.
         let (sui_coins_for_swap, _) = mint_sui_for_swap<COIN_10>(
             &token_bridge_relayer_state,
@@ -1064,6 +1089,13 @@ module token_bridge_relayer::complete_transfer_tests {
         );
         assert!(coin::value(&sui_coins_for_swap) == 0, 0);
 
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_10>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, relayer);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
+
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
@@ -1071,6 +1103,7 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut bridge_state,
             vaa,
             sui_coins_for_swap,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -1098,6 +1131,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -1106,7 +1140,7 @@ module token_bridge_relayer::complete_transfer_tests {
     #[test]
     public fun complete_transfer_with_relay_coin_8_no_swap_with_fee() {
         // Test variables.
-        let vaa = x"010000000001003db589ee64873851de75a63e7970a94a9d7fb88622725379829787fb2f57c2727eb3ac98f11fa87c26312aac28fd835bf30ab9fdaff6bc282ea64fdf94984dd200641c8f060000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa5850000000000000000010300000000000000000000000000000000000000000000000000038d7ea4c68000000000000000000000000000000000000000000000000000000000000000000100150000000000000000000000000000000000000000000000000000000000000003001500000000000000000000000000000000000000000000000000000000000000690100000000000000000000000000000000000000000000000000000002540be40000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"010000000001000701eacae6a19f20c10eff5468ee4865367428e79d983640569bccf068bfcd3712ee06d6fa1f0204b6529ba24ba101baea52878db66c9225249877bcb0dc6910016425fc930000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa5850000000000000000010300000000000000000000000000000000000000000000000000038d7ea4c68000e4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a07001500000000000000000000000000000000000000000000000000000000000000690100000000000000000000000000000000000000000000000000000002540be40000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = 1000000000000000;
         let swap_amount = 0;
         let relayer_fee = 10000000000;
@@ -1124,9 +1158,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_8(
-            test_amount,
+        // Fetch the coin 8 metadata.
+        let test_metadata = get_coin_8_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -1144,9 +1177,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // NOTE: Switch the context to the relayer for this test.
         test_scenario::next_tx(scenario, relayer);
 
-        // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
-
         // Mint sui tokens for the relayer to swap with the contract.
         let (sui_coins_for_swap, _) = mint_sui_for_swap<COIN_8>(
             &token_bridge_relayer_state,
@@ -1156,6 +1186,13 @@ module token_bridge_relayer::complete_transfer_tests {
         );
         assert!(coin::value(&sui_coins_for_swap) == 0, 0);
 
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, relayer);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
+
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
@@ -1163,6 +1200,7 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut bridge_state,
             vaa,
             sui_coins_for_swap,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -1206,6 +1244,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -1214,7 +1253,7 @@ module token_bridge_relayer::complete_transfer_tests {
     #[test]
     public fun complete_transfer_with_relay_coin_10_no_swap_with_fee() {
         // Test variables.
-        let vaa = x"010000000001009034c0e26e0e789eb69fc27520da828b191b531293de6836fdb1da78ad66e7b33b199b200361006cec91d9f2d73aab37b4d40800dd48566da81ba97d715c575c00642362510000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa5850000000000000000010300000000000000000000000000000000000000000000000000038d7ea4c68000000000000000000000000000000000000000000000000000000000000000000100150000000000000000000000000000000000000000000000000000000000000003001500000000000000000000000000000000000000000000000000000000000000690100000000000000000000000000000000000000000000000000000002540be40000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"01000000000100ae721a91e717f5875203e70ad24f72d44f2ddec644f0db1af42cc5a86ce7c2793a0ab664bd8b89bd121d26cdd2f9dbbb72cb80bda6f83b2d5ecdf1fc086c2464006425fd110000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa5850000000000000000010300000000000000000000000000000000000000000000000000038d7ea4c68000e4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a07001500000000000000000000000000000000000000000000000000000000000000690100000000000000000000000000000000000000000000000000000002540be40000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = 100000000000000000;
         let swap_amount = 0;
         let relayer_fee = 1000000000000;
@@ -1232,9 +1271,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 10.
-        let (test_coin, test_metadata) = mint_coin_10(
-            test_amount,
+        // Fetch the coin 10 metadata.
+        let test_metadata = get_coin_10_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -1252,9 +1290,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // NOTE: Switch the context to the relayer for this test.
         test_scenario::next_tx(scenario, relayer);
 
-        // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
-
         // Mint sui tokens for the relayer to swap with the contract.
         let (sui_coins_for_swap, _) = mint_sui_for_swap<COIN_10>(
             &token_bridge_relayer_state,
@@ -1264,6 +1299,13 @@ module token_bridge_relayer::complete_transfer_tests {
         );
         assert!(coin::value(&sui_coins_for_swap) == 0, 0);
 
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_10>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, relayer);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
+
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
@@ -1271,6 +1313,7 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut bridge_state,
             vaa,
             sui_coins_for_swap,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -1314,6 +1357,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -1322,7 +1366,7 @@ module token_bridge_relayer::complete_transfer_tests {
     #[test]
     public fun complete_transfer_with_relay_coin_8_with_swap_and_fee() {
         // Test variables.
-        let vaa = x"0100000000010097eb351b67b5313f836885d055cf99590fba6c883afe97fd220020268f98141f16273f2c3827f2de0bdae8b1ccb97845ab4c34fdc05ed2cd542ec02b9b02688a01641c91350000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa585000000000000000001030000000000000000000000000000000000000000000000000011c37937e08000000000000000000000000000000000000000000000000000000000000000000100150000000000000000000000000000000000000000000000000000000000000003001500000000000000000000000000000000000000000000000000000000000000690100000000000000000000000000000000000000000000000000000000000a875000000000000000000000000000000000000000000000000000000000000186a00000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"01000000000100f9200b84a713acd26a787ab1c2652b037e4649f86f5b53e04712947fb1e4e62d7420e6f1c2083ef48f7639d56dacff9e4f0e87bf8e8bbf551ca1d8b5543bc293016425fdb00000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa585000000000000000001030000000000000000000000000000000000000000000000000011c37937e08000e4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a07001500000000000000000000000000000000000000000000000000000000000000690100000000000000000000000000000000000000000000000000000000000a875000000000000000000000000000000000000000000000000000000000000186a00000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = 5000000000000000;
         let swap_amount = 100000;
         let relayer_fee = 690000;
@@ -1340,9 +1384,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_8(
-            test_amount,
+        // Fetch the coin 8 metadata.
+        let test_metadata = get_coin_8_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -1360,9 +1403,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // NOTE: Switch the context to the relayer for this test.
         test_scenario::next_tx(scenario, relayer);
 
-        // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
-
         // Mint sui tokens for the relayer to swap with the contract. The
         // swap_amount will be overridden if its value is larger than
         // the max allowed swap amount.
@@ -1374,6 +1414,13 @@ module token_bridge_relayer::complete_transfer_tests {
         );
         let sui_coins_for_swap_amount = coin::value(&sui_coins_for_swap);
 
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, relayer);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
+
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
@@ -1381,6 +1428,7 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut bridge_state,
             vaa,
             sui_coins_for_swap,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -1389,7 +1437,7 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Store created object IDs.
         let created_ids = test_scenario::created(&effects);
-        assert!(vector::length(&created_ids) == 3, 0);
+        assert!(vector::length(&created_ids) == 2, 0);
 
         // Balance check the recipient.
         {
@@ -1435,6 +1483,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -1443,7 +1492,7 @@ module token_bridge_relayer::complete_transfer_tests {
     #[test]
     public fun complete_transfer_with_relay_coin_10_with_swap_and_fee() {
         // Test variables.
-        let vaa = x"010000000001005778e9c6e5cde363ab934c7591a77b36ff18177b173f56aea45aafa899c1a1aa0727f6d449fd877c771e74097eb9616bd065ef402f5e1aea1c9fe7340b3f6d6e01642367100000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa585000000000000000001030000000000000000000000000000000000000000000000000011c37937e08000000000000000000000000000000000000000000000000000000000000000000100150000000000000000000000000000000000000000000000000000000000000003001500000000000000000000000000000000000000000000000000000000000000690100000000000000000000000000000000000000000000000000000000000a875000000000000000000000000000000000000000000000000000000000000186a00000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"01000000000100ee57007769f4106400ff6af332609141919b87c09e9950612bd095485909d27c5f6401685416c3f6a14c310fa25d632f3f20401cc799afd2ee57c32441827ea3016425fe450000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa585000000000000000001030000000000000000000000000000000000000000000000000011c37937e08000e4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a07001500000000000000000000000000000000000000000000000000000000000000690100000000000000000000000000000000000000000000000000000000000a875000000000000000000000000000000000000000000000000000000000000186a00000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = 500000000000000000;
         let swap_amount = 10000000;
         let relayer_fee = 69000000;
@@ -1461,9 +1510,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 10.
-        let (test_coin, test_metadata) = mint_coin_10(
-            test_amount,
+        // Fetch the coin 10 metadata.
+        let test_metadata = get_coin_10_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -1481,9 +1529,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // NOTE: Switch the context to the relayer for this test.
         test_scenario::next_tx(scenario, relayer);
 
-        // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
-
         // Mint sui tokens for the relayer to swap with the contract. The
         // swap_amount will be overridden if its value is larger than
         // the max allowed swap amount.
@@ -1495,6 +1540,13 @@ module token_bridge_relayer::complete_transfer_tests {
         );
         let sui_coins_for_swap_amount = coin::value(&sui_coins_for_swap);
 
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_10>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, relayer);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
+
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
@@ -1502,6 +1554,7 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut bridge_state,
             vaa,
             sui_coins_for_swap,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -1510,7 +1563,7 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Store created object IDs.
         let created_ids = test_scenario::created(&effects);
-        assert!(vector::length(&created_ids) == 3, 0);
+        assert!(vector::length(&created_ids) == 2, 0);
 
         // Balance check the recipient.
         {
@@ -1556,6 +1609,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -1564,7 +1618,7 @@ module token_bridge_relayer::complete_transfer_tests {
     #[test]
     public fun complete_transfer_with_relay_coin_8_with_swap_no_fee() {
         // Test variables.
-        let vaa = x"01000000000100637e7759a7d2376386711ff1d14ffb006adc5c1ef22388faf66afa5aa7598eae0844beaf8410c385c17cbd3be1326ac01724d2a3dfef171568d26577583dd77f01641cb8c60000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa585000000000000000001030000000000000000000000000000000000000000000000000011c37937e080000000000000000000000000000000000000000000000000000000000000000001001500000000000000000000000000000000000000000000000000000000000000030015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000186a00000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"010000000001004ecd11ef37d383bdb8ca7f3ae8e49636d27ed11fb0a150111d9163f572d25de4300c1bc22e4fefb20c8b8fa7e300e696cb9743195fce9c0f02254cfde0edd046016426069e0000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa585000000000000000001030000000000000000000000000000000000000000000000000011c37937e08000e4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a070015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000186a00000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = 5000000000000000;
         let swap_amount = 100000;
 
@@ -1581,9 +1635,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_8(
-            test_amount,
+        // Fetch the coin 8 metadata.
+        let test_metadata = get_coin_8_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -1601,9 +1654,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // NOTE: Switch the context to the relayer for this test.
         test_scenario::next_tx(scenario, relayer);
 
-        // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
-
         // Mint sui tokens for the relayer to swap with the contract. The
         // swap_amount will be overridden if its value is larger than
         // the max allowed swap amount.
@@ -1615,6 +1665,13 @@ module token_bridge_relayer::complete_transfer_tests {
         );
         let sui_coins_for_swap_amount = coin::value(&sui_coins_for_swap);
 
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, relayer);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
+
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
@@ -1622,6 +1679,7 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut bridge_state,
             vaa,
             sui_coins_for_swap,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -1630,7 +1688,7 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Store created object IDs.
         let created_ids = test_scenario::created(&effects);
-        assert!(vector::length(&created_ids) == 3, 0);
+        assert!(vector::length(&created_ids) == 2, 0);
 
         // Balance check the recipient.
         {
@@ -1676,6 +1734,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -1684,7 +1743,7 @@ module token_bridge_relayer::complete_transfer_tests {
     #[test]
     public fun complete_transfer_with_relay_coin_10_with_swap_no_fee() {
         // Test variables.
-        let vaa = x"01000000000100ca67244a6ceb3769504626776fc0a72f2a36e02d2e0576221f0bd950a3622da337444288a0961ac1db3184b3917f28b85430fe8a1f17dd9a16703a6f6dae8fb000642369c40000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa585000000000000000001030000000000000000000000000000000000000000000000000011c37937e080000000000000000000000000000000000000000000000000000000000000000001001500000000000000000000000000000000000000000000000000000000000000030015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000186a00000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"010000000001006c4d60c7577ce6a0c5345afc35060e99d4475c2eacd5827dea75fe052444cc811473bf83db2e9b9b42c6818c9a7781ae6e78c60fbf0d745de0b36deaa2f1354e01642607970000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa585000000000000000001030000000000000000000000000000000000000000000000000011c37937e08000e4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a070015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000186a00000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = 500000000000000000;
         let swap_amount = 10000000;
 
@@ -1701,9 +1760,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 10.
-        let (test_coin, test_metadata) = mint_coin_10(
-            test_amount,
+        // Fetch the coin 10 metadata.
+        let test_metadata = get_coin_10_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -1721,9 +1779,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // NOTE: Switch the context to the relayer for this test.
         test_scenario::next_tx(scenario, relayer);
 
-        // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
-
         // Mint sui tokens for the relayer to swap with the contract. The
         // swap_amount will be overridden if its value is larger than
         // the max allowed swap amount.
@@ -1735,6 +1790,13 @@ module token_bridge_relayer::complete_transfer_tests {
         );
         let sui_coins_for_swap_amount = coin::value(&sui_coins_for_swap);
 
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_10>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, relayer);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
+
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
@@ -1742,6 +1804,7 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut bridge_state,
             vaa,
             sui_coins_for_swap,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -1750,7 +1813,7 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Store created object IDs.
         let created_ids = test_scenario::created(&effects);
-        assert!(vector::length(&created_ids) == 3, 0);
+        assert!(vector::length(&created_ids) == 2, 0);
 
         // Balance check the recipient.
         {
@@ -1796,6 +1859,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -1804,7 +1868,7 @@ module token_bridge_relayer::complete_transfer_tests {
     #[test]
     public fun complete_transfer_with_relay_coin_8_swap_amount_limit_reached() {
         // Test variables.
-        let vaa = x"01000000000100378aabd42a88015672ddcf3b71be8333182356123bca791ddf74b6812b5975d55a151fef43a52fb28ff7fc3b4abf4e0afe3e27974e98404e1d057284222aa78a01641c9a880000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa585000000000000000001030000000000000000000000000000000000000000000000000011c37937e080000000000000000000000000000000000000000000000000000000000000000001001500000000000000000000000000000000000000000000000000000000000000030015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000116886276640000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"010000000001002f87cd7dce747bcaacf5cf99f3f44896e69900ea1e656f1d5022dff6fe63a8da1e48685bb96e33d3431c1d3147a028db74f7a348df92eaac7c943214250c647001642607f40000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa585000000000000000001030000000000000000000000000000000000000000000000000011c37937e08000e4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a070015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000116886276640000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = 5000000000000000;
         let initial_swap_amount = 4900000000000000;
 
@@ -1821,9 +1885,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_8(
-            test_amount,
+        // Fetch the coin 8 metadata.
+        let test_metadata = get_coin_8_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -1841,9 +1904,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // NOTE: Switch the context to the relayer for this test.
         test_scenario::next_tx(scenario, relayer);
 
-        // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
-
         // Mint sui tokens for the relayer to swap with the contract. The
         // swap_amount will be overridden if its value is larger than
         // the max allowed swap amount.
@@ -1858,6 +1918,13 @@ module token_bridge_relayer::complete_transfer_tests {
         // Confirm that the swap_amount was reduced.
         assert!(swap_amount < initial_swap_amount, 0);
 
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, relayer);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
+
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
@@ -1865,6 +1932,7 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut bridge_state,
             vaa,
             sui_coins_for_swap,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -1873,7 +1941,7 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Store created object IDs.
         let created_ids = test_scenario::created(&effects);
-        assert!(vector::length(&created_ids) == 3, 0);
+        assert!(vector::length(&created_ids) == 2, 0);
 
         // Balance check the recipient.
         {
@@ -1919,6 +1987,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -1927,7 +1996,7 @@ module token_bridge_relayer::complete_transfer_tests {
     #[test]
     public fun complete_transfer_with_relay_coin_10_swap_amount_limit_reached() {
         // Test variables.
-        let vaa = x"010000000001000af2f0f92d6d0d6e1a20478010ecce03a287f8122e6149f9b5b24c2e999680cd36a7126bd8f2a36da98a179ddcaecaaa0f4d0e7b0b5554650111c4cfd3ae848201642372e90000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa585000000000000000001030000000000000000000000000000000000000000000000000011c37937e080000000000000000000000000000000000000000000000000000000000000000001001500000000000000000000000000000000000000000000000000000000000000030015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000116886276640000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"01000000000100c570ec706eb93b44bc0070cfa9ab1bb0efd3f7c5225ab8019ceda0a611fd612e344c99db2ffcfc35070a465bea36282cfee5ee3becfa6f796b0acd928c95db4501642608540000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa585000000000000000001030000000000000000000000000000000000000000000000000011c37937e08000e4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a070015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000116886276640000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = 500000000000000000;
         let initial_swap_amount = 490000000000000000;
 
@@ -1944,9 +2013,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 10.
-        let (test_coin, test_metadata) = mint_coin_10(
-            test_amount,
+        // Fetch the coin 10 metadata.
+        let test_metadata = get_coin_10_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -1964,9 +2032,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // NOTE: Switch the context to the relayer for this test.
         test_scenario::next_tx(scenario, relayer);
 
-        // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
-
         // Mint sui tokens for the relayer to swap with the contract. The
         // swap_amount will be overridden if its value is larger than
         // the max allowed swap amount.
@@ -1981,6 +2046,13 @@ module token_bridge_relayer::complete_transfer_tests {
         // Confirm that the swap_amount was reduced.
         assert!(swap_amount < initial_swap_amount, 0);
 
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_10>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, relayer);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
+
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
@@ -1988,6 +2060,7 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut bridge_state,
             vaa,
             sui_coins_for_swap,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -1996,7 +2069,7 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Store created object IDs.
         let created_ids = test_scenario::created(&effects);
-        assert!(vector::length(&created_ids) == 3, 0);
+        assert!(vector::length(&created_ids) == 2, 0);
 
         // Balance check the recipient.
         {
@@ -2042,6 +2115,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -2050,7 +2124,7 @@ module token_bridge_relayer::complete_transfer_tests {
     #[test]
     public fun complete_transfer_with_relay_coin_8_no_swap_no_fee_with_relayer_refund() {
         // Test variables.
-        let vaa = x"01000000000100892ec39bfa1807a5d0e2e91f393e79fc3587b7744b1c33b873441f4357aaf4ce77346970b793f6b78e76aa2be7a4a61414f51886a48d0420a6b492aaa2b29d6a01641c84a10000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa5850000000000000000010300000000000000000000000000000000000000000000000000038d7ea4c680000000000000000000000000000000000000000000000000000000000000000001001500000000000000000000000000000000000000000000000000000000000000030015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"0100000000010086cf601ebf46fa2f4f5e148c1989a2afbee2de5a7590c510c86d913e3e25c5d658b805a9a038300f86c846a69ee1f2e2bd90c3acd3bfb6db99a8f280e6c3d1fd01642608b20000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa5850000000000000000010300000000000000000000000000000000000000000000000000038d7ea4c68000e4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a070015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = 1000000000000000;
 
         // Test setup.
@@ -2066,9 +2140,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_8(
-            test_amount,
+        // Fetch the coin 8 metadata.
+        let test_metadata = get_coin_8_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -2086,9 +2159,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // NOTE: Switch the context to the relayer for this test.
         test_scenario::next_tx(scenario, relayer);
 
-        // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
-
         // Mint sui tokens for the relayer to swap with the contract. Set
         // the swap amount to a nonzero number so sui tokens are minted
         // and the contract is forced to refund the relayer.
@@ -2103,6 +2173,13 @@ module token_bridge_relayer::complete_transfer_tests {
         let sui_coins_for_swap_amount = coin::value(&sui_coins_for_swap);
         assert!(sui_coins_for_swap_amount > 0, 0);
 
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, relayer);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
+
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
@@ -2110,6 +2187,7 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut bridge_state,
             vaa,
             sui_coins_for_swap,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -2118,7 +2196,7 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Store created object IDs.
         let created_ids = test_scenario::created(&effects);
-        assert!(vector::length(&created_ids) == 2, 0);
+        assert!(vector::length(&created_ids) == 1, 0);
 
         // Balance check the recipient.
         {
@@ -2151,6 +2229,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -2159,7 +2238,7 @@ module token_bridge_relayer::complete_transfer_tests {
     #[test]
     public fun complete_transfer_with_relay_coin_10_no_swap_no_fee_with_relayer_refund() {
         // Test variables.
-        let vaa = x"010000000001009f8f280ade41d71c5dcef18bde6da9b0aa570bf069c6f55b499163462cc750f938c68db908f1a8a061a5484de6004482d67aa90335925690aa9bb626df77241600642374da0000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa5850000000000000000010300000000000000000000000000000000000000000000000000038d7ea4c680000000000000000000000000000000000000000000000000000000000000000001001500000000000000000000000000000000000000000000000000000000000000030015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"01000000000100a7fb65c240496505f29e1d5a788a5b09022f045209a1cdf5cee4ae10d3830399414d378196a37ca97240b760be6ff12c99b8ee4534c775aebdcc3e1e03d3edf601642609070000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa5850000000000000000010300000000000000000000000000000000000000000000000000038d7ea4c68000e4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a070015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = 100000000000000000;
 
         // This swap amount is not actually encoded in the VAA. This is used to
@@ -2179,9 +2258,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 10.
-        let (test_coin, test_metadata) = mint_coin_10(
-            test_amount,
+        // Fetch the coin 10 metadata.
+        let test_metadata = get_coin_10_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -2199,9 +2277,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // NOTE: Switch the context to the relayer for this test.
         test_scenario::next_tx(scenario, relayer);
 
-        // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
-
         // Mint sui tokens for the relayer to swap with the contract. Set
         // the swap amount to a nonzero number so sui tokens are minted
         // and the contract is forced to refund the relayer.
@@ -2216,6 +2291,13 @@ module token_bridge_relayer::complete_transfer_tests {
         let sui_coins_for_swap_amount = coin::value(&sui_coins_for_swap);
         assert!(sui_coins_for_swap_amount > 0, 0);
 
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_10>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, relayer);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
+
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
@@ -2223,6 +2305,7 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut bridge_state,
             vaa,
             sui_coins_for_swap,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -2231,7 +2314,7 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Store created object IDs.
         let created_ids = test_scenario::created(&effects);
-        assert!(vector::length(&created_ids) == 2, 0);
+        assert!(vector::length(&created_ids) == 1, 0);
 
         // Balance check the recipient.
         {
@@ -2264,6 +2347,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -2272,7 +2356,7 @@ module token_bridge_relayer::complete_transfer_tests {
     #[test]
     public fun complete_transfer_with_relay_coin_8_with_swap_fee_and_relayer_refund() {
         // Test variables.
-        let vaa = x"01000000000100b2015fa63451a54aca6771da0e85f37a5908dff6da6d5a805e2573967bc9017279c2383a750f3f1ae88485eebe2a0244a36f9aaf98de47ffcd552d39920a33bc00641cc5fb0000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa585000000000000000001030000000000000000000000000000000000000000000000000de0b6b3a7640000000000000000000000000000000000000000000000000000000000000000000100150000000000000000000000000000000000000000000000000000000000000003001500000000000000000000000000000000000000000000000000000000000000690100000000000000000000000000000000000000000000000000000000000186a000000000000000000000000000000000000000000000000000000000009896800000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"01000000000100d8c84830ac409d6700f253da892a084fb5c274e11cf6d6b29ee7e2b02b2913e570d7b885026be596a34b2cfd97974d493e66cb755307c7a5b5422dc29ca870ae016426099a0000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa585000000000000000001030000000000000000000000000000000000000000000000000de0b6b3a7640000e4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a07001500000000000000000000000000000000000000000000000000000000000000690100000000000000000000000000000000000000000000000000000000000186a000000000000000000000000000000000000000000000000000000000009896800000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = 1000000000000000000;
         let swap_amount = 10000000;
         let relayer_fee = 100000;
@@ -2290,9 +2374,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_8(
-            test_amount,
+        // Fetch the coin 8 metadata.
+        let test_metadata = get_coin_8_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -2310,9 +2393,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // NOTE: Switch the context to the relayer for this test.
         test_scenario::next_tx(scenario, relayer);
 
-        // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
-
         // Mint sui tokens for the relayer to swap with the contract. The
         // swap_amount will be overridden if its value is larger than
         // the max allowed swap amount. For this test specifically, we
@@ -2326,6 +2406,13 @@ module token_bridge_relayer::complete_transfer_tests {
         );
         let sui_coins_for_swap_amount = coin::value(&sui_coins_for_swap);
 
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, relayer);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
+
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
@@ -2333,6 +2420,7 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut bridge_state,
             vaa,
             sui_coins_for_swap,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -2341,7 +2429,7 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Store created object IDs.
         let created_ids = test_scenario::created(&effects);
-        assert!(vector::length(&created_ids) == 4, 0);
+        assert!(vector::length(&created_ids) == 3, 0);
 
         // Balance check the recipient.
         {
@@ -2394,6 +2482,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -2402,7 +2491,7 @@ module token_bridge_relayer::complete_transfer_tests {
     #[test]
     public fun complete_transfer_with_relay_coin_10_with_swap_fee_and_relayer_refund() {
         // Test variables.
-        let vaa = x"0100000000010018cd7f8e685cc58678013224ec29b3acef4fec41fc21112f8cd4553cd19514ff22d499f2fa0f9456d4e48b655c7719f8170f06156493b20c8fa7f4a9552a89080164237b7f0000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa58500000000000000000103000000000000000000000000000000000000000000000000002386f26fc10000000000000000000000000000000000000000000000000000000000000000000100150000000000000000000000000000000000000000000000000000000000000003001500000000000000000000000000000000000000000000000000000000000000690100000000000000000000000000000000000000000000000000000000000003e800000000000000000000000000000000000000000000000000000000000186a00000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"01000000000100017ff198f621fc34af7e98fec6c750c98dbf3865436901296b77371a54e4b1fd18adc54f3541bba0b4eb7f1e9e07179bef8f87a8349d5f6b905310a39afc7190016426e1330000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa58500000000000000000103000000000000000000000000000000000000000000000000002386f26fc10000e4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a07001500000000000000000000000000000000000000000000000000000000000000690100000000000000000000000000000000000000000000000000000000000003e800000000000000000000000000000000000000000000000000000000000186a00000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = 1000000000000000000;
         let swap_amount = 10000000;
         let relayer_fee = 100000;
@@ -2420,9 +2509,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 10.
-        let (test_coin, test_metadata) = mint_coin_10(
-            test_amount,
+        // Fetch the coin 10 metadata.
+        let test_metadata = get_coin_10_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -2440,9 +2528,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // NOTE: Switch the context to the relayer for this test.
         test_scenario::next_tx(scenario, relayer);
 
-        // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
-
         // Mint sui tokens for the relayer to swap with the contract. The
         // swap_amount will be overridden if its value is larger than
         // the max allowed swap amount. For this test specifically, we
@@ -2456,6 +2541,13 @@ module token_bridge_relayer::complete_transfer_tests {
         );
         let sui_coins_for_swap_amount = coin::value(&sui_coins_for_swap);
 
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_10>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, relayer);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
+
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
@@ -2463,6 +2555,7 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut bridge_state,
             vaa,
             sui_coins_for_swap,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -2471,7 +2564,7 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Store created object IDs.
         let created_ids = test_scenario::created(&effects);
-        assert!(vector::length(&created_ids) == 4, 0);
+        assert!(vector::length(&created_ids) == 3, 0);
 
         // Balance check the recipient.
         {
@@ -2524,6 +2617,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -2532,7 +2626,7 @@ module token_bridge_relayer::complete_transfer_tests {
     #[test]
     public fun complete_transfer_with_relay_coin_8_maximum_amount() {
         // Test variables.
-        let vaa = x"010000000001001995ebd46c97bc93cb6d405617fd42571542db2d4da1533194b79868cf3d6992276be61cb6b3327a6baf86d64a0357b53ea463d1ce2508987fa8248f664a58a801641cd10b0000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa58500000000000000000103000000000000000000000000000000000000000000000000fffffffffffffffe0000000000000000000000000000000000000000000000000000000000000001001500000000000000000000000000000000000000000000000000000000000000030015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"01000000000100efd41ec7a424159e29a36f33eda196af96f51e20dc685b98f73bc91b0332d48e6a7b4992d2f08490e5851ad39423282c5c36a892596447cd07d783e7ca983bf0016426e2390000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa58500000000000000000103000000000000000000000000000000000000000000000000fffffffffffffffee4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a070015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = U64_MAX;
         let swap_amount = 0;
 
@@ -2549,9 +2643,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_8(
-            test_amount,
+        // Fetch the coin 8 metadata.
+        let test_metadata = get_coin_8_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -2569,9 +2662,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // NOTE: Switch the context to the relayer for this test.
         test_scenario::next_tx(scenario, relayer);
 
-        // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
-
         // Mint sui tokens for the relayer to swap with the contract.
         let (sui_coins_for_swap, _) = mint_sui_for_swap<COIN_8>(
             &token_bridge_relayer_state,
@@ -2581,6 +2671,13 @@ module token_bridge_relayer::complete_transfer_tests {
         );
         assert!(coin::value(&sui_coins_for_swap) == 0, 0);
 
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, relayer);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
+
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
@@ -2588,6 +2685,7 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut bridge_state,
             vaa,
             sui_coins_for_swap,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -2615,6 +2713,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -2623,7 +2722,7 @@ module token_bridge_relayer::complete_transfer_tests {
     #[test]
     public fun complete_transfer_with_relay_coin_10_maximum_amount() {
         // Test variables.
-        let vaa = x"01000000000100acc86233ab83f8dfc51d8024b9eb675ed46bba1a9e9b2db45446287d98e06dcd40a69e4f651e7d6a122aa88a94a2dc7e97750b67d3c4b1925969f3e2577bee01006423bf790000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa58500000000000000000103000000000000000000000000000000000000000000000000028f5c28f5c28f5c0000000000000000000000000000000000000000000000000000000000000001001500000000000000000000000000000000000000000000000000000000000000030015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"010000000001001daee2a59ac06dc67b820f33461c76245a60e0a1b6f93dbdf3a45323f70bb4aa2afd96d057cb19a9f0e0f9f35dd72356d35c494b032450395a80b4e43bdbd693006426e2da0000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa58500000000000000000103000000000000000000000000000000000000000000000000028f5c28f5c28f5ce4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a070015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         // Since amounts are truncated for token bridge transfers for tokens
         // with greater than 8 decimals, we need to subtract 14 from the max
         // u64 amount.
@@ -2643,9 +2742,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 10.
-        let (test_coin, test_metadata) = mint_coin_10(
-            test_amount,
+        // Fetch the coin 10 metadata.
+        let test_metadata = get_coin_10_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -2663,9 +2761,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // NOTE: Switch the context to the relayer for this test.
         test_scenario::next_tx(scenario, relayer);
 
-        // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
-
         // Mint sui tokens for the relayer to swap with the contract.
         let (sui_coins_for_swap, _) = mint_sui_for_swap<COIN_10>(
             &token_bridge_relayer_state,
@@ -2675,6 +2770,13 @@ module token_bridge_relayer::complete_transfer_tests {
         );
         assert!(coin::value(&sui_coins_for_swap) == 0, 0);
 
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_10>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, relayer);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
+
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
@@ -2682,6 +2784,7 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut bridge_state,
             vaa,
             sui_coins_for_swap,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -2709,6 +2812,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -2717,7 +2821,7 @@ module token_bridge_relayer::complete_transfer_tests {
     #[test]
     public fun complete_transfer_with_relay_coin_8_minimum_amount() {
         // Test variables.
-        let vaa = x"010000000001000f2f9da9906b2a33d83c0d818d96b3945fbfe5f6ff5f0a7d6148142c240f3b81520704f1c2276254c7057f39e952c3951464d1b5094d9d3ee4bc4aae479eabd701641cd27a0000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa5850000000000000000010300000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001001500000000000000000000000000000000000000000000000000000000000000030015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"0100000000010013e6671712c51a4ae6a5247a2aa256620fa7d4f0a96c0dc1f2cd53ac7234f2713aeaae54f5ad0a9520133c45959a6943eb2541550a3ffa005b964530b3bef569006426e3290000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa585000000000000000001030000000000000000000000000000000000000000000000000000000000000001e4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a070015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = 1;
         let swap_amount = 0;
 
@@ -2734,9 +2838,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_8(
-            test_amount,
+        // Fetch the coin 8 metadata.
+        let test_metadata = get_coin_8_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -2754,9 +2857,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // NOTE: Switch the context to the relayer for this test.
         test_scenario::next_tx(scenario, relayer);
 
-        // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
-
         // Mint sui tokens for the relayer to swap with the contract.
         let (sui_coins_for_swap, _) = mint_sui_for_swap<COIN_8>(
             &token_bridge_relayer_state,
@@ -2766,6 +2866,13 @@ module token_bridge_relayer::complete_transfer_tests {
         );
         assert!(coin::value(&sui_coins_for_swap) == 0, 0);
 
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, relayer);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
+
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
@@ -2773,6 +2880,7 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut bridge_state,
             vaa,
             sui_coins_for_swap,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -2800,6 +2908,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -2808,7 +2917,7 @@ module token_bridge_relayer::complete_transfer_tests {
     #[test]
     public fun complete_transfer_with_relay_coin_10_minimum_amount() {
         // Test variables.
-        let vaa = x"01000000000100ddcb916083cdb2be356f9d06dee98837b153e969e2f08ae69d533917d87b243279c6f5b24d066159289dab47db1b778afa91ace044daaf8d410635f7efa25c12016423c0710000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa5850000000000000000010300000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001001500000000000000000000000000000000000000000000000000000000000000030015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"0100000000010065a9ab2c1a6e6b378babc706eef8f0ec0b6206ce0aacab1785e45290c29f9a023281bb4a55129cb9a45245655565cf35809f6712d012f3d4338c1f3fd4946757006426e3950000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa585000000000000000001030000000000000000000000000000000000000000000000000000000000000001e4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a070015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = 100;
         let swap_amount = 0;
 
@@ -2825,9 +2934,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 10.
-        let (test_coin, test_metadata) = mint_coin_10(
-            test_amount,
+        // Fetch the coin 10 metadata.
+        let test_metadata = get_coin_10_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -2845,9 +2953,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // NOTE: Switch the context to the relayer for this test.
         test_scenario::next_tx(scenario, relayer);
 
-        // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
-
         // Mint sui tokens for the relayer to swap with the contract.
         let (sui_coins_for_swap, _) = mint_sui_for_swap<COIN_10>(
             &token_bridge_relayer_state,
@@ -2857,6 +2962,13 @@ module token_bridge_relayer::complete_transfer_tests {
         );
         assert!(coin::value(&sui_coins_for_swap) == 0, 0);
 
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_10>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, relayer);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
+
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
@@ -2864,6 +2976,7 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut bridge_state,
             vaa,
             sui_coins_for_swap,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -2891,6 +3004,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -2900,7 +3014,7 @@ module token_bridge_relayer::complete_transfer_tests {
     /// No relayer fee in this test.
     public fun complete_transfer_with_relay_max_swap_amount_overflow_recovery() {
         // Test variables.
-        let vaa = x"010000000001000b5b89fe09b6ce9d0d9772129ea1560c0c2cc34437fb7693e99d46c194d999296ee01e710a82b769bd617335149cea6065821800f1a714e0df60b2bac8c3b5e500641cd2bc0000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa58500000000000000000103000000000000000000000000000000000000000000000000fffffffffffffffe00000000000000000000000000000000000000000000000000000000000000010015000000000000000000000000000000000000000000000000000000000000000300150000000000000000000000000000000000000000000000000000000000000069010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fffffffffffffffd0000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"01000000000100c64cb15dc24b25f0197973cfdbcb2471badd6081244f62b7623d1af02c246b1148d5a3f43243e5babebc067874411ef5a4580d3f349481b15496c3d3923ef44c006426e4000000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa58500000000000000000103000000000000000000000000000000000000000000000000fffffffffffffffee4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a0700150000000000000000000000000000000000000000000000000000000000000069010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fffffffffffffffd0000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = U64_MAX;
         let _swap_amount = 18446744073709551613;
 
@@ -2917,9 +3031,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_8(
-            test_amount,
+        // Fetch the coin 8 metadata.
+        let test_metadata = get_coin_8_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -2962,14 +3075,18 @@ module token_bridge_relayer::complete_transfer_tests {
         // NOTE: Switch the context to the relayer for this test.
         test_scenario::next_tx(scenario, relayer);
 
-        // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
-
         // Mint SUI for the swap.
         let sui_coins_for_swap = mint_sui(
             0,
             test_scenario::ctx(scenario)
         );
+
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, relayer);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
@@ -2978,6 +3095,7 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut bridge_state,
             vaa,
             sui_coins_for_swap,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -3008,6 +3126,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -3017,7 +3136,7 @@ module token_bridge_relayer::complete_transfer_tests {
     #[expected_failure(abort_code = redeem::E_UNREGISTERED_COIN)]
     public fun cannot_complete_transfer_with_relay_unregistered_coin() {
         // Test variables.
-        let vaa = x"01000000000100550313a786de681c34f12112ffaeff0bb923af7f6898144c9f2fb441c14b77ca6f276fa7b289e9649ccb520da3e274d7e06a767c9153e1977d709623fba32fe901641de07e0000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa585000000000000000001030000000000000000000000000000000000000000000000000de0b6b3a76400000000000000000000000000000000000000000000000000000000000000000001001500000000000000000000000000000000000000000000000000000000000000030015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"0100000000010081e52aa98547897df8ebf0ca7508ca295e46283aef48648ccaed71b69433efc969e987e4c63b3482636215c4fb6f6196797bb9ee592b1e9db1e159397574a822006426e5450000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa585000000000000000001030000000000000000000000000000000000000000000000000de0b6b3a7640000e4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a070015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = 1000000000000000000;
 
         // Test setup.
@@ -3033,9 +3152,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_8(
-            test_amount,
+        // Fetch the coin 8 metadata.
+        let test_metadata = get_coin_8_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -3069,9 +3187,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // NOTE: Switch the context to the relayer for this test.
         test_scenario::next_tx(scenario, relayer);
 
-        // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
-
         // Mint SUI for the swap. We avoid calling the `mint_sui_for_swap`
         // method here to avoid hitting the overflow exception outside
         // of the contract call.
@@ -3080,6 +3195,13 @@ module token_bridge_relayer::complete_transfer_tests {
             test_scenario::ctx(scenario)
         );
 
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, relayer);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
+
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
@@ -3087,6 +3209,7 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut bridge_state,
             vaa,
             sui_coins_for_swap,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -3097,6 +3220,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -3106,7 +3230,7 @@ module token_bridge_relayer::complete_transfer_tests {
     #[expected_failure(abort_code = redeem::E_UNREGISTERED_FOREIGN_CONTRACT)]
     public fun cannot_complete_transfer_with_relay_unknown_sender() {
         // Test variables.
-        let vaa = x"0100000000010066394a87b1740aa120175f687fa2cdd1457354388ea1706c74d6316edde311f560f6e2be66fdc16c68727186eab49f08a45df88e1535c47352fca01fcf2cbf3f01641de1f70000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa585000000000000000001030000000000000000000000000000000000000000000000000de0b6b3a76400000000000000000000000000000000000000000000000000000000000000000001001500000000000000000000000000000000000000000000000000000000000000030015000000000000000000000000000000000000000000000000000000000000beef01000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"01000000000100623bd5202ec946a255bcec60efee62cf816952b430f1584f543f535dadd065f263d761abc8df1c0f1d6aab68d9d93630d98795c7d17fe45bc5be22fb9f94536a016426e78b0000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa585000000000000000001030000000000000000000000000000000000000000000000000de0b6b3a7640000e4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a070015000000000000000000000000000000000000000000000000000000000000005001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = 1000000000000000000;
 
         // Test setup.
@@ -3122,9 +3246,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_8(
-            test_amount,
+        // Fetch the coin 8 metadata.
+        let test_metadata = get_coin_8_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -3142,9 +3265,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // NOTE: Switch the context to the relayer for this test.
         test_scenario::next_tx(scenario, relayer);
 
-        // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
-
         // Mint SUI for the swap. We avoid calling the `mint_sui_for_swap`
         // method here to avoid hitting the overflow exception outside
         // of the contract call.
@@ -3153,6 +3273,13 @@ module token_bridge_relayer::complete_transfer_tests {
             test_scenario::ctx(scenario)
         );
 
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, relayer);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
+
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
@@ -3160,6 +3287,7 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut bridge_state,
             vaa,
             sui_coins_for_swap,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -3170,6 +3298,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -3179,7 +3308,7 @@ module token_bridge_relayer::complete_transfer_tests {
     #[expected_failure(abort_code = redeem::E_INVALID_CALLER_FOR_ACTION)]
     public fun cannot_complete_transfer_with_relay_invalid_caller() {
         // Test variables.
-        let vaa = x"01000000000100550313a786de681c34f12112ffaeff0bb923af7f6898144c9f2fb441c14b77ca6f276fa7b289e9649ccb520da3e274d7e06a767c9153e1977d709623fba32fe901641de07e0000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa585000000000000000001030000000000000000000000000000000000000000000000000de0b6b3a76400000000000000000000000000000000000000000000000000000000000000000001001500000000000000000000000000000000000000000000000000000000000000030015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"01000000000100f756702ad05038bf30f829db2145b3681caf3d7c2c3b64fcc4d5a51771febb40536e6d32d2803d3ac8335112a4047fbb544597a716cba0f0737320276c31768f006426e7f10000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa585000000000000000001030000000000000000000000000000000000000000000000000de0b6b3a7640000e4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a070015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = 1000000000000000000;
 
         // Test setup.
@@ -3195,9 +3324,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_8(
-            test_amount,
+        // Fetch the coin 8 metadata.
+        let test_metadata = get_coin_8_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -3215,9 +3343,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // NOTE: Do not switch to the relayer for this test.
         test_scenario::next_tx(scenario, recipient);
 
-        // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
-
         // Mint SUI for the swap. We avoid calling the `mint_sui_for_swap`
         // method here to avoid hitting the overflow exception outside
         // of the contract call.
@@ -3226,6 +3351,16 @@ module token_bridge_relayer::complete_transfer_tests {
             test_scenario::ctx(scenario)
         );
 
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+
+        // NOTE: Explicitly set the context to the recipient to test that the
+        // contract correctly reverts.
+        test_scenario::next_tx(scenario, recipient);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
+
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
@@ -3233,6 +3368,7 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut bridge_state,
             vaa,
             sui_coins_for_swap,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -3243,6 +3379,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -3252,7 +3389,7 @@ module token_bridge_relayer::complete_transfer_tests {
     #[expected_failure(abort_code = redeem::E_INSUFFICIENT_NATIVE_COIN)]
     public fun cannot_complete_transfer_with_relay_coin_8_insufficient_native_amount() {
         // Test variables.
-        let vaa = x"010000000001003cc8126c35d8c9245949e6783090657719921d2b6b180fe4c5e21d78ea7e75784042e0b5e02e212f59dee454c929ab426fe19b1141d2afd136599a999dd9326d00641df20b0000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa585000000000000000001030000000000000000000000000000000000000000000000000de0b6b3a76400000000000000000000000000000000000000000000000000000000000000000001001500000000000000000000000000000000000000000000000000000000000000030015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002540be4000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"010000000001009f529b7eb564d366e4ad1a6b769aca0097c75fe156b7b25526d8bd59aacb219c245264c3da60de7a63713ff56b185da0fbc0dbaa1b674757d72d7434b479ccf3006426e88f0000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa585000000000000000001030000000000000000000000000000000000000000000000000de0b6b3a7640000e4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a070015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002540be4000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = 1000000000000000000;
         let swap_amount = 10000000000;
 
@@ -3269,9 +3406,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_8(
-            test_amount,
+        // Fetch the coin 8 metadata.
+        let test_metadata = get_coin_8_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -3288,9 +3424,6 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // NOTE: Switch the context to the relayer for this test.
         test_scenario::next_tx(scenario, relayer);
-
-        // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
 
         // Mint sui tokens for the relayer to swap with the contract. The
         // swap_amount will be overridden if its value is larger than
@@ -3312,6 +3445,13 @@ module token_bridge_relayer::complete_transfer_tests {
             test_scenario::ctx(scenario)
         );
 
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, relayer);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
+
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
@@ -3319,6 +3459,7 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut bridge_state,
             vaa,
             actual_sui_coins_for_swap,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -3327,6 +3468,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
         native_transfer::public_transfer(expected_sui_coins_for_swap, @0x0);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -3336,7 +3478,7 @@ module token_bridge_relayer::complete_transfer_tests {
     #[expected_failure(abort_code = redeem::E_INSUFFICIENT_NATIVE_COIN)]
     public fun cannot_complete_transfer_with_relay_coin_10_insufficient_native_amount() {
         // Test variables.
-        let vaa = x"01000000000100965572b12a481dfb02b85e0418304c6d8e82f90eb397548c651c9c650caaa9c765d5d3893247a336d8a40d52f078e321d0a32c40b27e5cba3a2aa6286b1ef80900642442290000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa5850000000000000000010300000000000000000000000000000000000000000000000000005af3107a40000000000000000000000000000000000000000000000000000000000000000001001500000000000000000000000000000000000000000000000000000000000000030015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f42400000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"01000000000100113e56a30d4a29d669939b08fc6b005d9015944b4b1efb09281f871db74f946a5c8bc148a892ba3a4d621a19ad3b4015e436f2f740ec670ea99d1d3bbc50dcaf006426e8fc0000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa5850000000000000000010300000000000000000000000000000000000000000000000000005af3107a4000e4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a070015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f42400000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = 10000000000000000;
         let swap_amount = 100000000;
 
@@ -3353,9 +3495,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 10.
-        let (test_coin, test_metadata) = mint_coin_10(
-            test_amount,
+        // Fetch the coin 10 metadata.
+        let test_metadata = get_coin_10_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -3372,9 +3513,6 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // NOTE: Switch the context to the relayer for this test.
         test_scenario::next_tx(scenario, relayer);
-
-        // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
 
         // Mint sui tokens for the relayer to swap with the contract. The
         // swap_amount will be overridden if its value is larger than
@@ -3396,6 +3534,13 @@ module token_bridge_relayer::complete_transfer_tests {
             test_scenario::ctx(scenario)
         );
 
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_10>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, relayer);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
+
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
@@ -3403,6 +3548,7 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut bridge_state,
             vaa,
             actual_sui_coins_for_swap,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -3411,6 +3557,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
         native_transfer::public_transfer(expected_sui_coins_for_swap, @0x0);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -3420,7 +3567,7 @@ module token_bridge_relayer::complete_transfer_tests {
     #[expected_failure(abort_code = redeem::E_SWAP_IN_OVERFLOW)]
     public fun cannot_complete_transfer_with_relay_max_swap_amount_overflow() {
         // Test variables.
-        let vaa = x"010000000001000b5b89fe09b6ce9d0d9772129ea1560c0c2cc34437fb7693e99d46c194d999296ee01e710a82b769bd617335149cea6065821800f1a714e0df60b2bac8c3b5e500641cd2bc0000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa58500000000000000000103000000000000000000000000000000000000000000000000fffffffffffffffe00000000000000000000000000000000000000000000000000000000000000010015000000000000000000000000000000000000000000000000000000000000000300150000000000000000000000000000000000000000000000000000000000000069010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fffffffffffffffd0000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
+        let vaa = x"01000000000100d1ddcc19a034feda60e1553e68d5c193ba88419417a091a8b75a99aadcdc1aae412147c94900ee3873564c296dee0fae8e2ea5ff0d36198c9cbd3b843fc8b13f016426e9d60000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa58500000000000000000103000000000000000000000000000000000000000000000000fffffffffffffffee4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a0700150000000000000000000000000000000000000000000000000000000000000069010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fffffffffffffffd0000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
         let test_amount = U64_MAX;
         let _swap_amount = 18446744073709551613;
 
@@ -3437,9 +3584,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_8(
-            test_amount,
+        // Fetch the coin 8 metadata.
+        let test_metadata = get_coin_8_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -3475,9 +3621,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // NOTE: Switch the context to the relayer for this test.
         test_scenario::next_tx(scenario, relayer);
 
-        // Deposit tokens into the bridge.
-        bridge_state::deposit_test_only(&mut bridge_state, test_coin);
-
         // Mint SUI for the swap. We avoid calling the `mint_sui_for_swap`
         // method here to avoid hitting the overflow exception outside
         // of the contract call.
@@ -3486,6 +3629,13 @@ module token_bridge_relayer::complete_transfer_tests {
             test_scenario::ctx(scenario)
         );
 
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, relayer);
+
+        // Take clock.
+        let the_clock = token_bridge_scenario::take_clock(scenario);
+
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
@@ -3493,6 +3643,7 @@ module token_bridge_relayer::complete_transfer_tests {
             &mut bridge_state,
             vaa,
             sui_coins_for_swap,
+            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -3500,6 +3651,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
+        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -3520,9 +3672,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_8(
-            0,
+        // Fetch the coin 8 metadata.
+        let test_metadata = get_coin_8_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -3614,7 +3765,6 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
         test_scenario::return_to_sender(scenario, owner_cap);
-        native_transfer::public_transfer(test_coin, @0x0);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -3635,9 +3785,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_10(
-            0,
+        // Fetch the coin 10 metadata.
+        let test_metadata = get_coin_10_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -3729,7 +3878,6 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
         test_scenario::return_to_sender(scenario, owner_cap);
-        native_transfer::public_transfer(test_coin, @0x0);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -3750,9 +3898,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_8(
-            0,
+        // Fetch the coin 8 metadata.
+        let test_metadata = get_coin_8_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -3853,7 +4000,6 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
         test_scenario::return_to_sender(scenario, owner_cap);
-        native_transfer::public_transfer(test_coin, @0x0);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -3874,9 +4020,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 10.
-        let (test_coin, test_metadata) = mint_coin_10(
-            0,
+        // Fetch the coin 10 metadata.
+        let test_metadata = get_coin_10_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -3977,7 +4122,6 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
         test_scenario::return_to_sender(scenario, owner_cap);
-        native_transfer::public_transfer(test_coin, @0x0);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -3999,9 +4143,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_8(
-            0,
+        // Fetch the coin 8 metadata.
+        let test_metadata = get_coin_8_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -4045,7 +4188,6 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
         test_scenario::return_to_sender(scenario, owner_cap);
-        native_transfer::public_transfer(test_coin, @0x0);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -4066,9 +4208,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_8(
-            0,
+        // Fetch the coin 8 metadata.
+        let test_metadata = get_coin_8_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -4143,7 +4284,6 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
         test_scenario::return_to_sender(scenario, owner_cap);
-        native_transfer::public_transfer(test_coin, @0x0);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -4165,9 +4305,8 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_8(
-            0,
+        // Fetch the coin 8 metadata.
+        let test_metadata = get_coin_8_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -4216,7 +4355,6 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
         test_scenario::return_to_sender(scenario, owner_cap);
-        native_transfer::public_transfer(test_coin, @0x0);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -4238,9 +4376,9 @@ module token_bridge_relayer::complete_transfer_tests {
         let wormhole_state =
             test_scenario::take_shared<WormholeState>(scenario);
 
-        // Mint coin 8.
-        let (test_coin, test_metadata) = mint_coin_8(
-            0,
+
+        // Fetch the coin 8 metadata.
+        let test_metadata = get_coin_8_metadata(
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, recipient);
@@ -4289,7 +4427,6 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::return_shared(bridge_state);
         test_scenario::return_shared(wormhole_state);
         test_scenario::return_to_sender(scenario, owner_cap);
-        native_transfer::public_transfer(test_coin, @0x0);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -4297,52 +4434,30 @@ module token_bridge_relayer::complete_transfer_tests {
 
     /// Utilities.
 
-    public fun mint_coin_8(
-        amount: u64,
+     public fun get_coin_8_metadata(
         ctx: &mut TxContext
-    ): (Coin<COIN_8>, CoinMetadata<COIN_8>) {
+    ): CoinMetadata<COIN_8> {
         // Initialize token 8.
         let (treasury_cap, metadata) = coin_8::create_coin_test_only(ctx);
 
-        // Mint tokens.
-        let test_coin = coin::mint(
-            &mut treasury_cap,
-            amount,
-            ctx
-        );
-
-        // Balance check the new coin object.
-        assert!(coin::value(&test_coin) == amount, 0);
-
         // Bye bye.
         native_transfer::public_transfer(treasury_cap, @0x0);
 
         // Return.
-        (test_coin, metadata)
+        (metadata)
     }
 
-    public fun mint_coin_10(
-        amount: u64,
+    public fun get_coin_10_metadata(
         ctx: &mut TxContext
-    ): (Coin<COIN_10>, CoinMetadata<COIN_10>) {
+    ): CoinMetadata<COIN_10> {
         // Initialize token 8.
         let (treasury_cap, metadata) = coin_10::create_coin_test_only(ctx);
 
-        // Mint tokens.
-        let test_coin = coin::mint(
-            &mut treasury_cap,
-            amount,
-            ctx
-        );
-
-        // Balance check the new coin object.
-        assert!(coin::value(&test_coin) == amount, 0);
-
         // Bye bye.
         native_transfer::public_transfer(treasury_cap, @0x0);
 
         // Return.
-        (test_coin, metadata)
+        (metadata)
     }
 
     public fun mint_sui(amount: u64, ctx: &mut TxContext): Coin<SUI> {
@@ -4395,13 +4510,14 @@ module token_bridge_relayer::complete_transfer_tests {
         token_bridge_relayer_state: &mut State,
         bridge_state: &mut BridgeState,
         wormhole_state: &mut WormholeState,
-        creator: address,
+        recipient: address,
         scenario: &mut Scenario,
         coin_meta: CoinMetadata<C>
     ): TransactionEffects {
         // Fetch necessary objects.
         let owner_cap =
             test_scenario::take_from_sender<OwnerCap>(scenario);
+        let the_clock = token_bridge_scenario::take_clock(scenario);
 
         // Register a foreign contract.
         {
@@ -4412,7 +4528,7 @@ module token_bridge_relayer::complete_transfer_tests {
                 TEST_FOREIGN_EMITTER_CONTRACT
             );
 
-            test_scenario::next_tx(scenario, creator);
+            test_scenario::next_tx(scenario, recipient);
         };
 
         // Attest token.
@@ -4426,13 +4542,14 @@ module token_bridge_relayer::complete_transfer_tests {
             attest_token::attest_token<C>(
                 bridge_state,
                 wormhole_state,
+                coin::into_balance<SUI>(fee_coin),
                 &coin_meta,
-                fee_coin,
-                0 // nonce
+                0, // nonce
+                &the_clock
             );
 
             // Proceed.
-            test_scenario::next_tx(scenario, creator);
+            test_scenario::next_tx(scenario, recipient);
             native_transfer::public_transfer(coin_meta, @0x0);
         };
 
@@ -4448,7 +4565,7 @@ module token_bridge_relayer::complete_transfer_tests {
             );
 
             // Proceed.
-            test_scenario::next_tx(scenario, creator);
+            test_scenario::next_tx(scenario, recipient);
 
             // Register passed coin type. Enable swaps by default.
             owner::register_token<C>(
@@ -4460,13 +4577,14 @@ module token_bridge_relayer::complete_transfer_tests {
             );
 
             // Proceed.
-            test_scenario::next_tx(scenario, creator);
+            test_scenario::next_tx(scenario, recipient);
         };
 
         // Return owner cap.
         test_scenario::return_to_sender(scenario, owner_cap);
+        token_bridge_scenario::return_clock(the_clock);
 
-        let effects = test_scenario::next_tx(scenario, creator);
+        let effects = test_scenario::next_tx(scenario, recipient);
         (effects)
     }
 }

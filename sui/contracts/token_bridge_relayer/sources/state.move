@@ -4,7 +4,7 @@ module token_bridge_relayer::state {
     use sui::tx_context::{TxContext};
 
     use wormhole::state::{State as WormholeState};
-    use wormhole::emitter::{EmitterCap};
+    use wormhole::emitter::{Self, EmitterCap};
     use wormhole::external_address::{ExternalAddress};
 
     use token_bridge_relayer::foreign_contracts::{Self};
@@ -50,7 +50,7 @@ module token_bridge_relayer::state {
         // Create state object.
         let state = State {
             id: object::new(ctx),
-            emitter_cap: wormhole::state::new_emitter(wormhole_state, ctx),
+            emitter_cap: emitter::new(wormhole_state, ctx),
             swap_rate_precision,
             relayer_fee_precision,
             registered_tokens: registered_tokens::new(ctx)
