@@ -1,28 +1,35 @@
+/// This module manages the relayer fees associated with all outbound transfers
+/// to foreign contracts. `chain` to `fee` mappings are stored as dynamic
+/// object fields on the `State` object. The `fee` stored in the dynamic
+/// object field should be the USD denominated fee.
 module token_bridge_relayer::relayer_fees {
+    // Sui dependencies.
     use sui::math::{Self};
     use sui::dynamic_object_field::{Self};
     use sui::object::{UID};
     use sui::table::{Self, Table};
     use sui::tx_context::{TxContext};
 
+    // Wormhole dependencies.
     use wormhole::state::{chain_id};
 
+    // Token Bridge dependencies.
     use token_bridge_relayer::foreign_contracts::{Self};
 
-    // Errors.
+    /// Errors.
     const E_INVALID_CHAIN: u64 = 0;
     const E_FEE_NOT_SET: u64 = 1;
     const E_CHAIN_NOT_REGISTERED: u64 = 2;
     const E_RELAYER_FEE_OVERFLOW: u64 = 3;
 
-    // Max U64 const.
+    /// Max U64 const.
     const U64_MAX: u64 = 18446744073709551614;
 
-    // Dynamic field key.
+    /// Dynamic object field key.
     const KEY: vector<u8> = b"relayer_fees";
 
-    /// Creates new dynamic object field using the stateId as the parent. The
-    /// dynamic object field hosts a chainId to RelayerFee mapping.
+    /// Creates new dynamic object field using the `State` ID as the parent.
+    /// The dynamic object field hosts a `chain` to `fee` mapping.
     public fun new(parent_uid: &mut UID, ctx: &mut TxContext) {
         dynamic_object_field::add(
             parent_uid,
@@ -31,7 +38,9 @@ module token_bridge_relayer::relayer_fees {
         );
     }
 
-    /// Adds a new chain ID => relayer fee mapping.
+    /// Adds a new `chain` to `fee` mapping. Reverts if the specified `chain`
+    /// has not been registered with the `foreign_contracts` object. The fee
+    /// should be USD denominated and scaled by the `relayer_fee_precision`.
     public fun add(
         parent_uid: &mut UID,
         chain: u16,
@@ -46,7 +55,8 @@ module token_bridge_relayer::relayer_fees {
         table::add(borrow_table_mut(parent_uid), chain, fee);
     }
 
-    /// Updates an existing chain ID => relayer fee mapping.
+    /// Updates the `fee` for an existing `chain`. The `fee` should be
+    /// USD denominated and scaled by the `relayer_fee_precision`.
     public fun update(
         parent_uid: &mut UID,
         chain: u16,
@@ -58,12 +68,23 @@ module token_bridge_relayer::relayer_fees {
         ) = fee;
     }
 
-    /// Returns the relayer fee associated with the specified chain ID.
+    /// Checks if a `chain` to `fee` mapping exists.
+    public fun has(parent_uid: &UID, chain: u16): bool {
+        table::contains<u16, u64>(borrow_table(parent_uid), chain)
+    }
+
+    // Getters.
+
+    /// Returns the `fee` associated with the specified `chain`.
     public fun usd_fee(parent_uid: &UID, chain: u16): u64 {
         assert!(has(parent_uid, chain), E_FEE_NOT_SET);
         *table::borrow(borrow_table(parent_uid), chain)
     }
 
+    /// Returns the `fee` associated with the specified `chain` in terms
+    /// of the coin. If an overflow occurs, it is very likely that the
+    /// contract owner has misconfigured the `swap_rate_precision`,
+    /// `relayer_fee_precision`, or `swap_rate`.
     public fun token_fee(
         parent_uid: &UID,
         chain: u16,
@@ -86,9 +107,7 @@ module token_bridge_relayer::relayer_fees {
         (token_fee as u64)
     }
 
-    public fun has(parent_uid: &UID, chain: u16): bool {
-        table::contains<u16, u64>(borrow_table(parent_uid), chain)
-    }
+    // Internal methods.
 
     fun borrow_table(parent_uid: &UID): &Table<u16, u64> {
         dynamic_object_field::borrow(parent_uid, KEY)

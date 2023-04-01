@@ -1,27 +1,39 @@
+/// This module composes on Wormhole's Token Bridge contract to faciliate
+/// one-click transfers of Token Bridge supported assets to registered
+/// (foreign) Token Bridge Relayer contracts.
 module token_bridge_relayer::transfer {
+    // Sui dependencies.
     use sui::sui::SUI;
     use sui::clock::{Clock};
     use sui::coin::{Self, Coin};
     use sui::transfer::{Self};
     use sui::tx_context::{Self, TxContext};
 
+    // Token Bridge dependencies.
     use token_bridge::normalized_amount::{Self};
     use token_bridge::state::{Self as bridge_state, State as TokenBridgeState};
     use token_bridge::transfer_tokens_with_payload::{transfer_tokens_with_payload};
 
+    // Wormhole dependencies.
     use wormhole::external_address::{Self};
     use wormhole::state::{State as WormholeState};
 
+    // Token Bridge Relayer modules.
     use token_bridge_relayer::message::{Self};
     use token_bridge_relayer::state::{Self as relayer_state, State};
 
-    // Errors.
+    /// Errors.
     const E_INVALID_TARGET_RECIPIENT: u64 = 0;
     const E_UNREGISTERED_FOREIGN_CONTRACT: u64 = 1;
     const E_INSUFFICIENT_AMOUNT: u64 = 2;
     const E_UNREGISTERED_COIN: u64 = 3;
     const E_INSUFFICIENT_TO_NATIVE_AMOUNT: u64 = 4;
 
+    /// `transfer_tokens_with_relay` calls Wormhole's Token Bridge contract
+    /// to emit a contract-controlled transfer. The transfer message includes
+    /// an arbitrary payload with instructions for how to handle relayer
+    /// payments on the target contract. Optionally, the payload will include
+    /// a quantity of tokens to swap into native assets on the target chain.
     public entry fun transfer_tokens_with_relay<C>(
         t_state: &State,
         wormhole_state: &mut WormholeState,
@@ -35,14 +47,14 @@ module token_bridge_relayer::transfer {
         the_clock: &Clock,
         ctx: &mut TxContext
     ) {
-        // Confirm that the coin is registered with this contract.
+        // Confirm that the coin type is registered with this contract.
         assert!(
             relayer_state::is_registered_token<C>(t_state),
             E_UNREGISTERED_COIN
         );
 
-        // Cache the target_recipient ExternalAddress and verify that the
-        // target_recipient is not the zero address.
+        // Cache the `target_recipient` ExternalAddress and verify that the
+        // `target_recipient` is not the zero address.
         let target_recipient_address = external_address::from_address(
             target_recipient
         );
@@ -51,7 +63,7 @@ module token_bridge_relayer::transfer {
             E_INVALID_TARGET_RECIPIENT
         );
 
-        // Confirm that the target chain has a registered contract.
+        // Confirm that the `target_chain` has a registered contract.
         assert!(
             relayer_state::contract_registered(t_state, target_chain),
             E_UNREGISTERED_FOREIGN_CONTRACT
@@ -62,21 +74,19 @@ module token_bridge_relayer::transfer {
         let decimals = bridge_state::coin_decimals<C>(token_bridge_state);
         let amount_received = coin::value(&coins);
 
-        // Compute the truncated to native token amount.
-        let transformed_to_native_amount = normalized_amount::from_raw(
+        // Compute the normalized `to_native_token_amount`.
+        let normalized_to_native_amount = normalized_amount::from_raw(
             to_native_token_amount,
             decimals
         );
         assert!(
             to_native_token_amount == 0 ||
-            normalized_amount::value(&transformed_to_native_amount) > 0,
+            normalized_amount::value(&normalized_to_native_amount) > 0,
             E_INSUFFICIENT_TO_NATIVE_AMOUNT
         );
 
-        // Compute the normalized relayer fee and confirm that the user
-        // sent enough tokens to cover the relayer fee and to native
-        // token amount.
-        let transformed_relayer_fee = normalized_amount::from_raw(
+        // Compute the normalized `relayer_fee`.
+        let normalized_relayer_fee = normalized_amount::from_raw(
                 relayer_state::token_relayer_fee<C>(
                     t_state,
                     target_chain,
@@ -85,35 +95,45 @@ module token_bridge_relayer::transfer {
                 decimals
             );
 
-        // Compute the truncated token amount.
-        let transformed_amount = normalized_amount::to_raw(
-            normalized_amount::from_raw(
-                amount_received,
-                decimals
-            ),
+        // Compute the noramlized token amount and confirm that the user
+        // sent enough tokens to cover the `relayer_fee` and the
+        // `to_native_token_amount`.
+        let normalized_amount = normalized_amount::from_raw(
+            amount_received,
             decimals
         );
         assert!(
-            transformed_amount >
-                normalized_amount::value(&transformed_relayer_fee) +
-                normalized_amount::value(&transformed_to_native_amount),
+            normalized_amount::value(&normalized_amount) >
+                normalized_amount::value(&normalized_relayer_fee) +
+                normalized_amount::value(&normalized_to_native_amount),
             E_INSUFFICIENT_AMOUNT
         );
 
-        // Create the TransferWithRelay message.
+        // Create the `TransferWithRelay` message.
         let msg = message::serialize(
             message::new(
-                transformed_relayer_fee,
-                transformed_to_native_amount,
+                normalized_relayer_fee,
+                normalized_to_native_amount,
                 target_recipient_address
             )
         );
 
-        // Split the coins object and send dust back to the user if
-        // the `transformed_amount` is less the original amount.
+        // Denormalize the `normalized_amount` and transfer any dust
+        // to the caller.
+        let denormalized_amount = normalized_amount::to_raw(
+            normalized_amount,
+            decimals
+        );
+
+        // Split the `coins` object and send dust back to the user if
+        // the `normalized_amount` is less the `amount_received`.
         let coins_to_transfer;
-        if (transformed_amount < amount_received){
-            coins_to_transfer = coin::split(&mut coins, transformed_amount, ctx);
+        if (denormalized_amount < amount_received) {
+            coins_to_transfer = coin::split(
+                &mut coins,
+                denormalized_amount,
+                ctx
+            );
 
             // Return the original object with the dust.
             transfer::public_transfer(coins, tx_context::sender(ctx))
@@ -121,7 +141,7 @@ module token_bridge_relayer::transfer {
             coins_to_transfer = coins;
         };
 
-        // Finally transfer tokens via Token Bridge.
+        // Finally, call the Token Bridge.
         transfer_tokens_with_payload<C>(
             token_bridge_state,
             relayer_state::emitter_cap(t_state),
@@ -146,18 +166,20 @@ module token_bridge_relayer::transfer_tests {
     use sui::transfer::{Self as native_transfer};
     use sui::tx_context::{TxContext};
 
+    // Token Bridge Relayer.
     use token_bridge_relayer::owner::{Self, OwnerCap};
     use token_bridge_relayer::transfer::{Self};
     use token_bridge_relayer::state::{State};
     use token_bridge_relayer::init_tests::{set_up, people};
     use token_bridge_relayer::relayer_fees::{Self};
 
-
+    // Wormhole.
     use wormhole::state::{
         Self as wormhole_state_module,
         State as WormholeState
     };
 
+    // Token Bridge.
     use token_bridge::state::{State as BridgeState};
     use token_bridge::attest_token::{Self};
     use token_bridge::token_bridge_scenario::{Self};
@@ -170,8 +192,7 @@ module token_bridge_relayer::transfer_tests {
     const U64_MAX: u64 = 18446744073709551614;
 
     #[test]
-    /// This test transfers tokens with an additional payload using example coin 8
-    /// (which has 8 decimals).
+    // This test transfers COIN_8 with relay parameters.
     public fun transfer_tokens_with_relay_coin_8() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
@@ -222,6 +243,7 @@ module token_bridge_relayer::transfer_tests {
     }
 
     #[test]
+    /// This test transfers COIN_8 for the maximum amount allowed (max(uint64)).
     public fun transfer_tokens_with_relay_coin_8_maximum_amount() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
@@ -272,6 +294,7 @@ module token_bridge_relayer::transfer_tests {
     }
 
     #[test]
+    /// This test transfers COIN_8 for the minimum amount allowed (1 unit).
     public fun transfer_tokens_with_relay_coin_8_minimum_amount() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
@@ -293,7 +316,7 @@ module token_bridge_relayer::transfer_tests {
         let should_register_contract: bool = true;
         let should_register_token: bool = true;
 
-        // Mint token 8, fetch the metadata and store the object ID for later.
+        // Mint token 10, fetch the metadata and store the object ID for later.
         let (test_coin, test_metadata) = mint_coin_8(
             min_coin_supply,
             test_scenario::ctx(scenario)
@@ -322,8 +345,9 @@ module token_bridge_relayer::transfer_tests {
     }
 
     #[test]
-    /// This test transfers tokens with an additional payload using example coin 10
-    /// (which has 10 decimals).
+    /// This test transfers COIN_10 with relay parameters. The last digit in
+    /// the `coin_supply` argument is nonzero, so the contract will return
+    /// `dust` to the caller.
     public fun transfer_tokens_with_relay_coin_10() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
@@ -334,6 +358,7 @@ module token_bridge_relayer::transfer_tests {
         let target_contract =
             @0x0000000000000000000000000000000000000000000000000000000000000069;
         let coin_supply: u64 = 42069000000019; // 42069.000000000009
+
         // Since COIN_10 has 10 decimals, the token bridge will truncate the
         // value. This is the expected amount to be returned by the contract.
         let expected_dust: u64 = 19;
@@ -348,7 +373,7 @@ module token_bridge_relayer::transfer_tests {
         let should_register_contract: bool = true;
         let should_register_token: bool = true;
 
-        // Mint token 8, fetch the metadata and store the object ID for later.
+        // Mint token 10, fetch the metadata and store the object ID for later.
         let (test_coin, test_metadata) = mint_coin_10(
             coin_supply,
             test_scenario::ctx(scenario)
@@ -393,9 +418,9 @@ module token_bridge_relayer::transfer_tests {
     }
 
     #[test]
-    /// This test transfers tokens with an additional payload using example coin 10
-    /// (which has 10 decimals). The last digit in the coin supply argument is zero
-    /// in this test, so the contract should not return any dust.
+    /// This test transfers COIN_10 with relayer parameters. The last digit
+    /// in the `coin_supply` argument is zero in this test, so the contract
+    /// should not return any dust.
     public fun transfer_tokens_with_relay_coin_10_no_dust() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
@@ -417,7 +442,7 @@ module token_bridge_relayer::transfer_tests {
         let should_register_contract: bool = true;
         let should_register_token: bool = true;
 
-        // Mint token 8, fetch the metadata and store the object ID for later.
+        // Mint token 10, fetch the metadata and store the object ID for later.
         let (test_coin, test_metadata) = mint_coin_10(
             coin_supply,
             test_scenario::ctx(scenario)
@@ -452,6 +477,9 @@ module token_bridge_relayer::transfer_tests {
     }
 
     #[test]
+    /// This test transfers COIN_10 for the maximum amount (max(uint64)).
+    /// The last digit in the `coin_supply` argument is nonzero, so the
+    /// contract will return `dust` to the caller.
     public fun transfer_tokens_with_relay_coin_10_maximum_amount() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
@@ -462,6 +490,7 @@ module token_bridge_relayer::transfer_tests {
         let target_contract =
             @0x0000000000000000000000000000000000000000000000000000000000000069;
         let max_coin_supply: u64 = U64_MAX; // Maximum amount.
+
         // Since COIN_10 has 10 decimals, the token bridge will truncate the
         // value. This is the expected amount to be returned by the contract.
         let expected_dust: u64 = 14;
@@ -476,7 +505,7 @@ module token_bridge_relayer::transfer_tests {
         let should_register_contract: bool = true;
         let should_register_token: bool = true;
 
-        // Mint token 8, fetch the metadata and store the object ID for later.
+        // Mint token 10, fetch the metadata and store the object ID for later.
         let (test_coin, test_metadata) = mint_coin_10(
             max_coin_supply,
             test_scenario::ctx(scenario)
@@ -521,6 +550,9 @@ module token_bridge_relayer::transfer_tests {
     }
 
     #[test]
+    /// This test transfers COIN_10 for the minimum amount (100 units).
+    /// The last digit in the `coin_supply` argument is zero, so the
+    /// contract will not return any `dust` to the caller.
     public fun transfer_tokens_with_relay_coin_10_minimum_amount() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
@@ -530,7 +562,11 @@ module token_bridge_relayer::transfer_tests {
         let target_chain: u16 = 69;
         let target_contract =
             @0x0000000000000000000000000000000000000000000000000000000000000069;
-        let min_coin_supply: u64 = 100; // Minimum amount.
+
+        // The minimum amount for COIN_10 transfers is 100, because the Token
+        // Bridge will truncate the amount by two decimal places.
+        let min_coin_supply: u64 = 100;
+
         // Since COIN_10 has 10 decimals, the token bridge will truncate the
         // value. This is the expected amount to be returned by the contract.
         let to_native_token_amount = 0;
@@ -544,7 +580,7 @@ module token_bridge_relayer::transfer_tests {
         let should_register_contract: bool = true;
         let should_register_token: bool = true;
 
-        // Mint token 8, fetch the metadata and store the object ID for later.
+        // Mint token 10, fetch the metadata and store the object ID for later.
         let (test_coin, test_metadata) = mint_coin_10(
             min_coin_supply,
             test_scenario::ctx(scenario)
@@ -576,6 +612,8 @@ module token_bridge_relayer::transfer_tests {
 
     #[test]
     #[expected_failure(abort_code = transfer::E_UNREGISTERED_COIN)]
+    /// This test attempts to transfer a token that has not been registered
+    /// on the Token Bridge Relayer contract.
     public fun cannot_transfer_tokens_with_relay_unregistered_token() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
@@ -595,7 +633,7 @@ module token_bridge_relayer::transfer_tests {
 
         // Registration knobs, should be used to test negative test cases.
         let should_register_contract: bool = true;
-        let should_register_token: bool = false; // set to false for this test
+        let should_register_token: bool = false; // Set to false for this test.
 
         // Mint token 8, fetch the metadata and store the object ID for later.
         let (test_coin, test_metadata) = mint_coin_8(
@@ -627,6 +665,8 @@ module token_bridge_relayer::transfer_tests {
 
     #[test]
     #[expected_failure(abort_code = transfer::E_INVALID_TARGET_RECIPIENT)]
+    /// This test attempts to transfer a token to an invalid target wallet.
+    /// The zero address is purposely passed to the contract.
     public fun cannot_transfer_tokens_with_relay_invalid_recipient() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
@@ -679,6 +719,8 @@ module token_bridge_relayer::transfer_tests {
 
     #[test]
     #[expected_failure(abort_code = transfer::E_UNREGISTERED_FOREIGN_CONTRACT)]
+    /// This test attempts to transfer a token to an unregistered (foreign)
+    /// Token Bridge Relayer contract.
     public fun cannot_transfer_tokens_with_relay_unregistered_contract() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
@@ -697,7 +739,7 @@ module token_bridge_relayer::transfer_tests {
         let relayer_fee: u64 = 1000000000; // 10
 
         // Registration knobs, should be used to test negative test cases.
-        let should_register_contract: bool = false; // set to false for this test
+        let should_register_contract: bool = false; // Set to false for this test.
         let should_register_token: bool = true;
 
         // Mint token 8, fetch the metadata and store the object ID for later.
@@ -731,7 +773,7 @@ module token_bridge_relayer::transfer_tests {
     #[test]
     #[expected_failure(abort_code = transfer::E_INSUFFICIENT_TO_NATIVE_AMOUNT)]
     /// This test confirms that the contract correctly reverts when the
-    /// specified to native token amount is too small and is normalized
+    /// specified `to_native_token_amount` is too small and is normalized
     /// to zero. This test uses coin 10 since it has 10 decimals.
     public fun cannot_transfer_tokens_with_relay_insufficient_normalized_to_native_amount() {
         let (creator, _) = people();
@@ -743,8 +785,9 @@ module token_bridge_relayer::transfer_tests {
         let target_contract =
             @0x0000000000000000000000000000000000000000000000000000000000000069;
         let coin_supply: u64 = 4206900000000; // 42069
-        // Set the to native amount to something that will be converted to
-        // zero when normalized by the contract.
+
+        // Set the `to_native_token_amount` to something that will be converted
+        // to zero when normalized by the contract.
         let to_native_token_amount = 9;
         let target_recipient =
             @0x000000000000000000000000beFA429d57cD18b7F8A4d91A2da9AB4AF05d0FBe;
@@ -756,7 +799,7 @@ module token_bridge_relayer::transfer_tests {
         let should_register_contract: bool = true;
         let should_register_token: bool = true;
 
-        // Mint token 8, fetch the metadata and store the object ID for later.
+        // Mint token 10, fetch the metadata and store the object ID for later.
         let (test_coin, test_metadata) = mint_coin_10(
             coin_supply,
             test_scenario::ctx(scenario)
@@ -786,6 +829,8 @@ module token_bridge_relayer::transfer_tests {
 
     #[test]
     #[expected_failure(abort_code = transfer::E_INSUFFICIENT_AMOUNT)]
+    /// This test confirms that the contract correctly reverts when the
+    /// specified transfer amount is zero.
     public fun cannot_transfer_tokens_with_relay_zero_amount() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
@@ -795,6 +840,7 @@ module token_bridge_relayer::transfer_tests {
         let target_chain: u16 = 69;
         let target_contract =
             @0x0000000000000000000000000000000000000000000000000000000000000069;
+
         // Explicitly set amount to zero.
         let coin_supply: u64 = 0;
         let to_native_token_amount = 0;
@@ -808,14 +854,14 @@ module token_bridge_relayer::transfer_tests {
         let should_register_contract: bool = true;
         let should_register_token: bool = true;
 
-        // Mint token 8, fetch the metadata and store the object ID for later.
+        // Mint token 10, fetch the metadata and store the object ID for later.
         let (test_coin, test_metadata) = mint_coin_10(
             coin_supply,
             test_scenario::ctx(scenario)
         );
         test_scenario::next_tx(scenario, creator);
 
-        // Test transfer with COIN_8.
+        // Test transfer with COIN_10.
         test_transfer_tokens_with_relay(
             target_chain,
             target_contract,
@@ -838,7 +884,10 @@ module token_bridge_relayer::transfer_tests {
 
     #[test]
     #[expected_failure(abort_code = transfer::E_INSUFFICIENT_AMOUNT)]
-    public fun cannot_transfer_tokens_with_relay_insufficient_amount() {
+    /// This test confirms that the contract correctly reverts when the
+    /// specified transfer amount is not large enough to cover the
+    /// sum of the `target_relayer_fee` and `to_native_token_amount`.
+    public fun cannot_transfer_tokens_with_relay_coin_8_insufficient_amount() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
@@ -893,7 +942,68 @@ module token_bridge_relayer::transfer_tests {
     }
 
     #[test]
+    #[expected_failure(abort_code = transfer::E_INSUFFICIENT_AMOUNT)]
+    /// This test confirms that the contract correctly reverts when the
+    /// specified transfer amount is not large enough to cover the
+    /// sum of the `target_relayer_fee` and `to_native_token_amount`.
+    public fun cannot_transfer_tokens_with_relay_coin_10_insufficient_amount() {
+        let (creator, _) = people();
+        let (my_scenario, _) = set_up(creator);
+        let scenario = &mut my_scenario;
+
+        // Define test variables.
+        let target_chain: u16 = 69;
+        let target_contract =
+            @0x0000000000000000000000000000000000000000000000000000000000000069;
+
+        // Amount params. Set these values so that the coin_supply value is
+        // less than the to_native_token_amount + relayer_fee.
+        let coin_supply: u64 = 4206900;
+        let to_native_token_amount = 4200000;
+        let relayer_fee: u64 = 6900;
+
+        // Other.
+        let target_recipient =
+            @0x000000000000000000000000beFA429d57cD18b7F8A4d91A2da9AB4AF05d0FBe;
+        let swap_rate: u64 = 690000000; // 6.9 USD
+        let max_native_swap_amount: u64 = 1000000000; // 10
+
+        // Registration knobs, should be used to test negative test cases.
+        let should_register_contract: bool = true;
+        let should_register_token: bool = true;
+
+        // Mint token 10, fetch the metadata and store the object ID for later.
+        let (test_coin, test_metadata) = mint_coin_10(
+            coin_supply,
+            test_scenario::ctx(scenario)
+        );
+        test_scenario::next_tx(scenario, creator);
+
+        // Test transfer with COIN_10.
+        test_transfer_tokens_with_relay(
+            target_chain,
+            target_contract,
+            test_coin,
+            test_metadata,
+            to_native_token_amount,
+            target_recipient,
+            should_register_contract,
+            should_register_token,
+            swap_rate,
+            max_native_swap_amount,
+            relayer_fee,
+            creator,
+            scenario
+        );
+
+        // Done.
+        test_scenario::end(my_scenario);
+    }
+
+    #[test]
     #[expected_failure(abort_code = relayer_fees::E_RELAYER_FEE_OVERFLOW)]
+    /// This test confirms that the contract reverts with a detailed error
+    /// when the target relayer fee calculation overflows.
     public fun cannot_transfer_tokens_with_relay_relayer_fee_overflow() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
@@ -1038,8 +1148,7 @@ module token_bridge_relayer::transfer_tests {
             test_scenario::take_from_sender<OwnerCap>(scenario);
         let the_clock = token_bridge_scenario::take_clock(scenario);
 
-
-        // Mint SUI token amount based on the wormhole fee.
+        // Mint SUI coins to pay the Wormhole fee.
         let sui_coin = mint_sui(
             wormhole_state_module::message_fee(&wormhole_state),
             test_scenario::ctx(scenario)

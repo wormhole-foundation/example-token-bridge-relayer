@@ -1,23 +1,34 @@
+/// This module manages the list of coins that are accepted by the Token Bridge
+/// Relayer. Each token has an associated `swap_rate`, `max_native_token_amount`
+/// and `swap_enabled` field that can be updated by the contract owner.
 module token_bridge_relayer::registered_tokens {
+    // Sui dependencies.
     use sui::dynamic_field::{Self};
     use sui::object::{Self, UID};
     use sui::tx_context::{TxContext};
 
+    // Token Bridge Relayer modules.
     use token_bridge_relayer::token_info::{Self, TokenInfo};
 
+    // `token_bridge_relayer::state` can access friendly methods.
     friend token_bridge_relayer::state;
 
+    /// Errors.
     const E_UNREGISTERED: u64 = 0;
     const E_ALREADY_REGISTERED: u64 = 1;
     const E_SWAP_RATE_IS_ZERO: u64 = 2;
 
+    /// Object that holds registered token dynamic fields.
     struct RegisteredTokens has key, store {
         id: UID,
+        /// The number of tokens registered with this contract.
         num_tokens: u64
     }
 
+    /// Coin type key.
     struct Key<phantom C> has copy, drop, store {}
 
+    /// Creates a new `RegisteredTokens` object.
     public fun new(ctx: &mut TxContext): RegisteredTokens {
         RegisteredTokens {
             id: object::new(ctx),
@@ -25,10 +36,9 @@ module token_bridge_relayer::registered_tokens {
         }
     }
 
-    public fun num_tokens(self: &RegisteredTokens): u64 {
-        self.num_tokens
-    }
-
+    /// Adds a new coin type to the `RegisteredTokens` object and sets the
+    /// initial values for `swap_rate`, `max_native_swap_amount` and
+    /// `swap_enabled`.
     public(friend) fun add_token<C>(
         self: &mut RegisteredTokens,
         swap_rate: u64,
@@ -43,6 +53,7 @@ module token_bridge_relayer::registered_tokens {
         )
     }
 
+    /// Removes a coin type from the `RegisteredToken` object.
     public(friend) fun remove_token<C>(
         self: &mut RegisteredTokens
     ) {
@@ -50,6 +61,8 @@ module token_bridge_relayer::registered_tokens {
         remove<C>(self);
     }
 
+    /// Updates the `swap_rate` for a coin type in the `RegisteredToken`
+    /// object.
     public(friend) fun update_swap_rate<C>(
         self: &mut RegisteredTokens,
         swap_rate: u64
@@ -62,6 +75,8 @@ module token_bridge_relayer::registered_tokens {
         );
     }
 
+    /// Updates the `max_native_swap_amount for a coin type in the
+    /// `RegisteredToken` object.
     public(friend) fun update_max_native_swap_amount<C>(
         self: &mut RegisteredTokens,
         max_native_swap_amount: u64
@@ -73,6 +88,8 @@ module token_bridge_relayer::registered_tokens {
         );
     }
 
+    /// Enables and disables native swaps for a coin type in the
+    /// `RegisteredToken` object.
     public(friend) fun toggle_swap_enabled<C>(
         self: &mut RegisteredTokens,
         enable_swap: bool
@@ -82,6 +99,17 @@ module token_bridge_relayer::registered_tokens {
         } else {
             token_info::disable_swap(borrow_token_info_mut<C>(self));
         }
+    }
+
+    /// Checks if a coin type belongs to a `RegisteredTokens` object.
+    public fun has<C>(self: &RegisteredTokens): bool {
+        dynamic_field::exists_(&self.id, Key<C>{})
+    }
+
+    // Getters.
+
+    public fun num_tokens(self: &RegisteredTokens): u64 {
+        self.num_tokens
     }
 
     public fun swap_rate<C>(self: &RegisteredTokens): u64 {
@@ -98,9 +126,7 @@ module token_bridge_relayer::registered_tokens {
         token_info::is_swap_enabled(borrow_token_info<C>(self))
     }
 
-    public fun has<C>(self: &RegisteredTokens): bool {
-        dynamic_field::exists_(&self.id, Key<C>{})
-    }
+    // Internal methods.
 
     fun add<C>(
         self: &mut RegisteredTokens,

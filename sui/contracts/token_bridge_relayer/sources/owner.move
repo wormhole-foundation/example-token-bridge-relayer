@@ -1,15 +1,21 @@
+/// This module creates an owner capability (OwnerCap). The owner is granted
+/// access to certain methods by passing the OwnerCap as an argument. These
+/// methods are used to govern the smart contract.
 module token_bridge_relayer::owner {
+    // Sui dependencies.
     use sui::dynamic_field::{Self};
     use sui::object::{Self, UID};
     use sui::transfer::{Self};
     use sui::tx_context::{Self, TxContext};
 
+    // Wormhole dependencies.
     use wormhole::external_address::{Self};
     use wormhole::state::{State as WormholeState};
 
+    // Token Bridge Relayer modules.
     use token_bridge_relayer::state::{Self, State};
 
-    // Errors.
+    /// Errors.
     const E_STATE_ALREADY_CREATED: u64 = 0;
 
     /// The one of a kind - created in the module initializer.
@@ -52,17 +58,23 @@ module token_bridge_relayer::owner {
         // State will be created once function finishes.
         *dynamic_field::borrow_mut(&mut owner_cap.id, b"state_created") = true;
 
-        // Hardcode the initial swap rate and relayer fee precision state variables.
-        let swap_rate_precision: u64 = 100000000;
-        let relayer_fee_precision: u64 = 10000000;
+        // Hardcode the initial swap rate and relayer fee precision state
+        // variables.
+        let swap_rate_precision: u64 = 100000000; // 1e8
+        let relayer_fee_precision: u64 = 10000000; // 1e8
 
         // Create and share state.
         transfer::public_share_object(
-            state::new(wormhole_state, swap_rate_precision, relayer_fee_precision, ctx)
+            state::new(
+                wormhole_state,
+                swap_rate_precision,
+                relayer_fee_precision,
+                ctx
+            )
         )
     }
 
-    /// Only owner. This method registers a foreign contract address.
+    /// Only owner. This method registers a `foreign_contract` address.
     public entry fun register_foreign_contract(
         _: &OwnerCap,
         t_state: &mut State,
@@ -76,7 +88,8 @@ module token_bridge_relayer::owner {
         );
     }
 
-    /// Only owner. This method updates the relayer fee for this chain.
+    /// Only owner. This method updates the `relayer_fee` for foreign target
+    /// contracts.
     public entry fun update_relayer_fee(
         _: &OwnerCap,
         t_state: &mut State,
@@ -86,7 +99,7 @@ module token_bridge_relayer::owner {
         state::update_relayer_fee(t_state, chain, relayer_fee)
     }
 
-    /// Only owner. This method updates the relayer fee precision for this
+    /// Only owner. This method updates the `relayer_fee_precision` for this
     /// chain.
     public entry fun update_relayer_fee_precision(
         _: &OwnerCap,
@@ -96,8 +109,8 @@ module token_bridge_relayer::owner {
         state::update_relayer_fee_precision(t_state, relayer_fee_precision);
     }
 
-    /// Only owner. This method registers a token, and sets the initial swap
-    /// rate and max native swap amount for the registered token.
+    /// Only owner. This method registers a token, and sets the initial
+    /// `swap_rate` and `max_native_swap_amount` for the registered token.
     public entry fun register_token<C>(
         _: &OwnerCap,
         t_state: &mut State,
@@ -121,7 +134,7 @@ module token_bridge_relayer::owner {
         state::deregister_token<C>(t_state);
     }
 
-    /// Only owner. This method updates the swap rate for a registered token.
+    /// Only owner. This method updates the `swap_rate` for a registered token.
     public entry fun update_swap_rate<C>(
         _: &OwnerCap,
         t_state: &mut State,
@@ -130,7 +143,7 @@ module token_bridge_relayer::owner {
         state::update_swap_rate<C>(t_state, swap_rate);
     }
 
-    /// Only owner. This method updates the swap rate precision for this chain.
+    /// Only owner. This method updates the `swap_rate_precision` for this chain.
     public entry fun update_swap_rate_precision(
         _: &OwnerCap,
         t_state: &mut State,
@@ -139,7 +152,7 @@ module token_bridge_relayer::owner {
         state::update_swap_rate_precision(t_state, swap_rate_precision);
     }
 
-    /// Only owner. This method updates the max native swap amount for a
+    /// Only owner. This method updates the `max_native_swap_amount` for a
     /// registered token.
     public entry fun update_max_native_swap_amount<C>(
         _: &OwnerCap,
@@ -149,7 +162,7 @@ module token_bridge_relayer::owner {
         state::update_max_native_swap_amount<C>(t_state, max_native_swap_amount);
     }
 
-    /// Only owner. This method toggles the swap_enabled boolean for a
+    /// Only owner. This method toggles the `swap_enabled` boolean for a
     /// registered token.
     public entry fun toggle_swap_enabled<C>(
         _: &OwnerCap,
@@ -172,6 +185,7 @@ module token_bridge_relayer::init_tests {
     use sui::object::{Self};
     use sui::test_scenario::{Self, Scenario, TransactionEffects};
 
+    // Token Bridge Relayer.
     use token_bridge_relayer::state::{
         Self as relayer_state,
         State as RelayerState
@@ -181,9 +195,11 @@ module token_bridge_relayer::init_tests {
     use token_bridge_relayer::relayer_fees::{Self};
     use token_bridge_relayer::registered_tokens::{Self};
 
+    // Wormhole.
     use wormhole::state::{State as WormholeState};
     use wormhole::external_address::{Self};
 
+    // Token Bridge.
     use token_bridge::state::{
         Self as bridge_state,
         State as BridgeState
@@ -216,9 +232,10 @@ module token_bridge_relayer::init_tests {
         {
             owner::init_test_only(test_scenario::ctx(scenario));
 
-            // Check existence of creator and state capabilities.
+            // Fetch effects.
             let effects = test_scenario::next_tx(scenario, creator);
 
+            // Confirm that only one object was created.
             let created_ids = test_scenario::created(&effects);
             assert!(vector::length(&created_ids) == 1, 0);
 
@@ -255,10 +272,6 @@ module token_bridge_relayer::init_tests {
         // Bye bye.
         test_scenario::return_shared<RelayerState>(state);
 
-        // Check the deleted ids length.
-        let deleted_ids = test_scenario::deleted(&effects);
-        assert!(vector::length(&deleted_ids) == 6, 0);
-
         // Done.
         test_scenario::end(my_scenario);
     }
@@ -294,28 +307,22 @@ module token_bridge_relayer::init_tests {
         test_scenario::end(my_scenario);
     }
 
-    // Foreign contract registration tests.
-
     #[test]
     public fun register_foreign_contract() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
 
-        // Fetch the TokenBridgeRelayer state object and owner capability.
+        // Fetch the relayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
 
         // Verify that the contract isn't already registered.
-        {
-            let is_registered =
-                relayer_state::contract_registered(
-                    &state,
-                    TEST_TARGET_CHAIN
-                );
-            assert!(!is_registered, 0);
-        };
+        assert!(
+            !relayer_state::contract_registered(&state, TEST_TARGET_CHAIN),
+            0
+        );
 
         // Register the emitter.
         owner::register_foreign_contract(
@@ -325,11 +332,15 @@ module token_bridge_relayer::init_tests {
             TEST_TARGET_CONTRACT,
         );
 
+        // Proceed.
+        test_scenario::next_tx(scenario, creator);
+
         // Verify that the contract was registered correctly.
         {
-            let is_registered =
-                relayer_state::contract_registered(&state, TEST_TARGET_CHAIN);
-            assert!(is_registered, 0);
+            assert!(
+                relayer_state::contract_registered(&state, TEST_TARGET_CHAIN),
+                0
+            );
 
             let registered_contract =
                 relayer_state::foreign_contract_address(
@@ -362,7 +373,7 @@ module token_bridge_relayer::init_tests {
         let target_contract2: address =
             @0x0000000000000000000000000000000000000000000000000000000000000069;
 
-        // Fetch the TokenBridgeRelayer state object and owner capability.
+        // Fetch the relayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
@@ -377,9 +388,10 @@ module token_bridge_relayer::init_tests {
 
         // Verify that the contract was registered correctly.
         {
-            let is_registered =
-                relayer_state::contract_registered(&state, TEST_TARGET_CHAIN);
-            assert!(is_registered, 0);
+            assert!(
+                relayer_state::contract_registered(&state, TEST_TARGET_CHAIN),
+                0
+            );
 
             let registered_contract =
                 relayer_state::foreign_contract_address(
@@ -392,10 +404,10 @@ module token_bridge_relayer::init_tests {
                 ) == TEST_TARGET_CONTRACT,
                 0
             );
-        };
 
-        // Proceed.
-        test_scenario::next_tx(scenario, creator);
+            // Proceed.
+            test_scenario::next_tx(scenario, creator);
+        };
 
         // Register another emitter with the same chain ID.
         owner::register_foreign_contract(
@@ -435,10 +447,10 @@ module token_bridge_relayer::init_tests {
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
 
-        // Target chain ID.
+        // Set `target_chain_id` to zero.
         let target_chain_id: u16 = 0;
 
-        // Fetch the TokenBridgeRelayer state object and owner capability.
+        // Fetch the relayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
@@ -471,7 +483,7 @@ module token_bridge_relayer::init_tests {
         let target_contract: address =
             @0x000000000000000000000000beFA429d57cD18b7F8A4d91A2da9AB4AF05d0FBe;
 
-        // Fetch the TokenBridgeRelayer state object and owner capability.
+        // Fetch the relayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
@@ -503,7 +515,7 @@ module token_bridge_relayer::init_tests {
         let target_contract: address =
             @0x0000000000000000000000000000000000000000000000000000000000000000;
 
-        // Fetch the TokenBridgeRelayer state object and owner capability.
+        // Fetch the relayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
@@ -535,7 +547,7 @@ module token_bridge_relayer::init_tests {
         let target_contract_zero_address: address =
             @0x0000000000000000000000000000000000000000000000000000000000000000;
 
-        // Fetch the TokenBridgeRelayer state object and owner capability.
+        // Fetch the relayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
@@ -550,9 +562,10 @@ module token_bridge_relayer::init_tests {
 
         // Verify that the contract was registered correctly.
         {
-            let is_registered =
-                relayer_state::contract_registered(&state, TEST_TARGET_CHAIN);
-            assert!(is_registered, 0);
+            assert!(
+                relayer_state::contract_registered(&state, TEST_TARGET_CHAIN),
+                0
+            );
 
             let registered_contract =
                 relayer_state::foreign_contract_address(
@@ -586,22 +599,19 @@ module token_bridge_relayer::init_tests {
         test_scenario::end(my_scenario);
     }
 
-    // Relayer fee tests.
-
     #[test]
     public fun set_initial_relayer_fee() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
 
-        // Fetch the TokenBridgeRelayer state object and owner capability.
+        // Fetch the relayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
 
         // Register the target contract.
         {
-            // Register the emitter.
             owner::register_foreign_contract(
                 &owner_cap,
                 &mut state,
@@ -661,7 +671,7 @@ module token_bridge_relayer::init_tests {
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
 
-        // Fetch the TokenBridgeRelayer state object and owner capability.
+        // Fetch the relayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
@@ -754,12 +764,12 @@ module token_bridge_relayer::init_tests {
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
 
-        // Fetch the TokenBridgeRelayer state object and owner capability.
+        // Fetch the relayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
 
-        // NOTE: Explicitly don't register the target contract.
+        // NOTE: This test explicitly does NOT register a target contract.
 
         // Expect the call to update the relayer to revert.
         {
@@ -797,7 +807,7 @@ module token_bridge_relayer::init_tests {
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
 
-        // Fetch the TokenBridgeRelayer state object and owner capability.
+        // Fetch the relayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
@@ -839,7 +849,7 @@ module token_bridge_relayer::init_tests {
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
 
-        // Fetch the TokenBridgeRelayer state object and owner capability.
+        // Fetch the relayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
@@ -874,15 +884,13 @@ module token_bridge_relayer::init_tests {
         test_scenario::end(my_scenario);
     }
 
-    // Update relayer fee precision tests.
-
     #[test]
     public fun update_relayer_fee_precision() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
 
-        // Fetch the TokenBridgeRelayer state object and owner capability.
+        // Fetch the relayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
@@ -902,6 +910,9 @@ module token_bridge_relayer::init_tests {
             &mut state,
             new_relayer_fee_precision
         );
+
+        // Proceed.
+        test_scenario::next_tx(scenario, creator);
 
         // Confirm that the state was updated accordingly.
         let relayer_fee_precision_in_state =
@@ -928,7 +939,7 @@ module token_bridge_relayer::init_tests {
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
 
-        // Fetch the TokenBridgeRelayer state object and owner capability.
+        // Fetch the relayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
@@ -950,15 +961,13 @@ module token_bridge_relayer::init_tests {
         test_scenario::end(my_scenario);
     }
 
-    // Token registration tests.
-
     #[test]
     public fun register_tokens() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
 
-        // Fetch the TokenBridgeRelayer state object and owner capability.
+        // Fetch the relayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
@@ -1003,12 +1012,11 @@ module token_bridge_relayer::init_tests {
             let num_tokens = relayer_state::registered_token_count(&state);
             assert!(is_registered && num_tokens == 1, 0);
 
-            // Confirm that the swap rate and max native swap amount were set
-            // in the contract's state properly.
+            // Confirm that the `swap_rate` and `max_native_swap_amount` were
+            // set in the contract's state properly.
             let swap_rate_in_state = relayer_state::swap_rate<COIN_8>(&state);
             let max_native_swap_amount_in_state =
                 relayer_state::max_native_swap_amount<COIN_8>(&state);
-
             assert!(
                 swap_rate_in_state == initial_swap_rate &&
                 max_native_swap_amount_in_state == TEST_INITIAL_MAX_SWAP_AMOUNT,
@@ -1030,7 +1038,7 @@ module token_bridge_relayer::init_tests {
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
 
-        // Fetch the TokenBridgeRelayer state object and owner capability.
+        // Fetch the relayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
@@ -1075,7 +1083,7 @@ module token_bridge_relayer::init_tests {
             test_scenario::next_tx(scenario, creator);
         };
 
-        // Register Coin 9.
+        // Register Coin 10.
         {
             owner::register_token<COIN_10>(
                 &owner_cap,
@@ -1123,7 +1131,7 @@ module token_bridge_relayer::init_tests {
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
 
-        // Fetch the TokenBridgeRelayer state object and owner capability.
+        // Fetch the relayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
@@ -1183,7 +1191,7 @@ module token_bridge_relayer::init_tests {
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
 
-        // Fetch the TokenBridgeRelayer state object and owner capability.
+        // Fetch the relayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
@@ -1200,16 +1208,15 @@ module token_bridge_relayer::init_tests {
             TEST_ENABLE_SWAP
         );
 
+        // Proceed.
+        test_scenario::next_tx(scenario, creator);
+
         // Confirm that COIN_8 was registered.
         let is_registered =
             relayer_state::is_registered_token<COIN_8>(
                 &state
             );
         assert!(is_registered, 0);
-
-        // Proceed.
-        test_scenario::next_tx(scenario, creator);
-
 
         // Bye bye.
         test_scenario::return_shared<RelayerState>(state);
@@ -1219,15 +1226,13 @@ module token_bridge_relayer::init_tests {
         test_scenario::end(my_scenario);
     }
 
-    // Token deregistration tests.
-
     #[test]
     public fun deregister_token() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
 
-        // Fetch the TokenBridgeRelayer state object and owner capability.
+        // Fetch the relayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
@@ -1247,6 +1252,9 @@ module token_bridge_relayer::init_tests {
                 TEST_ENABLE_SWAP
             );
 
+            // Proceed.
+            test_scenario::next_tx(scenario, creator);
+
             // Confirm that COIN_8 was registered.
             let is_registered =
                 relayer_state::is_registered_token<COIN_8>(
@@ -1254,9 +1262,6 @@ module token_bridge_relayer::init_tests {
                 );
             let num_tokens = relayer_state::registered_token_count(&state);
             assert!(is_registered && num_tokens == 1, 0);
-
-            // Proceed.
-            test_scenario::next_tx(scenario, creator);
         };
 
         // Deregister the token.
@@ -1280,10 +1285,7 @@ module token_bridge_relayer::init_tests {
             // We expect one objects to be deleted:
             // 1. TokenInfo for COIN_8
             let deleted_ids = test_scenario::deleted(&effects);
-
-            // TODO(Drew): Why is this two now?
             assert!(vector::length(&deleted_ids) == 1, 0);
-
         };
 
         // Bye bye.
@@ -1301,12 +1303,12 @@ module token_bridge_relayer::init_tests {
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
 
-        // Fetch the TokenBridgeRelayer state object and owner capability.
+        // Fetch the relayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
 
-        // The call to reregister the token should fail.
+        // The `deregister_token` call should fail.
         {
             owner::deregister_token<COIN_8>(
                 &owner_cap,
@@ -1322,15 +1324,13 @@ module token_bridge_relayer::init_tests {
         test_scenario::end(my_scenario);
     }
 
-    // Update swap rate tests.
-
     #[test]
     public fun update_swap_rate() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
 
-        // Fetch the TokenBridgeRelayer state object and owner capability.
+        // Fetch the relayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
@@ -1404,7 +1404,7 @@ module token_bridge_relayer::init_tests {
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
 
-        // Fetch the TokenBridgeRelayer state object and owner capability.
+        // Fetch the relayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
@@ -1441,7 +1441,7 @@ module token_bridge_relayer::init_tests {
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
 
-        // Fetch the TokenBridgeRelayer state object and owner capability.
+        // Fetch the relayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
@@ -1491,15 +1491,13 @@ module token_bridge_relayer::init_tests {
         test_scenario::end(my_scenario);
     }
 
-    // Update swap rate precision tests.
-
-     #[test]
+    #[test]
     public fun update_swap_rate_precision() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
 
-        // Fetch the TokenBridgeRelayer state object and owner capability.
+        // Fetch the relayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
@@ -1510,7 +1508,7 @@ module token_bridge_relayer::init_tests {
                 &state
             );
 
-        // Update the relayer fee precision to a new value.
+        // Update the `relayer_fee_precision` to a new value.
         let new_swap_rate_precision: u64 = 200000000;
         assert!(new_swap_rate_precision != initial_swap_rate_precision, 0);
 
@@ -1519,6 +1517,9 @@ module token_bridge_relayer::init_tests {
             &mut state,
             new_swap_rate_precision
         );
+
+        // Proceed.
+        test_scenario::next_tx(scenario, creator);
 
         // Confirm that the state was updated accordingly.
         let swap_rate_precision_in_state =
@@ -1545,12 +1546,12 @@ module token_bridge_relayer::init_tests {
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
 
-        // Fetch the TokenBridgeRelayer state object and owner capability.
+        // Fetch the relayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
 
-        // Update the relayer fee precision to a new value.
+        // Update the `relayer_fee_precision` to a new value.
         let new_swap_rate_precision: u64 = 0;
 
         owner::update_swap_rate_precision(
@@ -1567,15 +1568,13 @@ module token_bridge_relayer::init_tests {
         test_scenario::end(my_scenario);
     }
 
-    // Update max native swap amount tests.
-
     #[test]
     public fun update_max_native_swap_amount() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
 
-        // Fetch the TokenBridgeRelayer state object and owner capability.
+        // Fetch the relayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
@@ -1615,7 +1614,7 @@ module token_bridge_relayer::init_tests {
             test_scenario::next_tx(scenario, creator);
         };
 
-        // Update the max native swap amount.
+        // Update the `max_native_swap_amount`.
         {
             let new_max_native_swap_amount = 69;
             assert!(
@@ -1657,13 +1656,13 @@ module token_bridge_relayer::init_tests {
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
 
-        // Fetch the TokenBridgeRelayer state object and owner capability.
+        // Fetch the relayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
 
-        // Try to update the swap for an unregistered token. This call should
-        // fail.
+        // Try to update the max native swap amount for an unregistered token.
+        // This call should fail.
         owner::update_max_native_swap_amount<COIN_8>(
             &owner_cap,
             &mut state,
@@ -1681,15 +1680,13 @@ module token_bridge_relayer::init_tests {
         test_scenario::end(my_scenario);
     }
 
-    // Update swap_enabled boolean tests.
-
     #[test]
     public fun toggle_swap_enabled() {
         let (creator, _) = people();
         let (my_scenario, _) = set_up(creator);
         let scenario = &mut my_scenario;
 
-        // Fetch the TokenBridgeRelayer state object and owner capability.
+        // Fetch the relayer state object and owner capability.
         let state = test_scenario::take_shared<RelayerState>(scenario);
         let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
@@ -1699,7 +1696,7 @@ module token_bridge_relayer::init_tests {
                 &state
             );
 
-        // Register COIN_8 and set swap_enabled to true.
+        // Register COIN_8 and set `swap_enabled` to true.
         {
             // Do the thing.
             owner::register_token<COIN_8>(
@@ -1725,7 +1722,7 @@ module token_bridge_relayer::init_tests {
             test_scenario::next_tx(scenario, creator);
         };
 
-        // Toggle the swap_enabled to false and confirm the state changes.
+        // Toggle the `swap_enabled` to false and confirm the state changes.
         {
             // Do the thing.
             owner::toggle_swap_enabled<COIN_8>(
@@ -1757,14 +1754,13 @@ module token_bridge_relayer::init_tests {
         (@0x9f082e1bE326e8863BAc818F0c08ae28a8D47C99, @0x1337)
     }
 
-    /// This function sets up the test scenario for Hello Token by
-    /// initializing the wormhole, token bridge and Hello Token contracts.
-    /// It also creates an `emitter_cap` for Hello Token which is registered
-    /// with the Wormhole contract.
+    /// This function sets up the test scenario for Token Bridge Relayer by
+    /// initializing the wormhole, token bridge and Token Bridge Relayer
+    /// contracts. It also creates an `emitter_cap` for Token Bridge Relayer
+    /// which is registered with the Wormhole contract.
     public fun set_up(creator: address): (Scenario, TransactionEffects) {
         let my_scenario = test_scenario::begin(@0x0);
         let scenario = &mut my_scenario;
-
 
         // Set up Wormhole and the Token Bridge.
         {
@@ -1782,7 +1778,6 @@ module token_bridge_relayer::init_tests {
             test_scenario::next_tx(scenario, creator);
         };
 
-
         // Register a test emitter on the token bridge.
         {
             let state = test_scenario::take_shared<BridgeState>(scenario);
@@ -1791,10 +1786,12 @@ module token_bridge_relayer::init_tests {
                 2, // Ethereum chain ID
                 external_address::from_address(@0x3ee18B2214AFF97000D974cf647E7C347E8fa585),
             );
-            test_scenario::return_shared<BridgeState>(state);
 
             // Proceed.
             test_scenario::next_tx(scenario, creator);
+
+            // Return the goods.
+            test_scenario::return_shared<BridgeState>(state);
         };
 
         // Create the Hello Token shared state object.

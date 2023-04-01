@@ -1,4 +1,5 @@
 module token_bridge_relayer::redeem {
+    // Sui dependencies.
     use sui::sui::SUI;
     use sui::coin::{Self, Coin};
     use sui::math::{Self};
@@ -6,18 +7,21 @@ module token_bridge_relayer::redeem {
     use sui::transfer::{Self};
     use sui::tx_context::{Self, TxContext};
 
+    // Token Bridge dependencies.
     use token_bridge::state::{Self as bridge_state, State as TokenBridgeState};
     use token_bridge::complete_transfer_with_payload::{Self as bridge};
     use token_bridge::transfer_with_payload::{Self, TransferWithPayload};
     use token_bridge::normalized_amount::{Self};
 
+    // Wormhole dependencies.
     use wormhole::external_address::{Self};
     use wormhole::state::{State as WormholeState};
 
+    // Token Bridge Relayer modules.
     use token_bridge_relayer::message::{Self};
     use token_bridge_relayer::state::{Self as relayer_state, State};
 
-    // Errors.
+    /// Errors.
     const E_UNREGISTERED_FOREIGN_CONTRACT: u64 = 0;
     const E_UNREGISTERED_COIN: u64 = 1;
     const E_INVALID_CALLER_FOR_ACTION: u64 = 2;
@@ -25,9 +29,15 @@ module token_bridge_relayer::redeem {
     const E_SWAP_IN_OVERFLOW: u64 = 4;
     const E_SWAP_OUT_OVERFLOW: u64 = 5;
 
-    // Max U64 const.
+    /// Max U64 const.
     const U64_MAX: u64 = 18446744073709551614;
 
+    /// `complete_transfer` calls Wormhole's Token Bridge contract to complete
+    /// token transfers. It parses the encoded `TransferWithRelay` message
+    /// and sends tokens to the encoded `recipient`.
+    ///
+    /// This method will revert if the caller is not the `recipient` and should
+    /// only be used for self redeeming transfer VAAs.
     public entry fun complete_transfer<C>(
         t_state: &State,
         wormhole_state: &mut WormholeState,
@@ -57,12 +67,12 @@ module token_bridge_relayer::redeem {
         );
         assert!(is_valid, reason);
 
-        // Parse the TransferWithRelay message.
+        // Decode the `TransferWithRelay` message.
         let relay_msg = message::deserialize(
             transfer_with_payload::payload(&transfer_payload)
         );
 
-        // Fetch the recipient address and verify that the caller is the
+        // Fetch the `recipient` address and verify that the caller is the
         // recipient.
         let recipient = external_address::to_address(
             message::recipient(&relay_msg)
@@ -72,13 +82,23 @@ module token_bridge_relayer::redeem {
             E_INVALID_CALLER_FOR_ACTION
         );
 
-        // Handle self redemptions.
+        // Send the tokens to the recipient.
         transfer::public_transfer(
             coin::from_balance(balance, ctx),
             recipient
         );
     }
 
+    /// `complete_transfer_with_relay` calls Wormhole's Token Bridge contract
+    /// to complete token transfers. It parses the encoded `TransferWithRelay`
+    /// message and sends tokens to the encoded `recipient`. If a `relayer_fee`
+    /// is specified in the payload (it's nonzero) the contract will pay the
+    /// relayer. If a `to_native_token_amount` is specified in the payload
+    /// (it's nonzero) the contract will execute a native swap with the
+    /// off-chain relayer to drop the `recipient` off with native gas (SUI).
+    ///
+    /// This method will revert if the caller is the `recipient` and is intended
+    /// to be called by relayers only.
     public entry fun complete_transfer_with_relay<C>(
         t_state: &State,
         wormhole_state: &mut WormholeState,
@@ -100,7 +120,7 @@ module token_bridge_relayer::redeem {
                 the_clock
             );
 
-        // Convert the Balance to a Coin object.
+        // Convert the balance to a Coin object.
         let coins = coin::from_balance(balance, ctx);
 
         // Verify that the token is accepted by this contract and that
@@ -112,13 +132,13 @@ module token_bridge_relayer::redeem {
         );
         assert!(is_valid, reason);
 
-        // Parse the TransferWithRelay message.
+        // Parse the `TransferWithRelay` message.
         let relay_msg = message::deserialize(
             transfer_with_payload::payload(&transfer_payload)
         );
 
-        // Parse the recipient from the transfer with relay message and
-        // verify that the caller is not the recipient.
+        // Parse the `recipient` from the transfer with relay message and
+        // verify that the caller is not the `recipient`.
         let recipient = external_address::to_address(
             message::recipient(&relay_msg)
         );
@@ -154,7 +174,7 @@ module token_bridge_relayer::redeem {
         };
 
         // If this code executes, we know that swaps are enabled, the user
-        // has elected to perform a swap and that a relyaer is redeeming
+        // has elected to perform a swap and that a relayer is redeeming
         // the transaction. Handle the transfer.
         handle_transfer_and_swap<C>(
             t_state,
@@ -167,6 +187,118 @@ module token_bridge_relayer::redeem {
             ctx
         );
     }
+
+    // Getters.
+
+    /// Calculates the max number of tokens the recipient can convert to native
+    /// Sui. The max amount of native assets the contract will swap with the
+    /// recipient is governed by the `max_native_swap_amount` variable.
+    ///
+    /// If an overflow occurs, it is very likely that the contract owner
+    /// has misconfigured one (or many) of the state variables. The owner
+    /// should reconfigure the contract, or disable swaps to complete the
+    /// transfer.
+    public fun calculate_max_swap_amount_in<C>(
+        t_state: &State,
+        coin_decimals: u8
+    ): u64 {
+        // SUI token decimals are hardcoded to 9 in the coin contract,
+        // and can be hardcoded here since this contract is only intended
+        // to be deployed to the Sui network.
+        let sui_decimals: u8 = 9;
+
+        // Cast variables to u256 to avoid overflows.
+        let native_swap_rate = (
+            relayer_state::native_swap_rate<C>(t_state) as u256);
+        let max_native_swap_amount = (
+            relayer_state::max_native_swap_amount<C>(
+                t_state
+            ) as u256
+        );
+        let swap_rate_precision = (
+            relayer_state::swap_rate_precision(t_state) as u256
+        );
+
+        // Compute the max_swap_amount_in.
+        let max_swap_amount_in;
+        if (coin_decimals > sui_decimals) {
+            max_swap_amount_in = (
+                max_native_swap_amount * native_swap_rate *
+                (math::pow(10, coin_decimals - sui_decimals) as u256) /
+                swap_rate_precision
+            );
+        } else {
+            max_swap_amount_in = (
+                (max_native_swap_amount * native_swap_rate) /
+                ((math::pow(10, sui_decimals - coin_decimals) as u256) *
+                swap_rate_precision)
+            );
+        };
+
+        // Catch overflow.
+        assert!(
+            max_swap_amount_in <= (U64_MAX as u256),
+            E_SWAP_IN_OVERFLOW
+        );
+
+        // Return.
+        (max_swap_amount_in as u64)
+    }
+
+    /// Calculates the amount of native Sui that the recipient will receive
+    /// for swapping the `to_native_amount` of tokens.
+    ///
+    /// If an overflow occurs, it is very likely that the contract owner
+    /// has misconfigured one (or many) of the state variables. The owner
+    /// should reconfigure the contract, or disable swaps to complete the
+    /// transfer.
+    public fun calculate_native_swap_amount_out<C>(
+        t_state: &State,
+        to_native_amount: u64,
+        coin_decimals: u8
+    ): u64 {
+        // SUI token decimals are hardcoded to 9 in the coin contract,
+        // and can be hardcoded here since this contract is only intended
+        // to be deployed to the Sui network.
+        let sui_decimals: u8 = 9;
+
+        // Cast variables to u256 to avoid overflows.
+        let native_swap_rate = (
+            relayer_state::native_swap_rate<C>(t_state) as u256)
+        ;
+        let swap_rate_precision = (
+            relayer_state::swap_rate_precision(t_state) as u256
+        );
+
+        // Compute native_swap_amount_out.
+        let native_swap_amount_out;
+        if (coin_decimals > sui_decimals) {
+            native_swap_amount_out = (
+                swap_rate_precision *
+                (to_native_amount as u256) /
+                (native_swap_rate *
+                (math::pow(10, coin_decimals - sui_decimals) as u256))
+            );
+        } else {
+            native_swap_amount_out = (
+                swap_rate_precision *
+                (to_native_amount as u256) *
+                (math::pow(10, sui_decimals - coin_decimals) as u256) /
+                native_swap_rate
+            );
+        };
+
+        // Catch overflow.
+        assert!(
+            native_swap_amount_out <= (U64_MAX as u256),
+            E_SWAP_OUT_OVERFLOW
+        );
+
+        // Return.
+        (native_swap_amount_out as u64)
+    }
+
+    // Internal methods.
 
     fun verify_transfer<C>(
         t_state: &State,
@@ -236,10 +368,10 @@ module token_bridge_relayer::redeem {
         recipient: address,
         ctx: &mut TxContext
     ) {
-        // Calculate the quantity of native tokens to send to the recipient in
-        // return for the specified to_native_token_amount. This method will
-        // override the to_native_token_amount if the specified amount is too
-        // large too swap (based on the max_to_native_amount for the token).
+        // Calculate the quantity of native tokens to send to the `recipient` in
+        // return for the specified `to_native_token_amount`. This method will
+        // override the `to_native_token_amount` if the specified amount is too
+        // large too swap (based on the `max_to_native_amount` for the token).
         let (native_amount_for_recipient, to_native_token_amount) =
             calculate_native_amount_for_recipient<C>(
                 t_state,
@@ -247,9 +379,7 @@ module token_bridge_relayer::redeem {
                 decimals
             );
 
-        // Set the to_native_token_amount to zero if a swap will be performed.
-        // Also compute the relayer refund in case the relayer sent more
-        // tokens than necessary to perform the swap.
+        // Perform the swap is the `native_amount_for_recipient` is nonzero.
         if (native_amount_for_recipient > 0) {
             let native_coin_value = coin::value(&native_coins);
 
@@ -264,7 +394,10 @@ module token_bridge_relayer::redeem {
             let relayer_refund =
                 native_coin_value - native_amount_for_recipient;
 
+            // The amount of transferred coins to send the recipient after
+            // accounting for the swap.
             let native_coins_for_recipient;
+
             if (relayer_refund > 0) {
                 native_coins_for_recipient = coin::split(
                     &mut native_coins,
@@ -281,14 +414,14 @@ module token_bridge_relayer::redeem {
                 native_coins_for_recipient = native_coins;
             };
 
-            // Send the native coins to the recipient.
+            // Send the native coins to the `recipient`.
             transfer::public_transfer(native_coins_for_recipient, recipient);
         } else {
-            // Set the to_native_token_amount to zero since the
-            // native_amount_for_recipient is zero and no swap will occur.
+            // Set the `to_native_token_amount` to zero since the
+            // `native_amount_for_recipient` is zero and no swap will occur.
             to_native_token_amount = 0;
 
-            // Return the native_coin object to the relayer.
+            // Return the `native_coins` object to the relayer.
             transfer::public_transfer(native_coins, tx_context::sender(ctx));
         };
 
@@ -296,7 +429,7 @@ module token_bridge_relayer::redeem {
         let amount_for_relayer = relayer_fee + to_native_token_amount;
 
         // Split the coin object based on the amounts for the relayer and
-        // recipient.
+        // `recipient`.
         let coins_for_recipient;
         if (amount_for_relayer > 0) {
             let coin_amount = coin::value(&coins);
@@ -324,9 +457,9 @@ module token_bridge_relayer::redeem {
         decimals: u8
     ): (u64, u64) {
         if (to_native_token_amount > 0) {
-            // Compute the max amount of tokens the recipient can swap.
-            // Override the to_native_token_amount if its value is larger
-            // than the max_swap_amount.
+            // Compute the max amount of tokens the `recipient` can swap.
+            // Override the `to_native_token_amount` if its value is larger
+            // than the `max_swap_amount`.
             let max_swap_amount = calculate_max_swap_amount_in<C>(
                 t_state,
                 decimals
@@ -348,122 +481,23 @@ module token_bridge_relayer::redeem {
             return (0, 0)
         }
     }
-
-    public fun calculate_max_swap_amount_in<C>(
-        t_state: &State,
-        coin_decimals: u8
-    ): u64 {
-        // SUI token decimals are hardcoded to 9 in the coin contract,
-        // and can be hardcoded here since this contract is only intended
-        // to be deployed to the Sui network.
-        let sui_decimals: u8 = 9;
-
-        // Cast variables to u256 to avoid overflows.
-        let native_swap_rate = (
-            relayer_state::native_swap_rate<C>(t_state) as u256)
-        ;
-        let max_native_swap_amount = (
-            relayer_state::max_native_swap_amount<C>(
-                t_state
-            ) as u256
-        );
-        let swap_rate_precision = (
-            relayer_state::swap_rate_precision(t_state) as u256
-        );
-
-        // Compute the max_swap_amount_in.
-        let max_swap_amount_in;
-        if (coin_decimals > sui_decimals) {
-            max_swap_amount_in = (
-                max_native_swap_amount * native_swap_rate *
-                (math::pow(10, coin_decimals - sui_decimals) as u256) /
-                swap_rate_precision
-            );
-        } else {
-            max_swap_amount_in = (
-                (max_native_swap_amount * native_swap_rate) /
-                ((math::pow(10, sui_decimals - coin_decimals) as u256) *
-                swap_rate_precision)
-            );
-        };
-
-        // Catch overflow.
-        // TODO: document that the contract owner has configured
-        // the contracts incorrectly.
-        assert!(
-            max_swap_amount_in <= (U64_MAX as u256),
-            E_SWAP_IN_OVERFLOW
-        );
-
-        // Return u64 casted relayer fee.
-        (max_swap_amount_in as u64)
-    }
-
-    public fun calculate_native_swap_amount_out<C>(
-        t_state: &State,
-        to_native_amount: u64,
-        coin_decimals: u8
-    ): u64 {
-        // SUI token decimals are hardcoded to 9 in the coin contract,
-        // and can be hardcoded here since this contract is only intended
-        // to be deployed to the Sui network.
-        let sui_decimals: u8 = 9;
-
-        // Cast variables to u256 to avoid overflows.
-        let native_swap_rate = (
-            relayer_state::native_swap_rate<C>(t_state) as u256)
-        ;
-        let swap_rate_precision = (
-            relayer_state::swap_rate_precision(t_state) as u256
-        );
-
-        // Compute native_swap_amount_out.
-        let native_swap_amount_out;
-        if (coin_decimals > sui_decimals) {
-            native_swap_amount_out = (
-                swap_rate_precision *
-                (to_native_amount as u256) /
-                (native_swap_rate *
-                (math::pow(10, coin_decimals - sui_decimals) as u256))
-            );
-        } else {
-            native_swap_amount_out = (
-                swap_rate_precision *
-                (to_native_amount as u256) *
-                (math::pow(10, sui_decimals - coin_decimals) as u256) /
-                native_swap_rate
-            );
-        };
-
-        // Catch overflow.
-        // TODO: document that the contract owner has configured
-        // the contracts incorrectly.
-        assert!(
-            native_swap_amount_out <= (U64_MAX as u256),
-            E_SWAP_OUT_OVERFLOW
-        );
-
-        // Return u64 casted relayer fee.
-        (native_swap_amount_out as u64)
-    }
 }
 
 #[test_only]
 module token_bridge_relayer::complete_transfer_tests {
     use std::vector;
+
+    // Sui dependencies.
     use sui::sui::SUI;
     use sui::test_scenario::{Self, Scenario, TransactionEffects};
     use sui::coin::{Self, Coin, CoinMetadata};
     use sui::transfer::{Self as native_transfer};
     use sui::tx_context::{TxContext};
 
-    // Token Bridge Relayer.
-    use token_bridge_relayer::owner::{Self, OwnerCap};
-    use token_bridge_relayer::state::{State};
-    use token_bridge_relayer::init_tests::{Self, set_up as owner_set_up};
-    use token_bridge_relayer::redeem::{Self};
-
+    // Token Bridge dependencies.
     use token_bridge::token_bridge_scenario::{Self};
+    use token_bridge::state::{State as BridgeState};
+    use token_bridge::attest_token::{Self};
 
     // Wormhole.
     use wormhole::state::{
@@ -471,15 +505,17 @@ module token_bridge_relayer::complete_transfer_tests {
         State as WormholeState
     };
 
-    // Token Bridge.
-    use token_bridge::state::{State as BridgeState};
-    use token_bridge::attest_token::{Self};
+    // Token Bridge Relayer modules.
+    use token_bridge_relayer::owner::{Self, OwnerCap};
+    use token_bridge_relayer::state::{State};
+    use token_bridge_relayer::init_tests::{Self, set_up as owner_set_up};
+    use token_bridge_relayer::redeem::{Self};
 
     // Example coins.
     use example_coins::coin_8::{Self, COIN_8};
     use example_coins::coin_10::{Self, COIN_10};
 
-    // Test consts.
+    /// Test consts.
     const TEST_FOREIGN_EMITTER_CHAIN: u16 = 2;
     const TEST_FOREIGN_EMITTER_CONTRACT: address =
         @0x0000000000000000000000000000000000000000000000000000000000000069;

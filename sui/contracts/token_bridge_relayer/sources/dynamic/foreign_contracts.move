@@ -1,21 +1,27 @@
+/// This module manages the registration process for foreign Token Bridge
+/// Relayer contracts. `chain` to `ExternalAddress` mappings are stored
+/// as dynamic object fields on the `State` object.
 module token_bridge_relayer::foreign_contracts {
+    // Sui dependencies.
     use sui::dynamic_object_field::{Self};
     use sui::object::{UID};
     use sui::table::{Self, Table};
     use sui::tx_context::{TxContext};
 
+    // Wormhole dependencies.
     use wormhole::state::{chain_id};
     use wormhole::external_address::{Self, ExternalAddress};
 
-    // Errors.
+    /// Errors.
     const E_INVALID_CHAIN: u64 = 0;
     const E_INVALID_CONTRACT_ADDRESS: u64 = 1;
     const E_CONTRACT_DOES_NOT_EXIST: u64 = 2;
 
+    /// Dynamic object field key.
     const KEY: vector<u8> = b"foreign_contracts";
 
-    /// Creates new dynamic object field using the stateId as the parent. The
-    /// dynamic object field hosts a chainId to emitter mapping.
+    /// Creates new dynamic object field using the `State` ID as the parent.
+    /// The dynamic object field hosts a `chain` to `contract_address` mapping.
     public fun new(parent_uid: &mut UID, ctx: &mut TxContext) {
         dynamic_object_field::add(
             parent_uid,
@@ -24,17 +30,7 @@ module token_bridge_relayer::foreign_contracts {
         );
     }
 
-    public fun has(parent_uid: &UID, chain: u16): bool {
-        table::contains<u16, ExternalAddress>(borrow_table(parent_uid), chain)
-    }
-
-    /// Returns an address associated with a registered chain ID.
-    public fun contract_address(parent_uid: &UID, chain: u16): &ExternalAddress {
-        assert!(has(parent_uid, chain), E_CONTRACT_DOES_NOT_EXIST);
-        table::borrow(borrow_table(parent_uid), chain)
-    }
-
-    /// Adds a new chain ID => contract address mapping.
+    /// Adds a new `chain` to `contract_address` mapping.
     public fun add(
         parent_uid: &mut UID,
         chain: u16,
@@ -49,8 +45,8 @@ module token_bridge_relayer::foreign_contracts {
         table::add(borrow_table_mut(parent_uid), chain, contract_address);
     }
 
-    /// Updates an existing chain ID => contract address mapping. The
-    /// new address cannot be the zero address.
+    /// Updates an existing `chain` to `contract_address` mapping. Reverts
+    /// if the new `contract_address` is the zero address.
     public fun update(
         parent_uid: &mut UID,
         chain: u16,
@@ -66,6 +62,21 @@ module token_bridge_relayer::foreign_contracts {
             chain
         ) = contract_address;
     }
+
+    /// Checks if a `chain` to `contract_address` mapping exists.
+    public fun has(parent_uid: &UID, chain: u16): bool {
+        table::contains<u16, ExternalAddress>(borrow_table(parent_uid), chain)
+    }
+
+    // Getters.
+
+    /// Returns an address associated with a registered chain ID.
+    public fun contract_address(parent_uid: &UID, chain: u16): &ExternalAddress {
+        assert!(has(parent_uid, chain), E_CONTRACT_DOES_NOT_EXIST);
+        table::borrow(borrow_table(parent_uid), chain)
+    }
+
+    // Internal methods.
 
     fun borrow_table(parent_uid: &UID): &Table<u16, ExternalAddress> {
         dynamic_object_field::borrow(parent_uid, KEY)

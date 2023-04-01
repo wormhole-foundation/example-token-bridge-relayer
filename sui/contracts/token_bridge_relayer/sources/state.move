@@ -1,12 +1,18 @@
+/// This module implements the global state variables for the Token Bridge
+/// Relayer. The `State` object is used to perform anything that requires
+/// access to data that defines the Token Bridge Relayer contract.
 module token_bridge_relayer::state {
+    // Sui dependencies.
     use sui::sui::SUI;
     use sui::object::{Self, UID, ID};
     use sui::tx_context::{TxContext};
 
+    // Wormhole dependencies.
     use wormhole::state::{State as WormholeState};
     use wormhole::emitter::{Self, EmitterCap};
     use wormhole::external_address::{ExternalAddress};
 
+    // Token Bridge Relayer modules.
     use token_bridge_relayer::foreign_contracts::{Self};
     use token_bridge_relayer::relayer_fees::{Self};
     use token_bridge_relayer::registered_tokens::{Self, RegisteredTokens};
@@ -14,33 +20,38 @@ module token_bridge_relayer::state {
     // Only the owner should be allowed to mutate `State`.
     friend token_bridge_relayer::owner;
 
-    // Errors.
+    /// Errors.
     const E_INVALID_CHAIN: u64 = 0;
     const E_INVALID_CONTRACT_ADDRESS: u64 = 1;
     const E_PRECISION_CANNOT_BE_ZERO: u64 = 2;
     const E_INVALID_NATIVE_SWAP_RATE: u64 = 3;
 
-    // Max U64 const.
+    /// Max U64 const.
     const U64_MAX: u64 = 18446744073709551614;
 
-    /// Object that holds this contract's state. Foreign contracts are
-    /// stored as dynamic object fields of `State`.
+    /// Object that holds this contract's state. `foreign_contracts` and
+    /// `relayer_fees` are stored as dynamic object fields in this state object.
     struct State has key, store {
         id: UID,
 
-        /// HelloToken owned emitter capability.
+        /// Token Bridge Relayer owned emitter capability. This is used to
+        /// emit Wormhole messages.
         emitter_cap: EmitterCap,
 
-        /// Swap Rate Precision
+        /// Swap Rate Precision.
         swap_rate_precision: u64,
 
-        /// Relayer Fee Precision
+        /// Relayer Fee Precision.
         relayer_fee_precision: u64,
 
-        /// Accepted Tokens
+        /// Registered tokens object. Only coin types stored as dynamic fields
+        /// on this object are accepted by this contract.
         registered_tokens: RegisteredTokens,
     }
 
+    /// Creates new `State` object. The `emitter_cap` and `registered_tokens`
+    /// objects are also created. This method should only be executed from the
+    /// `owner::create_state` method.
     public(friend) fun new(
         wormhole_state: &mut WormholeState,
         swap_rate_precision: u64,
@@ -66,6 +77,8 @@ module token_bridge_relayer::state {
         state
     }
 
+    /// Registers foreign Token Bridge Relayer contracts. This contract will
+    /// only accept `TransferWithRelay` messages from registered contracts.
     public(friend) fun register_foreign_contract(
         self: &mut State,
         chain: u16,
@@ -86,6 +99,9 @@ module token_bridge_relayer::state {
         }
     }
 
+    /// Updates the `relayer_fee` for a `chain`. This method will revert
+    /// if a `foreign_contract` has not been registered for the specified
+    /// `chain`.
     public(friend) fun update_relayer_fee(
         self: &mut State,
         chain: u16,
@@ -106,6 +122,7 @@ module token_bridge_relayer::state {
         }
     }
 
+    /// Updates the `relayer_fee_precision`.
     public(friend) fun update_relayer_fee_precision(
         self: &mut State,
         new_relayer_fee_precision: u64
@@ -114,6 +131,9 @@ module token_bridge_relayer::state {
         self.relayer_fee_precision = new_relayer_fee_precision;
     }
 
+    /// Registers a coin type with this contract. This contract will only
+    /// accept inbound transfers (and allow outbound transfers) for registered
+    /// coin types.
     public(friend) fun register_token<C>(
         self: &mut State,
         swap_rate: u64,
@@ -128,6 +148,8 @@ module token_bridge_relayer::state {
         );
     }
 
+    /// Deregisters a coin type. This removes a dynamic field from the
+    /// `registered_tokens` object.
     public(friend) fun deregister_token<C>(
         self: &mut State
     ) {
@@ -136,6 +158,8 @@ module token_bridge_relayer::state {
         );
     }
 
+    /// Updates the `swap_rate` for the specified coin type. This method will
+    /// revert when the caller passes an unregistered coin type.
     public(friend) fun update_swap_rate<C>(
         self: &mut State,
         swap_rate: u64
@@ -146,6 +170,7 @@ module token_bridge_relayer::state {
         );
     }
 
+    /// Updates the `swap_rate_precision`.
     public(friend) fun update_swap_rate_precision(
         self: &mut State,
         new_swap_rate_precision: u64
@@ -154,6 +179,8 @@ module token_bridge_relayer::state {
         self.swap_rate_precision = new_swap_rate_precision;
     }
 
+    /// Updates the `max_native_swap_amount` for the specified coin type. This
+    /// method will revert when the caller passes an unregistered coin type.
     public(friend) fun update_max_native_swap_amount<C>(
         self: &mut State,
         max_native_swap_amount: u64
@@ -164,6 +191,8 @@ module token_bridge_relayer::state {
         );
     }
 
+    /// Updates the `swap_enabled` boolean for the specified coin type. This
+    /// method will revert when the caller passes an unregistered coin type.
     public(friend) fun toggle_swap_enabled<C>(
         self: &mut State,
         enable_swap: bool
@@ -173,6 +202,8 @@ module token_bridge_relayer::state {
             enable_swap
         );
     }
+
+    // Getters.
 
     public fun emitter_cap(self: &State): &EmitterCap {
         &self.emitter_cap
@@ -202,7 +233,10 @@ module token_bridge_relayer::state {
         registered_tokens::swap_rate<C>(&self.registered_tokens)
     }
 
-    // TODO: does this need an overflow check?
+    /// This method computes the `native_swap_rate` for a specified coin type.
+    /// If an overflow occurs, it is very likely that the contract owner
+    /// has misconfigured the `swap_rate_precision` or incorrectly set
+    /// the `swap_rate` for the specified coin type (or SUI).
     public fun native_swap_rate<C>(self: &State): u64 {
         let native_swap_rate = (
             (swap_rate_precision(self) as u256) *
