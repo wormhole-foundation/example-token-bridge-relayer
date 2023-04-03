@@ -17,12 +17,16 @@ module token_bridge_relayer::foreign_contracts {
     const E_INVALID_CONTRACT_ADDRESS: u64 = 1;
     const E_CONTRACT_DOES_NOT_EXIST: u64 = 2;
 
+    // Only state should be able to mutate the `foreign_contracts` dynamic field
+    // object.
+    friend token_bridge_relayer::state;
+
     /// Dynamic object field key.
     const KEY: vector<u8> = b"foreign_contracts";
 
     /// Creates new dynamic object field using the `State` ID as the parent.
     /// The dynamic object field hosts a `chain` to `contract_address` mapping.
-    public fun new(parent_uid: &mut UID, ctx: &mut TxContext) {
+    public(friend) fun new(parent_uid: &mut UID, ctx: &mut TxContext) {
         dynamic_object_field::add(
             parent_uid,
             KEY,
@@ -31,7 +35,7 @@ module token_bridge_relayer::foreign_contracts {
     }
 
     /// Adds a new `chain` to `contract_address` mapping.
-    public fun add(
+    public(friend) fun add(
         parent_uid: &mut UID,
         chain: u16,
         contract_address: ExternalAddress,
@@ -47,7 +51,7 @@ module token_bridge_relayer::foreign_contracts {
 
     /// Updates an existing `chain` to `contract_address` mapping. Reverts
     /// if the new `contract_address` is the zero address.
-    public fun update(
+    public(friend) fun update(
         parent_uid: &mut UID,
         chain: u16,
         contract_address: ExternalAddress
@@ -63,12 +67,12 @@ module token_bridge_relayer::foreign_contracts {
         ) = contract_address;
     }
 
+    // Getters.
+
     /// Checks if a `chain` to `contract_address` mapping exists.
     public fun has(parent_uid: &UID, chain: u16): bool {
         table::contains<u16, ExternalAddress>(borrow_table(parent_uid), chain)
     }
-
-    // Getters.
 
     /// Returns an address associated with a registered chain ID.
     public fun contract_address(parent_uid: &UID, chain: u16): &ExternalAddress {

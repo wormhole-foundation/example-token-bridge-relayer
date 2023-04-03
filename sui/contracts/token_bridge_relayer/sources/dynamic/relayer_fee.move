@@ -16,6 +16,10 @@ module token_bridge_relayer::relayer_fees {
     // Token Bridge dependencies.
     use token_bridge_relayer::foreign_contracts::{Self};
 
+    // Only state should be able to mutate the `relayer_fees` dynamic field
+    // object.
+    friend token_bridge_relayer::state;
+
     /// Errors.
     const E_INVALID_CHAIN: u64 = 0;
     const E_FEE_NOT_SET: u64 = 1;
@@ -30,7 +34,7 @@ module token_bridge_relayer::relayer_fees {
 
     /// Creates new dynamic object field using the `State` ID as the parent.
     /// The dynamic object field hosts a `chain` to `fee` mapping.
-    public fun new(parent_uid: &mut UID, ctx: &mut TxContext) {
+    public(friend) fun new(parent_uid: &mut UID, ctx: &mut TxContext) {
         dynamic_object_field::add(
             parent_uid,
             KEY,
@@ -41,7 +45,7 @@ module token_bridge_relayer::relayer_fees {
     /// Adds a new `chain` to `fee` mapping. Reverts if the specified `chain`
     /// has not been registered with the `foreign_contracts` object. The fee
     /// should be USD denominated and scaled by the `relayer_fee_precision`.
-    public fun add(
+    public(friend) fun add(
         parent_uid: &mut UID,
         chain: u16,
         fee: u64
@@ -57,7 +61,7 @@ module token_bridge_relayer::relayer_fees {
 
     /// Updates the `fee` for an existing `chain`. The `fee` should be
     /// USD denominated and scaled by the `relayer_fee_precision`.
-    public fun update(
+    public(friend) fun update(
         parent_uid: &mut UID,
         chain: u16,
         fee: u64
@@ -68,12 +72,12 @@ module token_bridge_relayer::relayer_fees {
         ) = fee;
     }
 
+    // Getters.
+
     /// Checks if a `chain` to `fee` mapping exists.
     public fun has(parent_uid: &UID, chain: u16): bool {
         table::contains<u16, u64>(borrow_table(parent_uid), chain)
     }
-
-    // Getters.
 
     /// Returns the `fee` associated with the specified `chain`.
     public fun usd_fee(parent_uid: &UID, chain: u16): u64 {

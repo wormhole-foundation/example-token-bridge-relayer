@@ -29,7 +29,7 @@ module token_bridge_relayer::registered_tokens {
     struct Key<phantom C> has copy, drop, store {}
 
     /// Creates a new `RegisteredTokens` object.
-    public fun new(ctx: &mut TxContext): RegisteredTokens {
+    public(friend) fun new(ctx: &mut TxContext): RegisteredTokens {
         RegisteredTokens {
             id: object::new(ctx),
             num_tokens: 0
@@ -75,7 +75,7 @@ module token_bridge_relayer::registered_tokens {
         );
     }
 
-    /// Updates the `max_native_swap_amount for a coin type in the
+    /// Updates the `max_native_swap_amount` for a coin type in the
     /// `RegisteredToken` object.
     public(friend) fun update_max_native_swap_amount<C>(
         self: &mut RegisteredTokens,
@@ -101,12 +101,11 @@ module token_bridge_relayer::registered_tokens {
         }
     }
 
-    /// Checks if a coin type belongs to a `RegisteredTokens` object.
+    // Getters.
+
     public fun has<C>(self: &RegisteredTokens): bool {
         dynamic_field::exists_(&self.id, Key<C>{})
     }
-
-    // Getters.
 
     public fun num_tokens(self: &RegisteredTokens): u64 {
         self.num_tokens
