@@ -26,7 +26,7 @@ git clone \
     https://github.com/wormhole-foundation/wormhole \
     tmp-wormhole > /dev/null 2>&1
 cd tmp-wormhole
-git reset --hard 33cda3d84b711941804f0644e467ad39a63e68ee
+git reset --hard 6362810839734ffb9ca4a4f953946abbc3dca72e
 
 ### Checkout sui directory and move that to this program directory
 git sparse-checkout set sui > /dev/null 2>&1

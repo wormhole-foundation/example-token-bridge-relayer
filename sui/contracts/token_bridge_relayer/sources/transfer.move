@@ -11,6 +11,7 @@ module token_bridge_relayer::transfer {
 
     // Token Bridge dependencies.
     use token_bridge::normalized_amount::{Self};
+    use token_bridge::token_registry::{Self};
     use token_bridge::state::{Self as bridge_state, State as TokenBridgeState};
     use token_bridge::transfer_tokens_with_payload::{transfer_tokens_with_payload};
 
@@ -71,7 +72,11 @@ module token_bridge_relayer::transfer {
 
         // Fetch the token decimals from the token bridge, and cache the token
         // amount.
-        let decimals = bridge_state::coin_decimals<C>(token_bridge_state);
+        let decimals = token_registry::coin_decimals<C>(
+            &bridge_state::verified_asset<C>(
+                token_bridge_state
+            )
+        );
         let amount_received = coin::value(&coins);
 
         // Compute the normalized `to_native_token_amount`.

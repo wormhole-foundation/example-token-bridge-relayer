@@ -5,6 +5,7 @@ module token_bridge_relayer::redeem {
     use sui::math::{Self};
     use sui::clock::{Clock};
     use sui::transfer::{Self};
+    use sui::event::{Self};
     use sui::tx_context::{Self, TxContext};
 
     // Token Bridge dependencies.
@@ -12,6 +13,7 @@ module token_bridge_relayer::redeem {
     use token_bridge::complete_transfer_with_payload::{Self as bridge};
     use token_bridge::transfer_with_payload::{Self, TransferWithPayload};
     use token_bridge::normalized_amount::{Self};
+    use token_bridge::token_registry::{Self};
 
     // Wormhole dependencies.
     use wormhole::external_address::{Self};
@@ -31,6 +33,15 @@ module token_bridge_relayer::redeem {
 
     /// Max U64 const.
     const U64_MAX: u64 = 18446744073709551614;
+
+    /// Event that's emitted if a swap event occurs.
+    struct SwapExecuted has drop, copy {
+        recipient: address,
+        relayer: address,
+        coin: address,
+        coin_amount: u64,
+        sui_amount: u64
+    }
 
     /// `complete_transfer` calls Wormhole's Token Bridge contract to complete
     /// token transfers. It parses the encoded `TransferWithRelay` message
@@ -144,8 +155,14 @@ module token_bridge_relayer::redeem {
         );
         assert!(recipient != tx_context::sender(ctx), E_INVALID_CALLER_FOR_ACTION);
 
-        // Fetch token decimals and denormalize the encoded message values.
-        let decimals = bridge_state::coin_decimals<C>(token_bridge_state);
+        // Fetch token decimals.
+        let decimals = token_registry::coin_decimals<C>(
+            &bridge_state::verified_asset<C>(
+                token_bridge_state
+            )
+        );
+
+        // Denormalize the encoded message values.
         let denormalized_relayer_fee = normalized_amount::to_raw(
             message::target_relayer_fee(&relay_msg),
             decimals
@@ -173,8 +190,16 @@ module token_bridge_relayer::redeem {
             return
         };
 
+        // Fetch the address of the transferred coin. This address will
+        // be emitted in the `SwapExecuted` event.
+        let coin_address = token_registry::token_address<C>(
+            &bridge_state::verified_asset<C>(
+                token_bridge_state
+            )
+        );
+
         // If this code executes, we know that swaps are enabled, the user
-        // has elected to perform a swap and that a relayer is redeeming
+        // has elected to perform a swap, and that a relayer is redeeming
         // the transaction. Handle the transfer.
         handle_transfer_and_swap<C>(
             t_state,
@@ -182,6 +207,7 @@ module token_bridge_relayer::redeem {
             denormalized_to_native_token_amount,
             coins,
             decimals,
+            external_address::to_address(coin_address),
             native_coins,
             recipient,
             ctx
@@ -364,6 +390,7 @@ module token_bridge_relayer::redeem {
         to_native_token_amount: u64,
         coins: Coin<C>,
         decimals: u8,
+        coin_address: address,
         native_coins: Coin<SUI>,
         recipient: address,
         ctx: &mut TxContext
@@ -378,6 +405,9 @@ module token_bridge_relayer::redeem {
                 to_native_token_amount,
                 decimals
             );
+
+        // Cache the `relayer` address.
+        let relayer = tx_context::sender(ctx);
 
         // Perform the swap is the `native_amount_for_recipient` is nonzero.
         if (native_amount_for_recipient > 0) {
@@ -408,7 +438,7 @@ module token_bridge_relayer::redeem {
                 // Return the refund amount to the relayer.
                 transfer::public_transfer(
                     native_coins,
-                    tx_context::sender(ctx)
+                    relayer
                 );
             } else {
                 native_coins_for_recipient = native_coins;
@@ -416,13 +446,24 @@ module token_bridge_relayer::redeem {
 
             // Send the native coins to the `recipient`.
             transfer::public_transfer(native_coins_for_recipient, recipient);
+
+            // Event swap event.
+            event::emit(
+                SwapExecuted {
+                    recipient,
+                    relayer,
+                    coin: coin_address,
+                    coin_amount: to_native_token_amount,
+                    sui_amount: native_amount_for_recipient
+                }
+            )
         } else {
             // Set the `to_native_token_amount` to zero since the
             // `native_amount_for_recipient` is zero and no swap will occur.
             to_native_token_amount = 0;
 
             // Return the `native_coins` object to the relayer.
-            transfer::public_transfer(native_coins, tx_context::sender(ctx));
+            transfer::public_transfer(native_coins, relayer);
         };
 
         // Compute the amount of transferred tokens to send to the relayer.
@@ -442,7 +483,7 @@ module token_bridge_relayer::redeem {
             );
 
             // Pay the relayer designated coins.
-            transfer::public_transfer(coins, tx_context::sender(ctx));
+            transfer::public_transfer(coins, relayer);
         } else {
             coins_for_recipient = coins;
         };
