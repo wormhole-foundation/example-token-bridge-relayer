@@ -6,12 +6,12 @@ module token_bridge_relayer::transfer {
     use sui::sui::SUI;
     use sui::clock::{Clock};
     use sui::coin::{Self, Coin};
-    use sui::transfer::{Self};
-    use sui::tx_context::{Self, TxContext};
+    use sui::tx_context::{TxContext};
 
     // Token Bridge dependencies.
     use token_bridge::normalized_amount::{Self};
     use token_bridge::token_registry::{Self};
+    use token_bridge::coin_utils::{Self};
     use token_bridge::state::{Self as bridge_state, State as TokenBridgeState};
     use token_bridge::transfer_tokens_with_payload::{transfer_tokens_with_payload};
 
@@ -46,8 +46,8 @@ module token_bridge_relayer::transfer {
         nonce: u32,
         target_recipient: address,
         the_clock: &Clock,
-        ctx: &mut TxContext
-    ) {
+        ctx: &TxContext
+    ): u64 {
         // Confirm that the coin type is registered with this contract.
         assert!(
             relayer_state::is_registered_token<C>(t_state),
@@ -123,35 +123,12 @@ module token_bridge_relayer::transfer {
             )
         );
 
-        // Denormalize the `normalized_amount` and transfer any dust
-        // to the caller.
-        let denormalized_amount = normalized_amount::to_raw(
-            normalized_amount,
-            decimals
-        );
-
-        // Split the `coins` object and send dust back to the user if
-        // the `normalized_amount` is less the `amount_received`.
-        let coins_to_transfer;
-        if (denormalized_amount < amount_received) {
-            coins_to_transfer = coin::split(
-                &mut coins,
-                denormalized_amount,
-                ctx
-            );
-
-            // Return the original object with the dust.
-            transfer::public_transfer(coins, tx_context::sender(ctx))
-        } else {
-            coins_to_transfer = coins;
-        };
-
         // Finally, call the Token Bridge.
-        transfer_tokens_with_payload<C>(
+        let (sequence, dust) = transfer_tokens_with_payload<C>(
             token_bridge_state,
             relayer_state::emitter_cap(t_state),
             wormhole_state,
-            coin::into_balance(coins_to_transfer),
+            coin_utils::take_full_balance(&mut coins),
             coin::into_balance(wormhole_fee),
             target_chain,
             *relayer_state::foreign_contract_address(t_state, target_chain),
@@ -159,6 +136,14 @@ module token_bridge_relayer::transfer {
             nonce,
             the_clock
         );
+
+        // Join `dust` back with original `coins`.
+        coin_utils::put_balance(&mut coins, dust);
+
+        // Return to sender.
+        coin_utils::return_nonzero(coins, ctx);
+
+        sequence
     }
 }
 
