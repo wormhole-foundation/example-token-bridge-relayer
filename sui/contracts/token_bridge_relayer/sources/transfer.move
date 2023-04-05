@@ -128,8 +128,8 @@ module token_bridge_relayer::transfer {
             token_bridge_state,
             relayer_state::emitter_cap(t_state),
             wormhole_state,
-            coin_utils::take_full_balance(&mut coins),
-            coin::into_balance(wormhole_fee),
+            coins,
+            wormhole_fee,
             target_chain,
             *relayer_state::foreign_contract_address(t_state, target_chain),
             msg,
@@ -137,11 +137,8 @@ module token_bridge_relayer::transfer {
             the_clock
         );
 
-        // Join `dust` back with original `coins`.
-        coin_utils::put_balance(&mut coins, dust);
-
         // Return to sender.
-        coin_utils::return_nonzero(coins, ctx);
+        coin_utils::return_nonzero(dust, ctx);
 
         sequence
     }
@@ -1181,7 +1178,7 @@ module token_bridge_relayer::transfer_tests {
             attest_token::attest_token<C>(
                 &mut bridge_state,
                 &mut wormhole_state,
-                coin::into_balance(fee_coin),
+                fee_coin,
                 &coin_metadata,
                 0, // Nonce.
                 &the_clock

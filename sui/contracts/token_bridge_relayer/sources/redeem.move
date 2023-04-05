@@ -60,13 +60,14 @@ module token_bridge_relayer::redeem {
         // Complete the transfer on the Token Bridge. This call returns the
         // coin object for the amount transferred via the Token Bridge. It
         // also returns the chain ID of the message sender.
-        let (balance, transfer_payload, emitter_chain_id) =
+        let (coins, transfer_payload, emitter_chain_id) =
             bridge::complete_transfer_with_payload<C>(
                 token_bridge_state,
                 relayer_state::emitter_cap(t_state),
                 wormhole_state,
                 vaa,
-                the_clock
+                the_clock,
+                ctx
             );
 
         // Verify that the token is accepted by this contract and that
@@ -95,7 +96,7 @@ module token_bridge_relayer::redeem {
 
         // Send the tokens to the recipient.
         transfer::public_transfer(
-            coin::from_balance(balance, ctx),
+            coins,
             recipient
         );
     }
@@ -122,17 +123,15 @@ module token_bridge_relayer::redeem {
         // Complete the transfer on the Token Bridge. This call returns the
         // coin object for the amount transferred via the Token Bridge. It
         // also returns the chain ID of the message sender.
-        let (balance, transfer_payload, emitter_chain_id) =
+        let (coins, transfer_payload, emitter_chain_id) =
             bridge::complete_transfer_with_payload<C>(
                 token_bridge_state,
                 relayer_state::emitter_cap(t_state),
                 wormhole_state,
                 vaa,
-                the_clock
+                the_clock,
+                ctx
             );
-
-        // Convert the balance to a Coin object.
-        let coins = coin::from_balance(balance, ctx);
 
         // Verify that the token is accepted by this contract and that
         // the sender of the Wormhole message is a trusted contract.
@@ -4619,7 +4618,7 @@ module token_bridge_relayer::complete_transfer_tests {
             attest_token::attest_token<C>(
                 bridge_state,
                 wormhole_state,
-                coin::into_balance<SUI>(fee_coin),
+                fee_coin,
                 &coin_meta,
                 0, // nonce
                 &the_clock
