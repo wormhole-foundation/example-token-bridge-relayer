@@ -37,7 +37,7 @@ module token_bridge_relayer::owner {
         // This step is unnecessary because the `EmitterCap` passed into
         // `create_state` deletes the object at that UID. But we will keep this
         // here for now in case something changes with Wormhole's EmitterCap.
-        dynamic_field::add(&mut owner_cap.id, b"state_created", false);
+        dynamic_field::add(&mut owner_cap.id, b"create_state", true);
 
         // Transfer `OwnerCap` to the contract publisher.
         transfer::transfer(owner_cap, tx_context::sender(ctx));
@@ -46,17 +46,17 @@ module token_bridge_relayer::owner {
     /// Only owner. This creates a new state object that also acts as dynamic
     /// storage.
     public entry fun create_state(
-        wormhole_state: &mut WormholeState,
+        wormhole_state: &WormholeState,
         owner_cap: &mut OwnerCap,
         ctx: &mut TxContext
     ) {
         assert!(
-            !*dynamic_field::borrow(&owner_cap.id, b"state_created"),
+            dynamic_field::exists_(&owner_cap.id, b"create_state"),
             E_STATE_ALREADY_CREATED
         );
 
         // State will be created once function finishes.
-        *dynamic_field::borrow_mut(&mut owner_cap.id, b"state_created") = true;
+        let _: bool = dynamic_field::remove(&mut owner_cap.id, b"create_state");
 
         // Hardcode the initial swap rate and relayer fee precision state
         // variables.
@@ -349,7 +349,7 @@ module token_bridge_relayer::init_tests {
                 );
             assert!(
                 external_address::to_address(
-                    *registered_contract
+                    registered_contract
                 ) == TEST_TARGET_CONTRACT,
                 0
             );
@@ -400,7 +400,7 @@ module token_bridge_relayer::init_tests {
                 );
             assert!(
                 external_address::to_address(
-                    *registered_contract
+                    registered_contract
                 ) == TEST_TARGET_CONTRACT,
                 0
             );
@@ -426,7 +426,7 @@ module token_bridge_relayer::init_tests {
                 );
             assert!(
                 external_address::to_address(
-                    *registered_contract
+                    registered_contract
                 ) == target_contract2,
                 0
             );
@@ -574,7 +574,7 @@ module token_bridge_relayer::init_tests {
                 );
             assert!(
                 external_address::to_address(
-                    *registered_contract
+                    registered_contract
                 ) == TEST_TARGET_CONTRACT,
                 0
             );

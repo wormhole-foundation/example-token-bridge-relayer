@@ -10,7 +10,6 @@ module token_bridge_relayer::transfer {
 
     // Token Bridge dependencies.
     use token_bridge::normalized_amount::{Self};
-    use token_bridge::token_registry::{Self};
     use token_bridge::coin_utils::{Self};
     use token_bridge::state::{Self as bridge_state, State as TokenBridgeState};
     use token_bridge::transfer_tokens_with_payload::{transfer_tokens_with_payload};
@@ -72,11 +71,7 @@ module token_bridge_relayer::transfer {
 
         // Fetch the token decimals from the token bridge, and cache the token
         // amount.
-        let decimals = token_registry::coin_decimals<C>(
-            &bridge_state::verified_asset<C>(
-                token_bridge_state
-            )
-        );
+        let decimals = bridge_state::coin_decimals<C>(token_bridge_state);
         let amount_received = coin::value(&coins);
 
         // Compute the normalized `to_native_token_amount`.
@@ -131,7 +126,7 @@ module token_bridge_relayer::transfer {
             coins,
             wormhole_fee,
             target_chain,
-            *relayer_state::foreign_contract_address(t_state, target_chain),
+            relayer_state::foreign_contract_address(t_state, target_chain),
             msg,
             nonce,
             the_clock
@@ -176,7 +171,7 @@ module token_bridge_relayer::transfer_tests {
     use example_coins::coin_10::{Self, COIN_10};
 
     // Test consts.
-    const U64_MAX: u64 = 18446744073709551614;
+    const MAX_SUPPLY: u64 = 0xfffffffffffffffe;
 
     #[test]
     // This test transfers COIN_8 with relay parameters.
@@ -240,7 +235,7 @@ module token_bridge_relayer::transfer_tests {
         let target_chain: u16 = 69;
         let target_contract =
             @0x0000000000000000000000000000000000000000000000000000000000000069;
-        let max_coin_supply: u64 = U64_MAX; // Maximum amount.
+        let max_coin_supply: u64 = MAX_SUPPLY; // Maximum amount able to mint.
         let to_native_token_amount = 500000000; // 5
         let target_recipient =
             @0x000000000000000000000000beFA429d57cD18b7F8A4d91A2da9AB4AF05d0FBe;
@@ -476,7 +471,7 @@ module token_bridge_relayer::transfer_tests {
         let target_chain: u16 = 69;
         let target_contract =
             @0x0000000000000000000000000000000000000000000000000000000000000069;
-        let max_coin_supply: u64 = U64_MAX; // Maximum amount.
+        let max_coin_supply: u64 = MAX_SUPPLY; // Maximum amount able to mint.
 
         // Since COIN_10 has 10 decimals, the token bridge will truncate the
         // value. This is the expected amount to be returned by the contract.
@@ -1006,7 +1001,7 @@ module token_bridge_relayer::transfer_tests {
         let to_native_token_amount = 42000;
 
         // Set the relayer fee to the u64 max.
-        let relayer_fee: u64 = U64_MAX;
+        let relayer_fee: u64 = MAX_SUPPLY;
 
         // Other.
         let target_recipient =

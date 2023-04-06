@@ -6,9 +6,11 @@ module token_bridge_relayer::redeem {
     use sui::clock::{Clock};
     use sui::transfer::{Self};
     use sui::event::{Self};
+    use sui::pay::{Self};
     use sui::tx_context::{Self, TxContext};
 
     // Token Bridge dependencies.
+    use token_bridge::coin_utils::{Self};
     use token_bridge::state::{Self as bridge_state, State as TokenBridgeState};
     use token_bridge::complete_transfer_with_payload::{Self as bridge};
     use token_bridge::transfer_with_payload::{Self, TransferWithPayload};
@@ -16,7 +18,7 @@ module token_bridge_relayer::redeem {
     use token_bridge::token_registry::{Self};
 
     // Wormhole dependencies.
-    use wormhole::external_address::{Self};
+    use wormhole::external_address::{Self, ExternalAddress};
     use wormhole::state::{State as WormholeState};
 
     // Token Bridge Relayer modules.
@@ -32,7 +34,7 @@ module token_bridge_relayer::redeem {
     const E_SWAP_OUT_OVERFLOW: u64 = 5;
 
     /// Max U64 const.
-    const U64_MAX: u64 = 18446744073709551614;
+    const MAX_SUPPLY: u256 = 0xfffffffffffffffe;
 
     /// Event that's emitted if a swap event occurs.
     struct SwapExecuted has drop, copy {
@@ -72,12 +74,7 @@ module token_bridge_relayer::redeem {
 
         // Verify that the token is accepted by this contract and that
         // the sender of the Wormhole message is a trusted contract.
-        let (is_valid, reason) = verify_transfer<C>(
-            t_state,
-            emitter_chain_id,
-            &transfer_payload
-        );
-        assert!(is_valid, reason);
+        verify_transfer<C>(t_state, emitter_chain_id, &transfer_payload);
 
         // Decode the `TransferWithRelay` message.
         let relay_msg = message::deserialize(
@@ -95,10 +92,7 @@ module token_bridge_relayer::redeem {
         );
 
         // Send the tokens to the recipient.
-        transfer::public_transfer(
-            coins,
-            recipient
-        );
+        pay::keep(coins, ctx);
     }
 
     /// `complete_transfer_with_relay` calls Wormhole's Token Bridge contract
@@ -135,16 +129,11 @@ module token_bridge_relayer::redeem {
 
         // Verify that the token is accepted by this contract and that
         // the sender of the Wormhole message is a trusted contract.
-        let (is_valid, reason) = verify_transfer<C>(
-            t_state,
-            emitter_chain_id,
-            &transfer_payload
-        );
-        assert!(is_valid, reason);
+        verify_transfer<C>(t_state, emitter_chain_id, &transfer_payload);
 
         // Parse the `TransferWithRelay` message.
         let relay_msg = message::deserialize(
-            transfer_with_payload::payload(&transfer_payload)
+            transfer_with_payload::take_payload(transfer_payload)
         );
 
         // Parse the `recipient` from the transfer with relay message and
@@ -155,11 +144,8 @@ module token_bridge_relayer::redeem {
         assert!(recipient != tx_context::sender(ctx), E_INVALID_CALLER_FOR_ACTION);
 
         // Fetch token decimals.
-        let decimals = token_registry::coin_decimals<C>(
-            &bridge_state::verified_asset<C>(
-                token_bridge_state
-            )
-        );
+        let verified = bridge_state::verified_asset<C>(token_bridge_state);
+        let decimals = token_registry::coin_decimals<C>(&verified);
 
         // Denormalize the encoded message values.
         let denormalized_relayer_fee = normalized_amount::to_raw(
@@ -184,33 +170,22 @@ module token_bridge_relayer::redeem {
                 recipient,
                 ctx
             );
-
-            // Bail out.
-            return
-        };
-
-        // Fetch the address of the transferred coin. This address will
-        // be emitted in the `SwapExecuted` event.
-        let coin_address = token_registry::token_address<C>(
-            &bridge_state::verified_asset<C>(
-                token_bridge_state
-            )
-        );
-
-        // If this code executes, we know that swaps are enabled, the user
-        // has elected to perform a swap, and that a relayer is redeeming
-        // the transaction. Handle the transfer.
-        handle_transfer_and_swap<C>(
-            t_state,
-            denormalized_relayer_fee,
-            denormalized_to_native_token_amount,
-            coins,
-            decimals,
-            external_address::to_address(coin_address),
-            native_coins,
-            recipient,
-            ctx
-        );
+        } else {
+            // If this code executes, we know that swaps are enabled, the user
+            // has elected to perform a swap, and that a relayer is redeeming
+            // the transaction. Handle the transfer.
+            handle_transfer_and_swap<C>(
+                t_state,
+                denormalized_relayer_fee,
+                denormalized_to_native_token_amount,
+                coins,
+                decimals,
+                token_registry::token_address<C>(&verified),
+                native_coins,
+                recipient,
+                ctx
+            );
+        }
     }
 
     // Getters.
@@ -261,10 +236,7 @@ module token_bridge_relayer::redeem {
         };
 
         // Catch overflow.
-        assert!(
-            max_swap_amount_in <= (U64_MAX as u256),
-            E_SWAP_IN_OVERFLOW
-        );
+        assert!(max_swap_amount_in <= MAX_SUPPLY, E_SWAP_IN_OVERFLOW);
 
         // Return.
         (max_swap_amount_in as u64)
@@ -315,7 +287,7 @@ module token_bridge_relayer::redeem {
 
         // Catch overflow.
         assert!(
-            native_swap_amount_out <= (U64_MAX as u256),
+            native_swap_amount_out <= MAX_SUPPLY,
             E_SWAP_OUT_OVERFLOW
         );
 
@@ -329,23 +301,20 @@ module token_bridge_relayer::redeem {
         t_state: &State,
         emitter_chain_id: u16,
         transfer_payload: &TransferWithPayload,
-    ): (bool, u64) {
+    ) {
         // Check that the coin is registered with this contract.
-        if (!relayer_state::is_registered_token<C>(t_state)) {
-            return (false, E_UNREGISTERED_COIN)
-        };
+        assert!(relayer_state::is_registered_token<C>(t_state), E_UNREGISTERED_COIN);
 
         // Check that the emitter is a registered contract.
-        if(
-            *relayer_state::foreign_contract_address(
+        let emitter =
+            relayer_state::foreign_contract_address(
                 t_state,
                 emitter_chain_id
-            ) != transfer_with_payload::sender(transfer_payload)
-        ) {
-            return (false, E_UNREGISTERED_FOREIGN_CONTRACT)
-        };
-
-        (true, 0)
+            );
+        assert!(
+            emitter == transfer_with_payload::sender(transfer_payload),
+            E_UNREGISTERED_FOREIGN_CONTRACT
+        );
     }
 
     fun handle_transfer_without_swap<C>(
@@ -356,31 +325,15 @@ module token_bridge_relayer::redeem {
         ctx: &mut TxContext
     ) {
         if (relayer_fee > 0) {
-            let coins_for_relayer = coin::split(
-                &mut coins,
-                relayer_fee,
-                ctx
-            );
-
             // Send the caller the relayer fee.
-            transfer::public_transfer(
-                coins_for_relayer,
-                tx_context::sender(ctx)
-            );
+            pay::split(&mut coins, relayer_fee, ctx);
         };
 
         // Send the original coin object to the recipient.
         transfer::public_transfer(coins, recipient);
 
         // Return any native coins to the relayer.
-        if (coin::value(&native_coins) > 0) {
-            transfer::public_transfer(
-                native_coins,
-                tx_context::sender(ctx)
-            );
-        } else {
-            coin::destroy_zero<SUI>(native_coins);
-        }
+        coin_utils::return_nonzero(native_coins, ctx);
     }
 
     fun handle_transfer_and_swap<C>(
@@ -389,7 +342,7 @@ module token_bridge_relayer::redeem {
         to_native_token_amount: u64,
         coins: Coin<C>,
         decimals: u8,
-        coin_address: address,
+        coin_address: ExternalAddress,
         native_coins: Coin<SUI>,
         recipient: address,
         ctx: &mut TxContext
@@ -398,15 +351,12 @@ module token_bridge_relayer::redeem {
         // return for the specified `to_native_token_amount`. This method will
         // override the `to_native_token_amount` if the specified amount is too
         // large too swap (based on the `max_to_native_amount` for the token).
-        let (native_amount_for_recipient, to_native_token_amount) =
+        let native_amount_for_recipient =
             calculate_native_amount_for_recipient<C>(
                 t_state,
-                to_native_token_amount,
+                &mut to_native_token_amount,
                 decimals
             );
-
-        // Cache the `relayer` address.
-        let relayer = tx_context::sender(ctx);
 
         // Perform the swap is the `native_amount_for_recipient` is nonzero.
         if (native_amount_for_recipient > 0) {
@@ -418,107 +368,74 @@ module token_bridge_relayer::redeem {
                 E_INSUFFICIENT_NATIVE_COIN
             );
 
-            // Calculate the relayer refund. Send the native coins
-            // to the recipient and the refund to the relayer.
-            let relayer_refund =
-                native_coin_value - native_amount_for_recipient;
-
-            // The amount of transferred coins to send the recipient after
-            // accounting for the swap.
-            let native_coins_for_recipient;
-
-            if (relayer_refund > 0) {
-                native_coins_for_recipient = coin::split(
-                    &mut native_coins,
-                    native_coin_value - relayer_refund,
-                    ctx
-                );
-
-                // Return the refund amount to the relayer.
-                transfer::public_transfer(
-                    native_coins,
-                    relayer
-                );
-            } else {
-                native_coins_for_recipient = native_coins;
-            };
-
-            // Send the native coins to the `recipient`.
-            transfer::public_transfer(native_coins_for_recipient, recipient);
+            // Send the native coins to the recipient and the refund to the
+            // relayer. The amount of transferred coins to send the recipient
+            // after accounting for the swap.
+            pay::split_and_transfer(
+                &mut native_coins,
+                native_amount_for_recipient,
+                recipient,
+                ctx
+            );
 
             // Event swap event.
             event::emit(
                 SwapExecuted {
                     recipient,
-                    relayer,
-                    coin: coin_address,
+                    relayer: tx_context::sender(ctx),
+                    coin: external_address::to_address(coin_address),
                     coin_amount: to_native_token_amount,
                     sui_amount: native_amount_for_recipient
                 }
             )
-        } else {
-            // Set the `to_native_token_amount` to zero since the
-            // `native_amount_for_recipient` is zero and no swap will occur.
-            to_native_token_amount = 0;
-
-            // Return the `native_coins` object to the relayer.
-            transfer::public_transfer(native_coins, relayer);
         };
 
-        // Compute the amount of transferred tokens to send to the relayer.
-        let amount_for_relayer = relayer_fee + to_native_token_amount;
+        // Return the `native_coins` object to the relayer.
+        coin_utils::return_nonzero(native_coins, ctx);
 
         // Split the coin object based on the amounts for the relayer and
-        // `recipient`.
-        let coins_for_recipient;
-        if (amount_for_relayer > 0) {
-            let coin_amount = coin::value(&coins);
+        // `recipient` and transfer these tokens to him. The relayer will be
+        // receiving his fee and the token amount after the swap for the
+        // recipient.
+        let remaining_amount =
+            coin::value(&coins) - relayer_fee - to_native_token_amount;
+        pay::split_and_transfer(&mut coins, remaining_amount, recipient, ctx);
 
-            // Split the coins.
-            coins_for_recipient = coin::split(
-                &mut coins,
-                coin_amount - amount_for_relayer,
-                ctx
-            );
-
-            // Pay the relayer designated coins.
-            transfer::public_transfer(coins, relayer);
-        } else {
-            coins_for_recipient = coins;
-        };
-
-        // Finally pay the recipient the transferred tokens.
-        transfer::public_transfer(coins_for_recipient, recipient);
+        // Pay the relayer designated coins after the split.
+        coin_utils::return_nonzero(coins, ctx);
     }
 
     fun calculate_native_amount_for_recipient<C>(
         t_state: &State,
-        to_native_token_amount: u64,
+        to_native_token_amount: &mut u64,
         decimals: u8
-    ): (u64, u64) {
-        if (to_native_token_amount > 0) {
+    ): u64 {
+        if (*to_native_token_amount > 0) {
             // Compute the max amount of tokens the `recipient` can swap.
             // Override the `to_native_token_amount` if its value is larger
             // than the `max_swap_amount`.
-            let max_swap_amount = calculate_max_swap_amount_in<C>(
-                t_state,
-                decimals
-            );
-            if (to_native_token_amount > max_swap_amount) {
-                to_native_token_amount = max_swap_amount;
+            let max_swap_amount =
+                calculate_max_swap_amount_in<C>(t_state, decimals);
+
+            if (*to_native_token_amount > max_swap_amount) {
+                *to_native_token_amount = max_swap_amount;
             };
 
             // Compute the amount of native asset to send the recipient.
-            return (
+            let amount_for_recipient =
                 calculate_native_swap_amount_out<C>(
                     t_state,
-                    to_native_token_amount,
+                    *to_native_token_amount,
                     decimals
-                ),
-                to_native_token_amount
-            )
+                );
+
+            if (amount_for_recipient == 0) {
+                *to_native_token_amount = 0;
+            };
+
+            amount_for_recipient
         } else {
-            return (0, 0)
+            0
         }
     }
 }
@@ -562,7 +479,7 @@ module token_bridge_relayer::complete_transfer_tests {
     const TEST_INITIAL_SUI_SWAP_RATE: u64 = 2000000000; // $20.
     const TEST_INITIAL_COIN_SWAP_RATE: u64 = 100000000; // $1.
     const TEST_INITIAL_MAX_SWAP_AMOUNT: u64 = 1000000000; // 10 SUI.
-    const U64_MAX: u64 = 18446744073709551614;
+    const MAX_SUPPLY: u64 = 0xfffffffffffffffe;
 
     #[test]
     public fun complete_transfer() {
@@ -730,7 +647,7 @@ module token_bridge_relayer::complete_transfer_tests {
     public fun complete_transfer_maximum_amount() {
         // Test variables.
         let vaa = x"0100000000010005f6332b5352b67eda5342c30d759a44e99f6140e60708b407ad2e0b5e3aeae57d37c997079f2a698a937f7c93d2fb72ce107e9d1d604e676ef2ba83b4168e5b006425f0d80000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa58500000000000000000103000000000000000000000000000000000000000000000000fffffffffffffffee4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a070015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
-        let test_amount = U64_MAX;
+        let test_amount = MAX_SUPPLY;
 
         // Test setup.
         let (recipient, _) = init_tests::people();
@@ -1513,7 +1430,7 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Store created object IDs.
         let created_ids = test_scenario::created(&effects);
-        assert!(vector::length(&created_ids) == 2, 0);
+        assert!(vector::length(&created_ids) == 3, 0);
 
         // Balance check the recipient.
         {
@@ -1639,7 +1556,7 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Store created object IDs.
         let created_ids = test_scenario::created(&effects);
-        assert!(vector::length(&created_ids) == 2, 0);
+        assert!(vector::length(&created_ids) == 3, 0);
 
         // Balance check the recipient.
         {
@@ -1764,7 +1681,7 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Store created object IDs.
         let created_ids = test_scenario::created(&effects);
-        assert!(vector::length(&created_ids) == 2, 0);
+        assert!(vector::length(&created_ids) == 3, 0);
 
         // Balance check the recipient.
         {
@@ -1889,7 +1806,7 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Store created object IDs.
         let created_ids = test_scenario::created(&effects);
-        assert!(vector::length(&created_ids) == 2, 0);
+        assert!(vector::length(&created_ids) == 3, 0);
 
         // Balance check the recipient.
         {
@@ -2017,7 +1934,7 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Store created object IDs.
         let created_ids = test_scenario::created(&effects);
-        assert!(vector::length(&created_ids) == 2, 0);
+        assert!(vector::length(&created_ids) == 3, 0);
 
         // Balance check the recipient.
         {
@@ -2145,7 +2062,7 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Store created object IDs.
         let created_ids = test_scenario::created(&effects);
-        assert!(vector::length(&created_ids) == 2, 0);
+        assert!(vector::length(&created_ids) == 3, 0);
 
         // Balance check the recipient.
         {
@@ -2703,7 +2620,7 @@ module token_bridge_relayer::complete_transfer_tests {
     public fun complete_transfer_with_relay_coin_8_maximum_amount() {
         // Test variables.
         let vaa = x"01000000000100efd41ec7a424159e29a36f33eda196af96f51e20dc685b98f73bc91b0332d48e6a7b4992d2f08490e5851ad39423282c5c36a892596447cd07d783e7ca983bf0016426e2390000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa58500000000000000000103000000000000000000000000000000000000000000000000fffffffffffffffee4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a070015000000000000000000000000000000000000000000000000000000000000006901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
-        let test_amount = U64_MAX;
+        let test_amount = MAX_SUPPLY;
         let swap_amount = 0;
 
         // Test setup.
@@ -2802,7 +2719,7 @@ module token_bridge_relayer::complete_transfer_tests {
         // Since amounts are truncated for token bridge transfers for tokens
         // with greater than 8 decimals, we need to subtract 14 from the max
         // u64 amount.
-        let test_amount = U64_MAX - 14;
+        let test_amount = MAX_SUPPLY - 14;
         let swap_amount = 0;
 
         // Test setup.
@@ -3091,7 +3008,7 @@ module token_bridge_relayer::complete_transfer_tests {
     public fun complete_transfer_with_relay_max_swap_amount_overflow_recovery() {
         // Test variables.
         let vaa = x"01000000000100c64cb15dc24b25f0197973cfdbcb2471badd6081244f62b7623d1af02c246b1148d5a3f43243e5babebc067874411ef5a4580d3f349481b15496c3d3923ef44c006426e4000000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa58500000000000000000103000000000000000000000000000000000000000000000000fffffffffffffffee4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a0700150000000000000000000000000000000000000000000000000000000000000069010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fffffffffffffffd0000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
-        let test_amount = U64_MAX;
+        let test_amount = MAX_SUPPLY;
         let _swap_amount = 18446744073709551613;
 
         // Test setup.
@@ -3189,6 +3106,7 @@ module token_bridge_relayer::complete_transfer_tests {
                 test_scenario::take_from_sender<Coin<COIN_8>>(scenario);
 
             // Validate the object's value.
+            sui::test_utils::assert_eq(coin::value(&token_object), test_amount);
             assert!(coin::value(&token_object) == test_amount, 0);
 
             // Bye bye.
@@ -3644,7 +3562,7 @@ module token_bridge_relayer::complete_transfer_tests {
     public fun cannot_complete_transfer_with_relay_max_swap_amount_overflow() {
         // Test variables.
         let vaa = x"01000000000100d1ddcc19a034feda60e1553e68d5c193ba88419417a091a8b75a99aadcdc1aae412147c94900ee3873564c296dee0fae8e2ea5ff0d36198c9cbd3b843fc8b13f016426e9d60000000000020000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa58500000000000000000103000000000000000000000000000000000000000000000000fffffffffffffffee4d0bcbdc026b98a242f13e2761601107c90de400f0c24cdafea526abf201c260015a80dc5b12f68ff8278c4eb48917aaa3572dde5420c19f8b74e0099eb13ed1a0700150000000000000000000000000000000000000000000000000000000000000069010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fffffffffffffffd0000000000000000000000009f082e1be326e8863bac818f0c08ae28a8d47c99";
-        let test_amount = U64_MAX;
+        let test_amount = MAX_SUPPLY;
         let _swap_amount = 18446744073709551613;
 
         // Test setup.
@@ -4254,7 +4172,7 @@ module token_bridge_relayer::complete_transfer_tests {
             // Attempt to calculate the swap amount.
             redeem::calculate_native_swap_amount_out<COIN_8>(
                 &token_bridge_relayer_state,
-                U64_MAX,
+                MAX_SUPPLY,
                 8 // Coin decimals.
             );
         };
@@ -4411,7 +4329,7 @@ module token_bridge_relayer::complete_transfer_tests {
             owner::update_swap_rate<SUI>(
                 &owner_cap,
                 &mut token_bridge_relayer_state,
-                U64_MAX
+                MAX_SUPPLY
             );
 
             // Decrease the COIN_8 swap rate.
@@ -4490,7 +4408,7 @@ module token_bridge_relayer::complete_transfer_tests {
             owner::update_swap_rate<COIN_8>(
                 &owner_cap,
                 &mut token_bridge_relayer_state,
-                U64_MAX
+                MAX_SUPPLY
             );
 
             token_bridge_relayer::state::native_swap_rate<COIN_8>(

@@ -27,7 +27,7 @@ module token_bridge_relayer::relayer_fees {
     const E_RELAYER_FEE_OVERFLOW: u64 = 3;
 
     /// Max U64 const.
-    const U64_MAX: u64 = 18446744073709551614;
+    const MAX_SUPPLY: u256 = 0xfffffffffffffffe;
 
     /// Dynamic object field key.
     const KEY: vector<u8> = b"relayer_fees";
@@ -105,7 +105,7 @@ module token_bridge_relayer::relayer_fees {
         let token_fee = numerator / denominator;
 
         // Catch overflow.
-        assert!(token_fee <= (U64_MAX as u256), E_RELAYER_FEE_OVERFLOW);
+        assert!(token_fee <= MAX_SUPPLY, E_RELAYER_FEE_OVERFLOW);
 
         // Return u64 casted relayer fee.
         (token_fee as u64)

@@ -4,7 +4,7 @@
 module token_bridge_relayer::state {
     // Sui dependencies.
     use sui::sui::SUI;
-    use sui::object::{Self, UID, ID};
+    use sui::object::{Self, UID};
     use sui::tx_context::{TxContext};
 
     // Wormhole dependencies.
@@ -19,6 +19,8 @@ module token_bridge_relayer::state {
 
     // Only the owner should be allowed to mutate `State`.
     friend token_bridge_relayer::owner;
+    friend token_bridge_relayer::redeem;
+    friend token_bridge_relayer::transfer;
 
     /// Errors.
     const E_INVALID_CHAIN: u64 = 0;
@@ -27,7 +29,7 @@ module token_bridge_relayer::state {
     const E_INVALID_NATIVE_SWAP_RATE: u64 = 3;
 
     /// Max U64 const.
-    const U64_MAX: u64 = 18446744073709551614;
+    const MAX_SUPPLY: u256 = 0xfffffffffffffffe;
 
     /// Object that holds this contract's state. `foreign_contracts` and
     /// `relayer_fees` are stored as dynamic object fields in this state object.
@@ -53,7 +55,7 @@ module token_bridge_relayer::state {
     /// objects are also created. This method should only be executed from the
     /// `owner::create_state` method.
     public(friend) fun new(
-        wormhole_state: &mut WormholeState,
+        wormhole_state: &WormholeState,
         swap_rate_precision: u64,
         relayer_fee_precision: u64,
         ctx: &mut TxContext
@@ -205,12 +207,8 @@ module token_bridge_relayer::state {
 
     // Getters.
 
-    public fun emitter_cap(self: &State): &EmitterCap {
+    public(friend) fun emitter_cap(self: &State): &EmitterCap {
         &self.emitter_cap
-    }
-
-    public fun id(self: &State): &ID {
-        object::borrow_id(self)
     }
 
     public fun contract_registered(self: &State, chain: u16): bool {
@@ -247,7 +245,7 @@ module token_bridge_relayer::state {
         // Catch overflow.
         assert!(
             native_swap_rate > 0 &&
-            native_swap_rate <= (U64_MAX as u256),
+            native_swap_rate <= MAX_SUPPLY,
             E_INVALID_NATIVE_SWAP_RATE
         );
 
@@ -265,8 +263,8 @@ module token_bridge_relayer::state {
     public fun foreign_contract_address(
         self: &State,
         chain: u16
-    ): &ExternalAddress {
-        foreign_contracts::contract_address(&self.id, chain)
+    ): ExternalAddress {
+        *foreign_contracts::contract_address(&self.id, chain)
     }
 
     public fun usd_relayer_fee(self: &State, chain: u16): u64 {
