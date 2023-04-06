@@ -20,13 +20,12 @@ fi
 echo "fetching Sui programs from wormhole repo"
 git clone \
     --depth 1 \
-    --branch sui/token-bridge-cleanup \
+    --branch sui/integration_v2 \
     --filter=blob:none \
     --sparse \
     https://github.com/wormhole-foundation/wormhole \
     tmp-wormhole > /dev/null 2>&1
 cd tmp-wormhole
-git reset --hard ab5220a918b5912f8b20ea6ddff4c1d83e801014
 
 ### Checkout sui directory and move that to this program directory
 git sparse-checkout set sui > /dev/null 2>&1
