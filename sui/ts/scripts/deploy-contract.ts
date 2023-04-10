@@ -9,12 +9,15 @@ import yargs from "yargs";
 import YAML from "yaml";
 import * as fs from "fs";
 import {getCreatedFromTransaction} from "../src";
+import * as path from "path";
 
 const VERSION = "0.1.0";
 
 async function main() {
   const {provider, signer, packagePath, buildMoveToml, jsonOutput} =
     await setUp();
+
+  console.log(packagePath);
 
   const existingMoveToml = `${packagePath}/Move.toml`;
 
@@ -182,7 +185,7 @@ async function setUp(): Promise<DeploySetup> {
     .parse();
 
   // Is packagePath okay?
-  const packagePath = args.p;
+  const packagePath = `${path.resolve()}/${args.p}`;
   if (!fs.existsSync(packagePath)) {
     throw new Error("Invalid package path.");
   }
@@ -214,6 +217,18 @@ async function setUp(): Promise<DeploySetup> {
   // Create signer using active address.
   const signer = (() => {
     const activeAddress: string = config["active_address"];
+
+    const test = JSON.parse(
+      fs.readFileSync(config["keystore"]["File"], {encoding: "utf8"})
+    );
+
+    const keyp = Ed25519Keypair.fromSeed(
+      Buffer.from(test[4], "base64").subarray(1)
+    );
+
+    console.log(keyp.getPublicKey().toSuiAddress());
+    console.log(activeAddress);
+
     const keypair: Ed25519Keypair = JSON.parse(
       fs.readFileSync(config["keystore"]["File"], {encoding: "utf8"})
     )
@@ -225,6 +240,7 @@ async function setUp(): Promise<DeploySetup> {
           // Fun intermixing of addresses with and without 0x.
           keypair.getPublicKey().toSuiAddress() == activeAddress.substring(2)
       );
+
     return new RawSigner(keypair, provider);
   })();
 

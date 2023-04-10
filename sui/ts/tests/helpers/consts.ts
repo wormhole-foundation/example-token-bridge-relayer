@@ -1,23 +1,26 @@
 // wallets
 export const WALLET_PRIVATE_KEY = Buffer.from(
-  "AAVVILgsWlDxuSAi2m/8vA9qIsH4MSeAbX2FxzfT/ak9",
+  "AEDorSqM3nYmNeja26rmaddyyZ4dMpSoEYWxT71+AWbD",
   "base64"
 ).subarray(1);
 export const RELAYER_PRIVATE_KEY = Buffer.from(
-  "ADqqCLztTLs2jpl/Akh0Vw3ISkCLZ2oN0TFhSTAbqM8E",
+  "AJaQFexEWr4WS7UxY2yEBNZLTI0FCkI8QNWm23bUNA10",
   "base64"
 ).subarray(1);
 export const CREATOR_PRIVATE_KEY = Buffer.from(
-  "ABbk8FH9fDBUt4XxqfzA2RlRQp1HuiQGmw4J3k7wN172",
+  "ACMS4emBUzUD0vcYoiSM2Z8i2qs4MMrKeFRZY3L/pXYK",
   "base64"
 ).subarray(1);
 
 // wormhole
 export const WORMHOLE_ID = process.env.TESTING_WORMHOLE_ID!;
-export const WORMHOLE_CREATOR_CAPABILITY_ID =
-  process.env.TESTING_WORMHOLE_CREATOR_CAPABILITY_ID!;
+export const WORMHOLE_DEPLOYER_CAPABILITY_ID =
+  process.env.TESTING_WORMHOLE_DEPLOYER_CAPABILITY_ID!;
+export const WORMHOLE_UPGRADE_CAPABILITY_ID =
+  process.env.TESTING_WORMHOLE_UPGRADE_CAPABILITY_ID!;
 export const WORMHOLE_STATE_ID = process.env.TESTING_WORMHOLE_STATE_ID!;
 export const WORMHOLE_FEE = "0";
+export const WORMHOLE_GUARDIAN_LIFE = "4294967294";
 
 // token bridge
 export const TOKEN_BRIDGE_ID = process.env.TESTING_TOKEN_BRIDGE_ID!;
@@ -43,7 +46,7 @@ export const EXAMPLE_COINS_ID = process.env.TESTING_EXAMPLE_COINS_ID!;
 export const COIN_8_TREASURY_ID = process.env.TESTING_COIN_8_TREASURY_ID!;
 export const COIN_8_TYPE = `${EXAMPLE_COINS_ID}::coin_8::COIN_8`;
 
-// 9-decimal coin (COIN_10)
+// 10-decimal coin (COIN_10)
 export const COIN_10_TREASURY_ID = process.env.TESTING_COIN_10_TREASURY_ID!;
 export const COIN_10_TYPE = `${EXAMPLE_COINS_ID}::coin_10::COIN_10`;
 

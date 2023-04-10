@@ -5,7 +5,7 @@ version = "0.1.0"
 [dependencies.Sui]
 git = "https://github.com/MystenLabs/sui.git"
 subdir = "crates/sui-framework/packages/sui-framework"
-rev = "81dbcf2b6cab07d623a1012bf31daf658963c765"
+rev = "ddfc3fa0768a38286787319603a5458a9ff91cc1"
 
 [dependencies.Wormhole]
 local = "../../dependencies/wormhole"
@@ -14,6 +14,4 @@ local = "../../dependencies/wormhole"
 local = "../../dependencies/token_bridge"
 
 [addresses]
-wormhole = "0xf9f8fc8afd2a9d2aa95aa1a6bebef4495d918305"
-token_bridge = "0x713b27973eac6da7824c76ea1ee1da95335cded2"
-token_bridge_relayer = "0x0"
+token_bridge_relayer = "0x8392cb2f16e5c5b7535c5946d8defffd95d6623c1a4c40f3b8e4d3dd2088bd3a"

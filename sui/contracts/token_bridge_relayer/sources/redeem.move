@@ -303,7 +303,10 @@ module token_bridge_relayer::redeem {
         transfer_payload: &TransferWithPayload,
     ) {
         // Check that the coin is registered with this contract.
-        assert!(relayer_state::is_registered_token<C>(t_state), E_UNREGISTERED_COIN);
+        assert!(
+            relayer_state::is_registered_token<C>(t_state),
+            E_UNREGISTERED_COIN
+        );
 
         // Check that the emitter is a registered contract.
         let emitter =
@@ -358,7 +361,7 @@ module token_bridge_relayer::redeem {
                 decimals
             );
 
-        // Perform the swap is the `native_amount_for_recipient` is nonzero.
+        // Perform the swap if is the `native_amount_for_recipient` is nonzero.
         if (native_amount_for_recipient > 0) {
             let native_coin_value = coin::value(&native_coins);
 

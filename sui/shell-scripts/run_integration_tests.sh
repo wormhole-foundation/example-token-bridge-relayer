@@ -6,6 +6,7 @@ if [ $? -eq 0 ]; then
     exit 1;
 fi
 
+DEPENDENCIES_DIR=$(pwd)/dependencies
 TEST_DIR=$(dirname $0)/../ts/tests
 SUI_CONFIG=$TEST_DIR/sui_config
 
@@ -20,21 +21,16 @@ sui start \
 sleep 1
 
 echo "deploying wormhole contracts to localnet"
-yarn deploy /dependencies/wormhole \
-    -c ts/tests/sui_config/client.yaml \
-    -m dependencies/wormhole.Move.localnet.toml
+bash $DEPENDENCIES_DIR/scripts/deploy.sh devnet \
+    -k ACMS4emBUzUD0vcYoiSM2Z8i2qs4MMrKeFRZY3L/pXYK
 
-# yarn deploy dependencies/token_bridge \
-#     -c ts/tests/sui_config/client.yaml \
-#     -m dependencies/token_bridge.Move.localnet.toml
+echo "deploying example coins"
+worm sui deploy \
+    $DEPENDENCIES_DIR/../contracts/example_coins \
+    -n devnet -k ACMS4emBUzUD0vcYoiSM2Z8i2qs4MMrKeFRZY3L/pXYK
 
-# echo "deploying example coins"
-# yarn deploy contracts/example_coins \
-#     -c ts/tests/sui_config/client.yaml \
-#     -m contracts/example_coins/Move.localnet.toml
-
-# ## run environment check here
-# npx ts-mocha -t 1000000 $TEST_DIR/00_environment.ts
+## run environment check here
+npx ts-mocha -t 1000000 $TEST_DIR/00_environment.ts
 
 # ## deploy scaffolding contracts
 # echo "deploying scaffolding examples"
