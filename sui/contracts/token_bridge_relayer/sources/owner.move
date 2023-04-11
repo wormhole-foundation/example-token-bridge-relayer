@@ -61,7 +61,7 @@ module token_bridge_relayer::owner {
         // Hardcode the initial swap rate and relayer fee precision state
         // variables.
         let swap_rate_precision: u64 = 100000000; // 1e8
-        let relayer_fee_precision: u64 = 10000000; // 1e8
+        let relayer_fee_precision: u64 = 100000000; // 1e8
 
         // Create and share state.
         transfer::public_share_object(

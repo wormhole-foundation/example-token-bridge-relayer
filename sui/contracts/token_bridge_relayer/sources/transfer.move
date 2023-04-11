@@ -883,7 +883,7 @@ module token_bridge_relayer::transfer_tests {
         // less than the to_native_token_amount + relayer_fee.
         let coin_supply: u64 = 42069;
         let to_native_token_amount = 42000;
-        let relayer_fee: u64 = 69;
+        let relayer_fee: u64 = 690;
 
         // Other.
         let target_recipient =
