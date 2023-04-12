@@ -29,17 +29,14 @@ worm sui deploy \
     $DEPENDENCIES_DIR/../contracts/example_coins \
     -n devnet -k ACMS4emBUzUD0vcYoiSM2Z8i2qs4MMrKeFRZY3L/pXYK
 
-## run environment check here
-npx ts-mocha -t 1000000 $TEST_DIR/00_environment.ts
+## deploy relayer contracts
+echo "deploying relayer"
+worm sui deploy \
+    $DEPENDENCIES_DIR/../contracts/token_bridge_relayer \
+    -n devnet -k ACMS4emBUzUD0vcYoiSM2Z8i2qs4MMrKeFRZY3L/pXYK
 
-# ## deploy scaffolding contracts
-# echo "deploying scaffolding examples"
-# yarn deploy contracts/02_token_bridge_relayer \
-#     -c ts/tests/sui_config/client.yaml \
-#     -m contracts/02_token_bridge_relayer/Move.localnet.toml
-
-# ## run contract tests here
-# npx ts-mocha -t 1000000 $TEST_DIR/0[1-9]*.ts
+## run contract tests here
+npx ts-mocha -t 1000000 $TEST_DIR/0[0-9]*.ts
 
 # nuke
 pkill sui

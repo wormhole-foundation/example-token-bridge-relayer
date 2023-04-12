@@ -1,119 +1,90 @@
-import {
-  JsonRpcProvider,
-  RawSigner,
-  SuiExecuteTransactionResponse,
-} from "@mysten/sui.js";
+import {JsonRpcProvider, RawSigner, TransactionBlock} from "@mysten/sui.js";
 import {execSync} from "child_process";
 import {ethers} from "ethers";
 import {WORMHOLE_STATE_ID} from "../tests/helpers";
 import * as fs from "fs";
 
-export function computeRelayerFee(
-  amount: number,
-  relayerFee: number,
-  relayerFeePrecision: number
-) {
-  return Math.floor((amount * relayerFee) / relayerFeePrecision);
-}
-
-export async function getWormholeFeeCoins(
-  provider: JsonRpcProvider,
-  signer: RawSigner
-) {
-  // Fetch Sui coin object.
-  const [sui] = await provider
-    .getCoins(await signer.getAddress(), "0x2::sui::SUI")
-    .then((result) => result.data);
-
-  // Fetch the wormhole sate.
+export async function getWormholeFee(provider: JsonRpcProvider) {
+  // Fetch the wormhole state fields.
   const fields = await getObjectFields(provider, WORMHOLE_STATE_ID);
 
-  // Split the Sui object based on the wormhole fee.
-  const splitSuiCoin = await signer
-    .splitCoin({
-      coinObjectId: sui.coinObjectId,
-      splitAmounts: [Number(fields.message_fee)],
-      gasBudget: 1000,
-    })
-    .then(async (tx) => {
-      const created = await getCreatedFromTransaction(tx).then(
-        (objects) => objects[0]
-      );
-      return "reference" in created ? created.reference.objectId : null;
-    });
-
-  return splitSuiCoin;
-}
-
-export async function getRegisteredAssetInfo(
-  provider: JsonRpcProvider,
-  ownerId: string,
-  assetType: string
-) {
-  // Check registered asset.
-  const dynamicTokensData = await provider
-    .getDynamicFields(ownerId)
-    .then((result) => result.data);
-
-  const dynamicItem = dynamicTokensData.find((item) =>
-    item.name.includes(assetType)
-  );
-
-  // Throw error if the dynamic object is not found.
-  if (dynamicItem == undefined) {
-    Promise.reject("Asset info not found.");
+  if (fields === null) {
+    Promise.reject("State object not found.");
   }
 
-  // Fetch the asset info.
-  const assetInfo = await provider
-    .getDynamicFieldObject(ownerId, dynamicItem!.name)
-    .then((result) => {
-      if (
-        typeof result.details !== "string" &&
-        "data" in result.details &&
-        "fields" in result.details.data
-      ) {
-        return result.details.data.fields;
-      } else {
-        return null;
-      }
-    });
+  // Cache wormhole fee.
+  return fields!.fee_collector.fields.fee_amount;
+}
 
-  return assetInfo;
+export function getWormholeEvents(result: any) {
+  if ("events" in result) {
+    let wormholeEvents = [];
+    for (const event of result.events!) {
+      if (event.type.includes("WormholeMessage")) {
+        wormholeEvents.push(event);
+      }
+    }
+    return wormholeEvents;
+  } else {
+    return null;
+  }
 }
 
 export async function getObjectFields(
   provider: JsonRpcProvider,
   objectId: string
 ) {
-  const objectInfo = await provider.getObject(objectId);
-  if (
-    typeof objectInfo !== "string" &&
-    "details" in objectInfo &&
-    typeof objectInfo.details !== "string" &&
-    "data" in objectInfo.details &&
-    "fields" in objectInfo.details.data
-  ) {
-    return objectInfo.details.data.fields;
-  }
+  // Fetch object.
+  const result = await provider.getObject({
+    id: objectId,
+    options: {showContent: true},
+  });
 
-  return Promise.reject("not shared object");
+  if (
+    typeof result.data!.content !== "string" &&
+    "fields" in result.data!.content!
+  ) {
+    return result.data!.content.fields;
+  } else {
+    return null;
+  }
+}
+
+export async function getDynamicFieldsByType(
+  provider: JsonRpcProvider,
+  parentId: string,
+  type: string
+) {
+  // Fetch dynamic fields.
+  const dynamicFields = await provider
+    .getDynamicFields({parentId: parentId})
+    .then((result) => result.data);
+
+  // Fetch the target field by type.
+  const targetObject = dynamicFields.filter((id) =>
+    id.objectType.includes(type)
+  );
+
+  return targetObject;
 }
 
 export async function getDynamicObjectFields(
   provider: JsonRpcProvider,
   parentId: string,
-  childName: string
+  childName: any
 ) {
   const dynamicObjectFieldInfo = await provider
-    .getDynamicFieldObject(parentId, childName)
+    .getDynamicFieldObject({
+      parentId: parentId,
+      name: childName,
+    })
     .then((result) => {
       if (
-        typeof result.details !== "string" &&
-        "data" in result.details &&
-        "fields" in result.details.data
+        typeof result.data!.content !== "string" &&
+        "content" in result.data! &&
+        "fields" in result.data!.content!
       ) {
-        return result.details.data;
+        return result.data?.content;
       } else {
         return null;
       }
@@ -129,7 +100,7 @@ export async function getDynamicObjectFields(
 export async function getTableFromDynamicObjectField(
   provider: JsonRpcProvider,
   parentId: string,
-  childName: string
+  childName: any
 ) {
   const dynamicObjectInfo = await getDynamicObjectFields(
     provider,
@@ -139,7 +110,7 @@ export async function getTableFromDynamicObjectField(
 
   // Fetch the table's keys
   const keys = await provider
-    .getDynamicFields(dynamicObjectInfo!.fields.id.id)
+    .getDynamicFields({parentId: dynamicObjectInfo!.fields.id.id})
     .then((result) => result.data);
 
   if (keys.length == 0) {
@@ -151,66 +122,42 @@ export async function getTableFromDynamicObjectField(
     keys.map(async (key) => {
       // Fetch the value
       const valueObject = await getObjectFields(provider, key.objectId);
-      return [key.name, valueObject.value.fields];
+      return [key.name.value, valueObject!.value];
     })
   );
 
   return tableTuples;
 }
 
-export async function getCreatedFromTransaction(
-  txResponse: SuiExecuteTransactionResponse
+export async function getCoinWithHighestBalance(
+  provider: JsonRpcProvider,
+  walletAddress: string,
+  coinType: string
 ) {
-  if ("effects" in txResponse) {
-    const created = txResponse.effects.effects.created;
-    if (created !== undefined) {
-      return created;
+  const coins = await provider
+    .getCoins({
+      owner: walletAddress,
+      coinType: coinType,
+    })
+    .then((result) => result.data);
+
+  if (coins.length == 0) {
+    return Promise.reject("no coins with balance found");
+  }
+
+  let balanceMax = 0;
+  let index = 0;
+
+  // Find the coin with the highest balance.
+  for (let i = 0; i < coins.length; i++) {
+    let balance = coins[i].balance;
+    if (balance > balanceMax) {
+      balanceMax = balance;
+      index = i;
     }
   }
 
-  return Promise.reject("no created objects in transaction response");
-}
-
-export async function getEventsFromTransaction(
-  provider: JsonRpcProvider,
-  txResponse: SuiExecuteTransactionResponse
-) {
-  if ("certificate" in txResponse) {
-    return provider
-      .getEvents(
-        {
-          Transaction: txResponse.certificate!.transactionDigest,
-        },
-        null,
-        null
-      )
-      .then((result) => result.data);
-  }
-
-  return Promise.reject("no effects found in transaction response");
-}
-
-export async function getMoveEventsFromTransaction(
-  provider: JsonRpcProvider,
-  txResponse: SuiExecuteTransactionResponse
-) {
-  const events = await getEventsFromTransaction(provider, txResponse).then(
-    (events) => events.map((evt) => evt.event)
-  );
-
-  const moveEvents = [];
-  for (const event of events) {
-    if ("moveEvent" in event) {
-      moveEvents.push(event.moveEvent);
-    }
-  }
-  return moveEvents;
-}
-
-export interface DeployedWrappedCoin {
-  id: string;
-  owner: string;
-  type: string;
+  return coins[index];
 }
 
 export function buildAndDeployWrappedCoin(
@@ -219,27 +166,27 @@ export function buildAndDeployWrappedCoin(
   fullPathToTokenBridgeDependency: string,
   vaa: Uint8Array | Buffer,
   deployCommand: string,
-  clientConfig?: string
-): DeployedWrappedCoin {
+  key?: string
+) {
   // Create source
   const buf = Buffer.isBuffer(vaa) ? vaa : Buffer.from(vaa);
   const coinMoveSource = `module template::wrapped_coin {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
-    use token_bridge::create_wrapped::create_wrapped_coin;
+    use token_bridge::create_wrapped::prepare_registration;
 
     struct WRAPPED_COIN has drop {}
 
     fun init(coin_witness: WRAPPED_COIN, ctx: &mut TxContext) {
         let vaa_bytes = x"${buf.toString("hex")}";
 
-        let wrapped = create_wrapped_coin(
-          vaa_bytes,
+        let wrapped = prepare_registration(
           coin_witness,
+          vaa_bytes,
           ctx
         );
-        transfer::transfer(
+        transfer::public_transfer(
             wrapped,
             tx_context::sender(ctx)
         );
@@ -258,8 +205,8 @@ version = "0.69.420"
 
 [dependencies.Sui]
 git = "https://github.com/MystenLabs/sui.git"
-subdir = "crates/sui-framework"
-rev = "0fe3e5c237f2f6410c66617cede5733015a17a36"
+subdir = "crates/sui-framework/packages/sui-framework"
+rev = "ddfc3fa0768a38286787319603a5458a9ff91cc1"
 
 [dependencies.TokenBridge]
 local = "${fullPathToTokenBridgeDependency}"
@@ -270,10 +217,10 @@ token_bridge = "${tokenBridgeId}"
 template = "0x0"`;
 
   // Make tmp directory
-  const now = Number(Date.now());
   const homeDir = require("os").homedir();
-  const tmpDir = `${homeDir}/.tmp_wrapped_coin.${now}`;
+  const tmpDir = `${homeDir}/template`;
   const tmpSources = `${tmpDir}/sources`;
+
   fs.mkdirSync(tmpSources, {recursive: true});
 
   // Write `coinMoveSource` to this sources directory
@@ -281,30 +228,15 @@ template = "0x0"`;
 
   // Write Move.toml
   fs.writeFileSync(`${tmpDir}/Move.toml`, moveToml, "utf-8");
+  fs.writeFileSync(`${tmpDir}/Move.devnet.toml`, moveToml, "utf-8");
 
   // Build and deploy
-  let fullDeployCommand: string;
-  if (clientConfig === undefined) {
-    fullDeployCommand = `${deployCommand} ${tmpDir} --json`;
-  } else {
-    fullDeployCommand = `${deployCommand} ${tmpDir} -c ${clientConfig} --json`;
-  }
+  let fullDeployCommand = `${deployCommand} ${tmpDir} -n devnet -k ${key}`;
 
   // Parse deployment output
   const output = execSync(fullDeployCommand, {
     encoding: "utf8",
   });
-
-  const jsonOutput = JSON.parse(output.split("\n")[3])[0];
-
-  // Finally purge the tmp directory
-  fs.rmSync(tmpDir, {recursive: true, force: true});
-
-  return {
-    id: jsonOutput.id,
-    owner: jsonOutput.owner,
-    type: jsonOutput.type,
-  };
 }
 
 export function tokenBridgeNormalizeAmount(

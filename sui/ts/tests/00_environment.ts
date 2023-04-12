@@ -17,14 +17,10 @@ import {
   RELAYER_PRIVATE_KEY,
   WETH_ID,
   CREATOR_PRIVATE_KEY,
-  WORMHOLE_DEPLOYER_CAPABILITY_ID,
-  WORMHOLE_UPGRADE_CAPABILITY_ID,
+  RAW_CREATOR_KEY,
   WORMHOLE_FEE,
-  WORMHOLE_GUARDIAN_LIFE,
   GOVERNANCE_CHAIN,
   WORMHOLE_STATE_ID,
-  TOKEN_BRIDGE_EMITTER_ID,
-  TOKEN_BRIDGE_CREATOR_CAPABILITY_ID,
   TOKEN_BRIDGE_STATE_ID,
   COIN_10_TREASURY_ID,
   COIN_8_TREASURY_ID,
@@ -40,15 +36,14 @@ import {
   localnetConnection,
   RawSigner,
   TransactionBlock,
+  SUI_CLOCK_OBJECT_ID,
 } from "@mysten/sui.js";
 import {
   buildAndDeployWrappedCoin,
-  getCreatedFromTransaction,
   getWormholeMessagesFromTransaction,
-  getObjectFields,
   getTableFromDynamicObjectField,
-  getWormholeFeeCoins,
-  getRegisteredAssetInfo,
+  getWormholeFee,
+  getObjectFields,
 } from "../src";
 
 describe("0: Wormhole", () => {
@@ -78,16 +73,16 @@ describe("0: Wormhole", () => {
   // for governance actions to modify programs
   const governance = new mock.GovernanceEmitter(GOVERNANCE_EMITTER_ID, 20);
 
+  // Ethereum mock token bridge.
+  const ethereumTokenBridge = new mock.MockEthereumTokenBridge(
+    ETHEREUM_TOKEN_BRIDGE_ADDRESS
+  );
+
   describe("Environment", () => {
     it("Variables", () => {
       expect(process.env.TESTING_WORMHOLE_ID).is.not.undefined;
-      expect(process.env.TESTING_WORMHOLE_DEPLOYER_CAPABILITY_ID).is.not
-        .undefined;
       expect(process.env.TESTING_WORMHOLE_STATE_ID).is.not.undefined;
       expect(process.env.TESTING_TOKEN_BRIDGE_ID).is.not.undefined;
-      expect(process.env.TESTING_TOKEN_BRIDGE_CREATOR_CAPABILITY_ID).is.not
-        .undefined;
-      expect(process.env.TESTING_TOKEN_BRIDGE_EMITTER_ID).is.not.undefined;
       expect(process.env.TESTING_TOKEN_BRIDGE_STATE_ID).is.not.undefined;
       expect(process.env.TESTING_EXAMPLE_COINS_ID).is.not.undefined;
       expect(process.env.TESTING_COIN_8_TREASURY_ID).is.not.undefined;
@@ -124,7 +119,7 @@ describe("0: Wormhole", () => {
       }
     });
 
-    it("Mint and Transfer Example Coins", async () => {
+    it("Mint and transfer example coins", async () => {
       const walletAddress = await wallet.getAddress();
 
       // COIN_10
@@ -203,489 +198,219 @@ describe("0: Wormhole", () => {
         expect(balance.totalBalance.toString()).equals(amount);
       }
     });
-  });
 
-  describe("Verify Wormhole Program", () => {
-    it("Initialize", async () => {
-      // Set up guardian set.
-      const devnetGuardian = Buffer.from(
-        new ethers.Wallet(GUARDIAN_PRIVATE_KEY).address.substring(2),
-        "hex"
+    it("Register foreign emitter (Ethereum)", async () => {
+      // Create an emitter registration VAA.
+      const message = governance.publishTokenBridgeRegisterChain(
+        0, // timestamp
+        2,
+        ETHEREUM_TOKEN_BRIDGE_ADDRESS
       );
+      const signedWormholeMessage = guardians.addSignatures(message, [0]);
 
-      // Complete the Wormhole contract setup.
-      // const tx = new TransactionBlock();
-      // tx.moveCall({
-      //   target: `${WORMHOLE_ID}::setup::complete`,
-      //   arguments: [
-      //     tx.object(WORMHOLE_DEPLOYER_CAPABILITY_ID),
-      //     tx.object(WORMHOLE_UPGRADE_CAPABILITY_ID),
-      //     tx.pure(GOVERNANCE_CHAIN),
-      //     tx.pure(Array.from(Buffer.from(GOVERNANCE_EMITTER_ID, "hex"))),
-      //     tx.pure([Array.from(devnetGuardian)]),
-      //     tx.pure(WORMHOLE_GUARDIAN_LIFE),
-      //     tx.pure(WORMHOLE_FEE),
-      //   ],
-      // });
-      // const result = await creator.signAndExecuteTransactionBlock({
-      //   transactionBlock: tx,
-      // });
-      // expect(result.digest).is.not.null;
+      // Register an emitter from Ethereum on the token bridge.
+      {
+        const tx = new TransactionBlock();
+        tx.moveCall({
+          target: `${TOKEN_BRIDGE_ID}::register_chain::register_chain`,
+          arguments: [
+            tx.object(TOKEN_BRIDGE_STATE_ID),
+            tx.object(WORMHOLE_STATE_ID),
+            tx.pure(Array.from(signedWormholeMessage)),
+            tx.object(SUI_CLOCK_OBJECT_ID),
+          ],
+        });
+        const result = await creator.signAndExecuteTransactionBlock({
+          transactionBlock: tx,
+        });
+        expect(result.digest).is.not.null;
+      }
+    });
 
-      // // Transaction is successful, so check Wormhole state.
-      // const createdObjects = await getCreatedFromTransaction(tx!);
-      // expect(createdObjects).has.length(3);
+    // Before any coin can be transferred out, it needs to be attested for.
+    it("Attest native coins", async () => {
+      const wallletAddress = await wallet.getAddress();
 
-      // const created = createdObjects[0];
-      // if (created.owner != "Immutable" && "Shared" in created.owner) {
-      //   const stateId = created.reference.objectId;
-      //   expect(stateId).equals(WORMHOLE_STATE_ID);
-      // } else {
-      //   unexpected();
-      // }
+      // Fetch Sui object to pay wormhole fees with.
+      const feeAmount = await getWormholeFee(provider);
 
-      // // Verify that the Wormhole state was set up correctly.
-      // const fields = await getObjectFields(provider, WORMHOLE_STATE_ID);
+      // COIN_10
+      {
+        // Coin 10 metadata and nonce.
+        const metadata = await provider.getCoinMetadata({
+          coinType: COIN_10_TYPE,
+        });
+        const nonce = 69;
 
-      // // Guardian set index.
-      // expect(fields).has.property("guardian_set_index");
-      // expect(fields.guardian_set_index).equals(0);
+        // Call `token_bridge::attest_token` on Token Bridge.
+        const tx = new TransactionBlock();
+        const [wormholeFee] = tx.splitCoins(tx.gas, [tx.pure(feeAmount)]);
+        tx.moveCall({
+          target: `${TOKEN_BRIDGE_ID}::attest_token::attest_token`,
+          arguments: [
+            tx.object(TOKEN_BRIDGE_STATE_ID),
+            tx.object(WORMHOLE_STATE_ID),
+            wormholeFee,
+            tx.object(metadata.id!),
+            tx.pure(nonce),
+            tx.object(SUI_CLOCK_OBJECT_ID),
+          ],
+          typeArguments: [COIN_10_TYPE],
+        });
+        const eventData = await wallet
+          .signAndExecuteTransactionBlock({
+            transactionBlock: tx,
+            options: {
+              showEvents: true,
+            },
+          })
+          .then((result) => {
+            if ("events" in result && result.events?.length == 1) {
+              return result.events[0];
+            }
 
-      // // Guardian set.
-      // expect(fields).has.property("guardian_sets");
-      // const guardianSets = fields.guardian_sets.fields.contents;
-      // expect(guardianSets).has.length(1);
+            throw new Error("event not found");
+          });
 
-      // const guardianSet = guardianSets[0].fields.value.fields;
-      // expect(guardianSet.index).equals(0);
+        // Verify that the attest message was published.
+        expect(eventData.transactionModule).equal("attest_token");
+        expect(eventData.parsedJson!.nonce).equals(nonce);
+        expect(eventData.parsedJson!.sequence).equals("0");
 
-      // const guardianKeys = guardianSet.guardians;
-      // expect(guardianKeys).has.length(1);
+        // Verify that a token was registered in the token bridge state.
+        const tokenBridgeState = await getObjectFields(
+          provider,
+          TOKEN_BRIDGE_STATE_ID
+        );
+        expect(tokenBridgeState!.token_registry.fields.num_native).equals("1");
+      }
 
-      // const guardianKey = guardianKeys[0].fields.addr.fields.data;
-      // expect(guardianKey).deep.equals(Array.from(devnetGuardian));
+      // COIN_8
+      {
+        // Coin 8 metadata and nonce.
+        const metadata = await provider.getCoinMetadata({
+          coinType: COIN_8_TYPE,
+        });
+        const nonce = 420;
 
-      // // Emitter registry.
-      // expect(fields).has.property("emitter_registry");
-      // expect(fields.emitter_registry.fields.next_id).equals("1");
+        // Call `token_bridge::attest_token` on Token Bridge.
+        const tx = new TransactionBlock();
+        const [wormholeFee] = tx.splitCoins(tx.gas, [tx.pure(feeAmount)]);
+        tx.moveCall({
+          target: `${TOKEN_BRIDGE_ID}::attest_token::attest_token`,
+          arguments: [
+            tx.object(TOKEN_BRIDGE_STATE_ID),
+            tx.object(WORMHOLE_STATE_ID),
+            wormholeFee,
+            tx.object(metadata.id!),
+            tx.pure(nonce),
+            tx.object(SUI_CLOCK_OBJECT_ID),
+          ],
+          typeArguments: [COIN_8_TYPE],
+        });
+        const eventData = await wallet
+          .signAndExecuteTransactionBlock({
+            transactionBlock: tx,
+            options: {
+              showEvents: true,
+            },
+          })
+          .then((result) => {
+            if ("events" in result && result.events?.length == 1) {
+              return result.events[0];
+            }
+
+            throw new Error("event not found");
+          });
+
+        // Verify that the attest message was published.
+        expect(eventData.transactionModule).equal("attest_token");
+        expect(eventData.parsedJson!.nonce).equals(nonce);
+        expect(eventData.parsedJson!.sequence).equals("1");
+
+        // Verify that a token was registered in the token bridge state.
+        const tokenBridgeState = await getObjectFields(
+          provider,
+          TOKEN_BRIDGE_STATE_ID
+        );
+        expect(tokenBridgeState!.token_registry.fields.num_native).equals("2");
+      }
     });
   });
 
-  //   describe("Verify Token Bridge Program", () => {
-  //     // Mock Ethereum Token Bridge.
-  //     const ethereumTokenBridge = new mock.MockEthereumTokenBridge(
-  //       ETHEREUM_TOKEN_BRIDGE_ADDRESS
-  //     );
+  // it("Attest Sui", async () => {));
 
-  //     it("Get New Emitter", async () => {
-  //       // Call `get_new_emitter` on Wormhole for Token Bridge. This registers
-  //       // the Token Bridge with Wormhole, which will allow the Token Bridge
-  //       // to publish messages.
-  //       const getNewEmitterTx = await creator
-  //         .executeMoveCall({
-  //           packageObjectId: WORMHOLE_ID,
-  //           module: "wormhole",
-  //           function: "get_new_emitter",
-  //           typeArguments: [],
-  //           arguments: [WORMHOLE_STATE_ID],
-  //           gasBudget: 20000,
-  //         })
-  //         .catch((reason) => {
-  //           // should not happen
-  //           console.log(reason);
-  //           return null;
-  //         });
-  //       expect(getNewEmitterTx).is.not.null;
+  // it("Attest WETH from Ethereum", async () => {
+  //   // Create an attestation VAA.
+  //   const published = ethereumTokenBridge.publishAttestMeta(
+  //     WETH_ID,
+  //     18,
+  //     "WETH",
+  //     "Wrapped Ether"
+  //   );
 
-  //       // Transaction is successful, verify the Token Bridge emitter ID.
-  //       const createdObjects = await getCreatedFromTransaction(getNewEmitterTx!);
-  //       expect(createdObjects).has.length(1);
+  //   // Sign the VAA.
+  //   const signedWormholeMessage = guardians.addSignatures(published, [0]);
 
-  //       const created = createdObjects[0];
-  //       expect(created.reference.objectId).equals(TOKEN_BRIDGE_EMITTER_ID);
-  //     });
+  //   // Deploy wrapped coin using template.
+  //   const fullPathToTokenBridgeDependency = path.resolve(
+  //     `${__dirname}/../../dependencies/token_bridge`
+  //   );
+  //   const deployedCoinInfo = buildAndDeployWrappedCoin(
+  //     WORMHOLE_ID,
+  //     TOKEN_BRIDGE_ID,
+  //     fullPathToTokenBridgeDependency,
+  //     signedWormholeMessage,
+  //     "worm sui deploy",
+  //     RAW_CREATOR_KEY
+  //   );
+  //   expect(deployedCoinInfo.id).equals(WRAPPED_WETH_ID);
 
-  //     it("Initialize", async () => {
-  //       // Call `init_and_share_state` on Token Bridge.
-  //       const initTx = await creator
-  //         .executeMoveCall({
-  //           packageObjectId: TOKEN_BRIDGE_ID,
-  //           module: "state",
-  //           function: "init_and_share_state",
-  //           typeArguments: [],
-  //           arguments: [TOKEN_BRIDGE_CREATOR_CAPABILITY_ID, WORMHOLE_STATE_ID],
-  //           gasBudget: 20000,
-  //         })
-  //         .catch((reason) => {
-  //           // should not happen
-  //           console.log(reason);
-  //           return null;
-  //         });
-  //       expect(initTx).is.not.null;
+  // const newWrappedCoinType = `${TOKEN_BRIDGE_ID}::wrapped_coin::WrappedCoin<${WRAPPED_WETH_COIN_TYPE}>`;
+  // expect(deployedCoinInfo.type).equals(newWrappedCoinType);
 
-  //       // Deployer capability should be destroyed by this point.
-  //       {
-  //         const deployerCapability = await provider.getObject(
-  //           TOKEN_BRIDGE_CREATOR_CAPABILITY_ID
-  //         );
-  //         expect(deployerCapability.status).equals("Deleted");
-  //       }
+  // // Execute `create_wrapped::register_wrapped_coin` on Token Bridge.
+  // // The deployer keypair originally created this coin, so we must use
+  // // `creator` to execute the call.
+  // const registerWrappedCoinTx = await creator
+  //   .executeMoveCall({
+  //     packageObjectId: TOKEN_BRIDGE_ID,
+  //     module: "create_wrapped",
+  //     function: "register_wrapped_coin",
+  //     typeArguments: [WRAPPED_WETH_COIN_TYPE],
+  //     arguments: [TOKEN_BRIDGE_STATE_ID, WORMHOLE_STATE_ID, WRAPPED_WETH_ID],
+  //     gasBudget: 20000,
+  //   })
+  //   .catch((reason) => {
+  //     // should not happen
+  //     console.log(reason);
+  //     return null;
+  //   });
+  // expect(registerWrappedCoinTx).is.not.null;
 
-  //       // Transaction is successful, so check Token Bridge state.
-  //       const createdObjects = await getCreatedFromTransaction(initTx!);
-  //       expect(createdObjects).has.length(3);
+  // // Check state.
+  // const tokenBridgeState = await getObjectFields(
+  //   provider,
+  //   TOKEN_BRIDGE_STATE_ID
+  // );
 
-  //       const created = createdObjects[1];
-  //       if (created.owner != "Immutable" && "Shared" in created.owner) {
-  //         const stateId = created.reference.objectId;
-  //         expect(stateId).equals(TOKEN_BRIDGE_STATE_ID);
+  // // Fetch the wrapped asset info
+  // const registeredTokens = tokenBridgeState.registered_tokens.fields;
+  // expect(registeredTokens.num_native).to.equal("2");
 
-  //         // Finally verify the Token Bridge state.
-  //         const fields = await getObjectFields(provider, TOKEN_BRIDGE_STATE_ID);
+  // // Wrapped token count should've upticked.
+  // expect(registeredTokens.num_wrapped).to.equal("1");
 
-  //         expect(fields).has.property("emitter_cap");
-  //         expect(fields.emitter_cap.fields.sequence).equals("0");
-  //       } else {
-  //         unexpected();
-  //       }
-  //     });
+  // // Fetch the wrapped asset info.
+  // const wrappedAssetInfo = await getRegisteredAssetInfo(
+  //   provider,
+  //   registeredTokens.id.id,
+  //   WRAPPED_WETH_COIN_TYPE
+  // );
 
-  //     it("Register Foreign Emitter (Ethereum)", async () => {
-  //       // Create an emitter registration VAA.
-  //       const message = governance.publishTokenBridgeRegisterChain(
-  //         0, // timestamp
-  //         2,
-  //         ETHEREUM_TOKEN_BRIDGE_ADDRESS
-  //       );
-  //       const signedWormholeMessage = guardians.addSignatures(message, [0]);
-
-  //       // Call `register_chain::submit_vaa` on Token Bridge.
-  //       const registerChainTx = await creator
-  //         .executeMoveCall({
-  //           packageObjectId: TOKEN_BRIDGE_ID,
-  //           module: "register_chain",
-  //           function: "submit_vaa",
-  //           typeArguments: [],
-  //           arguments: [
-  //             WORMHOLE_STATE_ID,
-  //             TOKEN_BRIDGE_STATE_ID,
-  //             Array.from(signedWormholeMessage),
-  //           ],
-  //           gasBudget: 20000,
-  //         })
-  //         .catch((reason) => {
-  //           // should not happen
-  //           console.log(reason);
-  //           return null;
-  //         });
-  //       expect(registerChainTx).is.not.null;
-
-  //       // Fetch the registerred emitters table.
-  //       const tokenBridgeDynamicData = await provider
-  //         .getDynamicFields(TOKEN_BRIDGE_STATE_ID)
-  //         .then((result) => result.data);
-
-  //       expect(tokenBridgeDynamicData).has.length(1);
-
-  //       const registeredEmitters = await getTableFromDynamicObjectField(
-  //         provider,
-  //         TOKEN_BRIDGE_STATE_ID,
-  //         tokenBridgeDynamicData[0].name!
-  //       );
-  //       expect(registeredEmitters).has.length(1);
-
-  //       // Finally here to check the state to find new emitter.
-  //       const registeredEmitter = registeredEmitters[0];
-  //       expect(parseInt(registeredEmitter[0])).equals(2);
-  //       expect(registeredEmitter[1].external_address).deep.equals(
-  //         Array.from(
-  //           tryNativeToUint8Array(ETHEREUM_TOKEN_BRIDGE_ADDRESS, "ethereum")
-  //         )
-  //       );
-  //     });
-
-  //     // Before any coin can be transferred out, it needs to be attested for.
-  //     it("Attest Native Coins", async () => {
-  //       // COIN_10
-  //       {
-  //         // Fetch Sui object to pay wormhole fees with.
-  //         const wormholeFeeCoins = await getWormholeFeeCoins(provider, wallet);
-
-  //         // Coin 9 metadata.
-  //         const metadata = await provider.getCoinMetadata(COIN_10_TYPE);
-
-  //         // Call `attest_token::attest_token` on Token Bridge.
-  //         const attestTokensTx = await wallet
-  //           .executeMoveCall({
-  //             packageObjectId: TOKEN_BRIDGE_ID,
-  //             module: "attest_token",
-  //             function: "attest_token",
-  //             typeArguments: [COIN_10_TYPE],
-  //             arguments: [
-  //               TOKEN_BRIDGE_STATE_ID,
-  //               WORMHOLE_STATE_ID,
-  //               metadata.id!,
-  //               wormholeFeeCoins!,
-  //               0, // batch ID
-  //             ],
-  //             gasBudget: 20000,
-  //           })
-  //           .catch((reason) => {
-  //             // should not happen
-  //             console.log(reason);
-  //             return null;
-  //           });
-  //         expect(attestTokensTx).is.not.null;
-
-  //         // Check the Wormhole message event emitted by the contract.
-  //         const wormholeMessages = await getWormholeMessagesFromTransaction(
-  //           provider,
-  //           WORMHOLE_ID,
-  //           attestTokensTx!
-  //         );
-  //         expect(wormholeMessages).has.length(1);
-
-  //         const message = wormholeMessages[0];
-  //         expect(message.emitter).equals(TOKEN_BRIDGE_ID);
-  //         expect(message.sequence).equals("0");
-
-  //         // Verify state changes.
-  //         const tokenBridgeState = await getObjectFields(
-  //           provider,
-  //           TOKEN_BRIDGE_STATE_ID
-  //         );
-
-  //         // Emitter sequence should've upticked.
-  //         const emitter = tokenBridgeState.emitter_cap.fields;
-  //         expect(emitter.sequence).equals("1");
-
-  //         // Native coin count should've upticked.
-  //         const registeredTokens = tokenBridgeState.registered_tokens.fields;
-  //         expect(registeredTokens.num_native).to.equal("1");
-  //         expect(registeredTokens.num_wrapped).to.equal("0");
-  //       }
-
-  //       // COIN_8
-  //       {
-  //         // Fetch Sui object to pay wormhole fees with.
-  //         const wormholeFeeCoins = await getWormholeFeeCoins(provider, wallet);
-
-  //         // Coin 8 metadata.
-  //         const metadata = await provider.getCoinMetadata(COIN_8_TYPE);
-
-  //         // Call `attest_token::attest_token` on Token Bridge
-  //         const attestTokensTx = await wallet
-  //           .executeMoveCall({
-  //             packageObjectId: TOKEN_BRIDGE_ID,
-  //             module: "attest_token",
-  //             function: "attest_token",
-  //             typeArguments: [COIN_8_TYPE],
-  //             arguments: [
-  //               TOKEN_BRIDGE_STATE_ID,
-  //               WORMHOLE_STATE_ID,
-  //               metadata.id!,
-  //               wormholeFeeCoins!,
-  //               0, // batch ID
-  //             ],
-  //             gasBudget: 20000,
-  //           })
-  //           .catch((reason) => {
-  //             // should not happen
-  //             console.log(reason);
-  //             return null;
-  //           });
-  //         expect(attestTokensTx).is.not.null;
-
-  //         // Check the Wormhole message event emitted by the contract.
-  //         const wormholeMessages = await getWormholeMessagesFromTransaction(
-  //           provider,
-  //           WORMHOLE_ID,
-  //           attestTokensTx!
-  //         );
-  //         expect(wormholeMessages).has.length(1);
-
-  //         const message = wormholeMessages[0];
-  //         expect(message.emitter).equals(TOKEN_BRIDGE_ID);
-  //         expect(message.sequence).equals("1");
-
-  //         // Check state.
-  //         const tokenBridgeState = await getObjectFields(
-  //           provider,
-  //           TOKEN_BRIDGE_STATE_ID
-  //         );
-
-  //         // Emitter sequence should've upticked.
-  //         const emitter = tokenBridgeState.emitter_cap.fields;
-  //         expect(emitter.sequence).equals("2");
-
-  //         // Native coin count should've upticked.
-  //         const registeredTokens = tokenBridgeState.registered_tokens.fields;
-  //         expect(registeredTokens.num_native).to.equal("2");
-  //         expect(registeredTokens.num_wrapped).to.equal("0");
-  //       }
-  //     });
-
-  //     it("Outbound Transfer Native", async () => {
-  //       const walletAddress = await wallet.getAddress();
-  //       const amount = "10";
-  //       const recipientChain = "2";
-  //       const recipient = Buffer.alloc(32, "deadbeef");
-  //       const relayerFee = "0";
-  //       const batchId = "69";
-
-  //       // Fetch Sui object to pay wormhole fees with.
-  //       const wormholeFeeCoins = await getWormholeFeeCoins(provider, wallet);
-
-  //       // Grab balance.
-  //       const [transferCoin] = await provider
-  //         .getCoins(walletAddress, COIN_10_TYPE)
-  //         .then((result) => result.data);
-
-  //       // Split coin into another coin object.
-  //       const splitCoin = await wallet
-  //         .splitCoin({
-  //           coinObjectId: transferCoin.coinObjectId,
-  //           splitAmounts: [Number(amount)],
-  //           gasBudget: 1000,
-  //         })
-  //         .then(async (tx) => {
-  //           const created = await getCreatedFromTransaction(tx).then(
-  //             (objects) => objects[0]
-  //           );
-  //           return "reference" in created ? created.reference.objectId : null;
-  //         });
-  //       expect(splitCoin).is.not.null;
-
-  //       // Call `transfer_tokens::transfer_tokens` on Token Bridge.
-  //       const transferTokensTx = await wallet
-  //         .executeMoveCall({
-  //           packageObjectId: TOKEN_BRIDGE_ID,
-  //           module: "transfer_tokens",
-  //           function: "transfer_tokens",
-  //           typeArguments: [COIN_10_TYPE],
-  //           arguments: [
-  //             TOKEN_BRIDGE_STATE_ID,
-  //             WORMHOLE_STATE_ID,
-  //             splitCoin!,
-  //             wormholeFeeCoins!,
-  //             recipientChain,
-  //             Array.from(recipient),
-  //             relayerFee,
-  //             batchId,
-  //           ],
-  //           gasBudget: 20000,
-  //         })
-  //         .catch((reason) => {
-  //           // should not happen
-  //           console.log(reason);
-  //           return null;
-  //         });
-  //       expect(transferTokensTx).is.not.null;
-
-  //       // Verify that `splitCoin` is deleted.
-  //       {
-  //         const info = await provider.getObject(splitCoin!);
-  //         expect(info.status).equals("Deleted");
-  //       }
-
-  //       // Check the Wormhole message event emitted by the contract.
-  //       const wormholeMessages = await getWormholeMessagesFromTransaction(
-  //         provider,
-  //         WORMHOLE_ID,
-  //         transferTokensTx!
-  //       );
-  //       expect(wormholeMessages).has.length(1);
-
-  //       const message = wormholeMessages[0];
-  //       expect(message.emitter).equals(TOKEN_BRIDGE_ID);
-  //       expect(message.sequence).equals("2");
-
-  //       // Check state.
-  //       const tokenBridgeState = await getObjectFields(
-  //         provider,
-  //         TOKEN_BRIDGE_STATE_ID
-  //       );
-
-  //       const emitter = tokenBridgeState.emitter_cap.fields;
-  //       expect(emitter.sequence).equals("3");
-  //     });
-
-  //     it("Attest WETH from Ethereum", async () => {
-  //       // Create an attestation VAA.
-  //       const published = ethereumTokenBridge.publishAttestMeta(
-  //         WETH_ID,
-  //         18,
-  //         "WETH",
-  //         "Wrapped Ether"
-  //       );
-
-  //       // Sign the VAA.
-  //       const signedWormholeMessage = guardians.addSignatures(published, [0]);
-
-  //       // Deploy wrapped coin using template.
-  //       const fullPathToTokenBridgeDependency = path.resolve(
-  //         `${__dirname}/../../dependencies/token_bridge`
-  //       );
-  //       const clientConfig = path.resolve(`${__dirname}/sui_config/client.yaml`);
-  //       const deployedCoinInfo = buildAndDeployWrappedCoin(
-  //         WORMHOLE_ID,
-  //         TOKEN_BRIDGE_ID,
-  //         fullPathToTokenBridgeDependency,
-  //         signedWormholeMessage,
-  //         "yarn deploy",
-  //         clientConfig
-  //       );
-  //       expect(deployedCoinInfo.id).equals(WRAPPED_WETH_ID);
-
-  //       const newWrappedCoinType = `${TOKEN_BRIDGE_ID}::wrapped_coin::WrappedCoin<${WRAPPED_WETH_COIN_TYPE}>`;
-  //       expect(deployedCoinInfo.type).equals(newWrappedCoinType);
-
-  //       // Execute `create_wrapped::register_wrapped_coin` on Token Bridge.
-  //       // The deployer keypair originally created this coin, so we must use
-  //       // `creator` to execute the call.
-  //       const registerWrappedCoinTx = await creator
-  //         .executeMoveCall({
-  //           packageObjectId: TOKEN_BRIDGE_ID,
-  //           module: "create_wrapped",
-  //           function: "register_wrapped_coin",
-  //           typeArguments: [WRAPPED_WETH_COIN_TYPE],
-  //           arguments: [
-  //             TOKEN_BRIDGE_STATE_ID,
-  //             WORMHOLE_STATE_ID,
-  //             WRAPPED_WETH_ID,
-  //           ],
-  //           gasBudget: 20000,
-  //         })
-  //         .catch((reason) => {
-  //           // should not happen
-  //           console.log(reason);
-  //           return null;
-  //         });
-  //       expect(registerWrappedCoinTx).is.not.null;
-
-  //       // Check state.
-  //       const tokenBridgeState = await getObjectFields(
-  //         provider,
-  //         TOKEN_BRIDGE_STATE_ID
-  //       );
-
-  //       // Fetch the wrapped asset info
-  //       const registeredTokens = tokenBridgeState.registered_tokens.fields;
-  //       expect(registeredTokens.num_native).to.equal("2");
-
-  //       // Wrapped token count should've upticked.
-  //       expect(registeredTokens.num_wrapped).to.equal("1");
-
-  //       // Fetch the wrapped asset info.
-  //       const wrappedAssetInfo = await getRegisteredAssetInfo(
-  //         provider,
-  //         registeredTokens.id.id,
-  //         WRAPPED_WETH_COIN_TYPE
-  //       );
-
-  //       const treasuryCap = wrappedAssetInfo!.value.fields.treasury_cap.fields;
-  //       expect(treasuryCap.total_supply.fields.value).equals("0");
-  //     });
+  // const treasuryCap = wrappedAssetInfo!.value.fields.treasury_cap.fields;
+  // expect(treasuryCap.total_supply.fields.value).equals("0");
+  // });
 
   //     it("Mint WETH to Wallets", async () => {
   //       const rawAmount = ethers.utils.parseEther("69420");
@@ -755,4 +480,5 @@ describe("0: Wormhole", () => {
   //       ).is.true;
   //     });
   //   });
+  // });
 });
