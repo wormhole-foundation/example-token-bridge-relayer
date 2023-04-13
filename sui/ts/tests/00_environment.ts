@@ -40,7 +40,6 @@ import {
 } from "@mysten/sui.js";
 import {
   buildAndDeployWrappedCoin,
-  getWormholeMessagesFromTransaction,
   getTableFromDynamicObjectField,
   getWormholeFee,
   getObjectFields,
