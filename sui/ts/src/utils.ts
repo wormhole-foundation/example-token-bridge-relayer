@@ -195,7 +195,7 @@ export async function getCoinWithHighestBalance(
 
   // Find the coin with the highest balance.
   for (let i = 0; i < coins.length; i++) {
-    let balance = coins[i].balance;
+    let balance = parseInt(coins[i].balance);
     if (balance > balanceMax) {
       balanceMax = balance;
       index = i;

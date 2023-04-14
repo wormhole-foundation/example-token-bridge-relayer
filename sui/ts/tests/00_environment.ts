@@ -39,7 +39,6 @@ import {
   SUI_CLOCK_OBJECT_ID,
 } from "@mysten/sui.js";
 import {
-  buildAndDeployWrappedCoin,
   getTableFromDynamicObjectField,
   getWormholeFee,
   getObjectFields,
@@ -101,7 +100,7 @@ describe("0: Wormhole", () => {
             provider.getCoins({owner: address}).then((result) => result.data)
           );
         for (const coin of coinData) {
-          expect(coin.balance).equals(30000000000000000);
+          expect(coin.balance).equals("30000000000000000");
         }
       }
 
@@ -113,7 +112,7 @@ describe("0: Wormhole", () => {
             provider.getCoins({owner: address}).then((result) => result.data)
           );
         for (const coin of coinData) {
-          expect(coin.balance).equals(30000000000000000);
+          expect(coin.balance).equals("30000000000000000");
         }
       }
     });

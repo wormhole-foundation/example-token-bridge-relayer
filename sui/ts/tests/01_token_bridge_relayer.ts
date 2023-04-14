@@ -50,7 +50,6 @@ import {
   createTransferWithRelayPayload,
   getSwapQuote,
   getSwapAmountIn,
-  getTestBalances,
   getBalanceChangeFromTransaction,
 } from "../src";
 
@@ -451,7 +450,8 @@ describe("1: Token Bridge Relayer", () => {
           coinType: COIN_8_TYPE,
         });
         expect(
-          coinBalanceBefore.totalBalance - coinBalanceAfter.totalBalance
+          parseInt(coinBalanceBefore.totalBalance) -
+            parseInt(coinBalanceAfter.totalBalance)
         ).eq(parseInt(outboundTransferAmount));
       });
 
@@ -829,7 +829,8 @@ describe("1: Token Bridge Relayer", () => {
           coinType: COIN_10_TYPE,
         });
         expect(
-          coinBalanceBefore.totalBalance - coinBalanceAfter.totalBalance
+          parseInt(coinBalanceBefore.totalBalance) -
+            parseInt(coinBalanceAfter.totalBalance)
         ).eq(
           tokenBridgeDenormalizeAmount(normalizedTransferAmount, coin10Decimals)
         );
