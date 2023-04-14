@@ -168,7 +168,7 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
         ITokenBridge.TransferWithPayload memory transfer,
         uint16 emitterChainId,
         bytes32 emitterAddress
-    ) internal returns (bytes memory signedTransfer) {
+    ) internal view returns (bytes memory signedTransfer) {
         // construct `TransferWithPayload` Wormhole message
         IWormhole.VM memory vm;
 
