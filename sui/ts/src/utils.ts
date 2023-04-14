@@ -258,29 +258,26 @@ export async function getTokenInfo(
 }
 
 export function tokenBridgeNormalizeAmount(
-  amount: ethers.BigNumber,
+  amount: number,
   decimals: number
-): ethers.BigNumber {
+): number {
   if (decimals > 8) {
-    amount = amount.div(10 ** (decimals - 8));
+    amount = amount / 10 ** (decimals - 8);
   }
-  return amount;
+  return Math.floor(amount);
 }
 
 export function tokenBridgeDenormalizeAmount(
-  amount: ethers.BigNumber,
+  amount: number,
   decimals: number
-): ethers.BigNumber {
+): number {
   if (decimals > 8) {
-    amount = amount.mul(10 ** (decimals - 8));
+    amount = amount * 10 ** (decimals - 8);
   }
-  return amount;
+  return Math.floor(amount);
 }
 
-export function tokenBridgeTransform(
-  amount: ethers.BigNumber,
-  decimals: number
-): ethers.BigNumber {
+export function tokenBridgeTransform(amount: number, decimals: number): number {
   return tokenBridgeDenormalizeAmount(
     tokenBridgeNormalizeAmount(amount, decimals),
     decimals
