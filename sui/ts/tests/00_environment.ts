@@ -1,11 +1,5 @@
 import {expect} from "chai";
-import * as path from "path";
 import {ethers} from "ethers";
-import {
-  CHAIN_ID_SUI,
-  tryNativeToHexString,
-  tryNativeToUint8Array,
-} from "@certusone/wormhole-sdk";
 import * as mock from "@certusone/wormhole-sdk/lib/cjs/mock";
 import {
   ETHEREUM_TOKEN_BRIDGE_ADDRESS,
@@ -13,22 +7,14 @@ import {
   GUARDIAN_PRIVATE_KEY,
   WALLET_PRIVATE_KEY,
   TOKEN_BRIDGE_ID,
-  WORMHOLE_ID,
   RELAYER_PRIVATE_KEY,
-  WETH_ID,
   CREATOR_PRIVATE_KEY,
-  RAW_CREATOR_KEY,
-  WORMHOLE_FEE,
-  GOVERNANCE_CHAIN,
   WORMHOLE_STATE_ID,
   TOKEN_BRIDGE_STATE_ID,
   COIN_10_TREASURY_ID,
   COIN_8_TREASURY_ID,
   COIN_8_TYPE,
   COIN_10_TYPE,
-  WRAPPED_WETH_ID,
-  WRAPPED_WETH_COIN_TYPE,
-  unexpected,
 } from "./helpers";
 import {
   Ed25519Keypair,
@@ -38,11 +24,7 @@ import {
   TransactionBlock,
   SUI_CLOCK_OBJECT_ID,
 } from "@mysten/sui.js";
-import {
-  getTableFromDynamicObjectField,
-  getWormholeFee,
-  getObjectFields,
-} from "../src";
+import {getWormholeFee, getObjectFields} from "../src";
 
 describe("0: Wormhole", () => {
   const provider = new JsonRpcProvider(localnetConnection);
@@ -337,146 +319,4 @@ describe("0: Wormhole", () => {
   });
 
   // it("Attest Sui", async () => {));
-
-  // it("Attest WETH from Ethereum", async () => {
-  //   // Create an attestation VAA.
-  //   const published = ethereumTokenBridge.publishAttestMeta(
-  //     WETH_ID,
-  //     18,
-  //     "WETH",
-  //     "Wrapped Ether"
-  //   );
-
-  //   // Sign the VAA.
-  //   const signedWormholeMessage = guardians.addSignatures(published, [0]);
-
-  //   // Deploy wrapped coin using template.
-  //   const fullPathToTokenBridgeDependency = path.resolve(
-  //     `${__dirname}/../../dependencies/token_bridge`
-  //   );
-  //   const deployedCoinInfo = buildAndDeployWrappedCoin(
-  //     WORMHOLE_ID,
-  //     TOKEN_BRIDGE_ID,
-  //     fullPathToTokenBridgeDependency,
-  //     signedWormholeMessage,
-  //     "worm sui deploy",
-  //     RAW_CREATOR_KEY
-  //   );
-  //   expect(deployedCoinInfo.id).equals(WRAPPED_WETH_ID);
-
-  // const newWrappedCoinType = `${TOKEN_BRIDGE_ID}::wrapped_coin::WrappedCoin<${WRAPPED_WETH_COIN_TYPE}>`;
-  // expect(deployedCoinInfo.type).equals(newWrappedCoinType);
-
-  // // Execute `create_wrapped::register_wrapped_coin` on Token Bridge.
-  // // The deployer keypair originally created this coin, so we must use
-  // // `creator` to execute the call.
-  // const registerWrappedCoinTx = await creator
-  //   .executeMoveCall({
-  //     packageObjectId: TOKEN_BRIDGE_ID,
-  //     module: "create_wrapped",
-  //     function: "register_wrapped_coin",
-  //     typeArguments: [WRAPPED_WETH_COIN_TYPE],
-  //     arguments: [TOKEN_BRIDGE_STATE_ID, WORMHOLE_STATE_ID, WRAPPED_WETH_ID],
-  //     gasBudget: 20000,
-  //   })
-  //   .catch((reason) => {
-  //     // should not happen
-  //     console.log(reason);
-  //     return null;
-  //   });
-  // expect(registerWrappedCoinTx).is.not.null;
-
-  // // Check state.
-  // const tokenBridgeState = await getObjectFields(
-  //   provider,
-  //   TOKEN_BRIDGE_STATE_ID
-  // );
-
-  // // Fetch the wrapped asset info
-  // const registeredTokens = tokenBridgeState.registered_tokens.fields;
-  // expect(registeredTokens.num_native).to.equal("2");
-
-  // // Wrapped token count should've upticked.
-  // expect(registeredTokens.num_wrapped).to.equal("1");
-
-  // // Fetch the wrapped asset info.
-  // const wrappedAssetInfo = await getRegisteredAssetInfo(
-  //   provider,
-  //   registeredTokens.id.id,
-  //   WRAPPED_WETH_COIN_TYPE
-  // );
-
-  // const treasuryCap = wrappedAssetInfo!.value.fields.treasury_cap.fields;
-  // expect(treasuryCap.total_supply.fields.value).equals("0");
-  // });
-
-  //     it("Mint WETH to Wallets", async () => {
-  //       const rawAmount = ethers.utils.parseEther("69420");
-  //       const unitDifference = ethers.BigNumber.from("10").pow(18 - 8);
-  //       const mintAmount = rawAmount.div(unitDifference).toString();
-
-  //       // Recipient's wallet.
-  //       const destinationBytes = await wallet
-  //         .getAddress()
-  //         .then((address) =>
-  //           Buffer.concat([Buffer.alloc(12), Buffer.from(address, "hex")])
-  //         );
-
-  //       // Create a token transfer VAA.
-  //       const published = ethereumTokenBridge.publishTransferTokens(
-  //         tryNativeToHexString(WETH_ID, "ethereum"),
-  //         2, // tokenChain
-  //         BigInt(mintAmount),
-  //         CHAIN_ID_SUI, // recipientChain
-  //         destinationBytes.toString("hex"),
-  //         0n
-  //       );
-
-  //       // Sign the transfer message.
-  //       const signedWormholeMessage = guardians.addSignatures(published, [0]);
-
-  //       // Grab the destination wallet's address. This will be used as a place
-  //       // holder for the fee recipient. No fee will be paid out.
-  //       const desitnationAddress = await wallet
-  //         .getAddress()
-  //         .then((address) => ethers.utils.hexlify(Buffer.from(address, "hex")));
-
-  //       // Execute `complete_transfer::complete_transfer` on Token Bridge.
-  //       const completeTransferTx = await wallet
-  //         .executeMoveCall({
-  //           packageObjectId: TOKEN_BRIDGE_ID,
-  //           module: "complete_transfer",
-  //           function: "complete_transfer",
-  //           typeArguments: [WRAPPED_WETH_COIN_TYPE],
-  //           arguments: [
-  //             TOKEN_BRIDGE_STATE_ID,
-  //             WORMHOLE_STATE_ID,
-  //             Array.from(signedWormholeMessage),
-  //             desitnationAddress,
-  //           ],
-  //           gasBudget: 20000,
-  //         })
-  //         .catch((reason) => {
-  //           // should not happen
-  //           console.log(reason);
-  //           return null;
-  //         });
-  //       expect(completeTransferTx).is.not.null;
-
-  //       // Fetch the wrapped asset's coin object after the transfer to
-  //       // verify that the tokens were minted to the recipient.
-  //       const coins = await provider
-  //         .getCoins(desitnationAddress, WRAPPED_WETH_COIN_TYPE)
-  //         .then((result) => result.data);
-  //       const nonzeroCoin = coins.find((coin) => coin.balance > 0);
-  //       expect(nonzeroCoin).is.not.undefined;
-
-  //       expect(
-  //         ethers.BigNumber.from(nonzeroCoin!.balance)
-  //           .mul(unitDifference)
-  //           .eq(rawAmount)
-  //       ).is.true;
-  //     });
-  //   });
-  // });
 });
