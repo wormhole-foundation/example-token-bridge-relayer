@@ -38,6 +38,7 @@ import {
   getSwapQuote,
   getSwapAmountIn,
   getBalanceChangeFromTransaction,
+  getDynamicFieldsByType,
 } from "../src";
 
 describe("1: Token Bridge Relayer", () => {
@@ -1083,6 +1084,139 @@ describe("1: Token Bridge Relayer", () => {
         expect(recipientCoinChange).equals(
           tokenBridgeDenormalizeAmount(normalizedMintAmount, coin10Decimals)
         );
+      });
+    });
+
+    describe("Only owner", () => {
+      it("Update Swap Rate", async () => {
+        expect(localVariables.stateId).is.not.undefined;
+        const stateId: string = localVariables.stateId;
+        const state = await getObjectFields(provider, stateId);
+
+        const newSwapRate = "50000000000"; // $500 USD
+
+        // Fetch the TokenInfo and confirm that the new and old swap rates
+        // are not the same value.
+        let tokenInfo = await getTokenInfo(provider, state, COIN_10_TYPE);
+        expect(tokenInfo.swap_rate != newSwapRate).is.true;
+
+        // Update swap rate.
+        const tx = new TransactionBlock();
+        tx.moveCall({
+          target: `${RELAYER_ID}::owner::update_swap_rate`,
+          arguments: [
+            tx.object(RELAYER_OWNER_CAP_ID),
+            tx.object(stateId),
+            tx.pure(newSwapRate),
+          ],
+          typeArguments: [COIN_10_TYPE],
+        });
+        const result = await creator.signAndExecuteTransactionBlock({
+          transactionBlock: tx,
+        });
+        expect(result.digest).is.not.null;
+
+        // Validate the state changes.
+        tokenInfo = await getTokenInfo(provider, state, COIN_10_TYPE);
+        expect(tokenInfo.swap_rate).equals(newSwapRate);
+      });
+
+      it("Update max native swap amount", async () => {
+        expect(localVariables.stateId).is.not.undefined;
+        const stateId: string = localVariables.stateId;
+        const state = await getObjectFields(provider, stateId);
+
+        const newMaxSwapAmount = "6900000000"; // $69 USD
+
+        // Fetch the TokenInfo.
+        let tokenInfo = await getTokenInfo(provider, state, COIN_10_TYPE);
+        expect(tokenInfo.max_native_swap_amount != newMaxSwapAmount).is.true;
+
+        // Update max native swap amount.
+        const tx = new TransactionBlock();
+        tx.moveCall({
+          target: `${RELAYER_ID}::owner::update_max_native_swap_amount`,
+          arguments: [
+            tx.object(RELAYER_OWNER_CAP_ID),
+            tx.object(stateId),
+            tx.pure(newMaxSwapAmount),
+          ],
+          typeArguments: [COIN_10_TYPE],
+        });
+        const result = await creator.signAndExecuteTransactionBlock({
+          transactionBlock: tx,
+        });
+        expect(result.digest).is.not.null;
+
+        // Validate the state changes.
+        tokenInfo = await getTokenInfo(provider, state, COIN_10_TYPE);
+        expect(tokenInfo.max_native_swap_amount).equals(newMaxSwapAmount);
+      });
+
+      it("Disable swaps", async () => {
+        expect(localVariables.stateId).is.not.undefined;
+        const stateId: string = localVariables.stateId;
+        const state = await getObjectFields(provider, stateId);
+
+        // Fetch the TokenInfo.
+        let tokenInfo = await getTokenInfo(provider, state, COIN_10_TYPE);
+        expect(tokenInfo.swap_enabled).is.true;
+
+        // Disable swaps.
+        const tx = new TransactionBlock();
+        tx.moveCall({
+          target: `${RELAYER_ID}::owner::toggle_swap_enabled`,
+          arguments: [
+            tx.object(RELAYER_OWNER_CAP_ID),
+            tx.object(stateId),
+            tx.pure(false),
+          ],
+          typeArguments: [COIN_10_TYPE],
+        });
+        const result = await creator.signAndExecuteTransactionBlock({
+          transactionBlock: tx,
+        });
+        expect(result.digest).is.not.null;
+
+        // Validate the state changes.
+        tokenInfo = await getTokenInfo(provider, state, COIN_10_TYPE);
+        expect(tokenInfo.swap_enabled).is.false;
+      });
+
+      it("Deregister token", async () => {
+        expect(localVariables.stateId).is.not.undefined;
+        const stateId: string = localVariables.stateId;
+        const state = await getObjectFields(provider, stateId);
+
+        // Fetch the dynamic field for COIN_10 token info before deregistering
+        // the coin type.
+        const registeredCoinFieldBefore = await getDynamicFieldsByType(
+          provider,
+          state!.registered_tokens.fields.id.id,
+          COIN_10_TYPE
+        );
+        expect(registeredCoinFieldBefore.length).equals(1);
+
+        // Disable swaps.
+        const tx = new TransactionBlock();
+        tx.moveCall({
+          target: `${RELAYER_ID}::owner::deregister_token`,
+          arguments: [tx.object(RELAYER_OWNER_CAP_ID), tx.object(stateId)],
+          typeArguments: [COIN_10_TYPE],
+        });
+        const result = await creator.signAndExecuteTransactionBlock({
+          transactionBlock: tx,
+        });
+        expect(result.digest).is.not.null;
+
+        // Fetch the dynamic field for COIN_10 token info after deregistering
+        // the coin type.
+        const registeredCoinFieldAfter = await getDynamicFieldsByType(
+          provider,
+          state!.registered_tokens.fields.id.id,
+          COIN_10_TYPE
+        );
+        expect(registeredCoinFieldAfter.length).equals(0);
       });
     });
   });

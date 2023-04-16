@@ -21,7 +21,7 @@ dependencies/wormhole/build:
 	bash shell-scripts/fetch_wormhole_contracts.sh
 
 .PHONY: test
-test: integration-test
+test: unit-test integration-test
 
 .PHONY: unit-test
 unit-test: $(CONTRACTS)
