@@ -1,4 +1,4 @@
-include testing.env
+include env/testing.env
 
 CONTRACTS := $(wildcard contracts/*/.)
 

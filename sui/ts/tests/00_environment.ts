@@ -15,7 +15,7 @@ import {
   COIN_8_TREASURY_ID,
   COIN_8_TYPE,
   COIN_10_TYPE,
-} from "./helpers";
+} from "../src/consts";
 import {
   Ed25519Keypair,
   JsonRpcProvider,

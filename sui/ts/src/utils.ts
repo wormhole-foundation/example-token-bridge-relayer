@@ -1,7 +1,7 @@
 import {JsonRpcProvider, RawSigner, TransactionBlock} from "@mysten/sui.js";
 import {execSync} from "child_process";
 import {ethers} from "ethers";
-import {WORMHOLE_STATE_ID, RELAYER_ID} from "../tests/helpers";
+import {WORMHOLE_STATE_ID, RELAYER_ID} from "./consts";
 import * as fs from "fs";
 import {string} from "yargs";
 

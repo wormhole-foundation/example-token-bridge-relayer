@@ -14,7 +14,7 @@ import {
   COIN_8_TYPE,
   COIN_10_TYPE,
   SUI_TYPE,
-} from "./helpers";
+} from "../src/consts";
 import {
   Ed25519Keypair,
   JsonRpcProvider,
@@ -194,7 +194,7 @@ describe("1: Token Bridge Relayer", () => {
       expect(localVariables.stateId).is.not.undefined;
       const stateId: string = localVariables.stateId;
 
-      // Set the relayer fee for the registered foreign contract.
+      // Register coin 10.
       const tx = new TransactionBlock();
       tx.moveCall({
         target: `${RELAYER_ID}::owner::register_token`,
@@ -228,7 +228,7 @@ describe("1: Token Bridge Relayer", () => {
       expect(localVariables.stateId).is.not.undefined;
       const stateId: string = localVariables.stateId;
 
-      // Set the relayer fee for the registered foreign contract.
+      // Register coin 8.
       const tx = new TransactionBlock();
       tx.moveCall({
         target: `${RELAYER_ID}::owner::register_token`,
@@ -262,7 +262,7 @@ describe("1: Token Bridge Relayer", () => {
       expect(localVariables.stateId).is.not.undefined;
       const stateId: string = localVariables.stateId;
 
-      // Set the relayer fee for the registered foreign contract.
+      // Register SUI.
       const tx = new TransactionBlock();
       tx.moveCall({
         target: `${RELAYER_ID}::owner::register_token`,
