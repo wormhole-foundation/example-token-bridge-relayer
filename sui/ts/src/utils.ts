@@ -73,6 +73,21 @@ export function getWormholeEvents(result: any) {
   }
 }
 
+export function getSwapEvent(result: any) {
+  if ("events" in result) {
+    let swapEvent;
+    for (const event of result.events!) {
+      if (event.type.includes("SwapExecuted")) {
+        swapEvent = event;
+        break;
+      }
+    }
+    return swapEvent;
+  } else {
+    return null;
+  }
+}
+
 export async function getObjectFields(
   provider: JsonRpcProvider,
   objectId: string

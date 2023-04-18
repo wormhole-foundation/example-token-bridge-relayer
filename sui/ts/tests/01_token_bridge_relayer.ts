@@ -46,7 +46,7 @@ import {
   getBalanceChangeFromTransaction,
   getDynamicFieldsByType,
   getIsTransferCompletedSui,
-  sleep,
+  getSwapEvent,
 } from "../src";
 
 describe("1: Token Bridge Relayer", () => {
@@ -987,6 +987,18 @@ describe("1: Token Bridge Relayer", () => {
           coin10Decimals,
           COIN_10_TYPE
         );
+
+        // Verify the swap event.
+        {
+          const swapEvent = await getSwapEvent(receipt);
+          expect(swapEvent.parsedJson.coin).equals(tokenAddress);
+          expect(swapEvent.parsedJson.relayer).equals(relayerAddress);
+          expect(swapEvent.parsedJson.recipient).equals(walletAddress);
+          expect(swapEvent.parsedJson.coin_amount).equals(
+            swapAmountIn.toString()
+          );
+          expect(swapEvent.parsedJson.sui_amount).equals(swapQuote.toString());
+        }
 
         // Validate relayer balance change.
         expect(relayerCoinChange).equals(
