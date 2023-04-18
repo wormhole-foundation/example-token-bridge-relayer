@@ -15,6 +15,8 @@ import {
   COIN_8_TREASURY_ID,
   COIN_8_TYPE,
   COIN_10_TYPE,
+  SUI_TYPE,
+  SUI_METADATA_ID,
 } from "../src/consts";
 import {
   Ed25519Keypair,
@@ -209,8 +211,6 @@ describe("0: Wormhole", () => {
 
     // Before any coin can be transferred out, it needs to be attested for.
     it("Attest native coins", async () => {
-      const wallletAddress = await wallet.getAddress();
-
       // Fetch Sui object to pay wormhole fees with.
       const feeAmount = await getWormholeFee(provider);
 
@@ -316,7 +316,52 @@ describe("0: Wormhole", () => {
         expect(tokenBridgeState!.token_registry.fields.num_native).equals("2");
       }
     });
-  });
 
-  // it("Attest Sui", async () => {));
+    it("Attest Sui", async () => {
+      // Fetch Sui object to pay wormhole fees with.
+      const feeAmount = await getWormholeFee(provider);
+      const nonce = 420;
+
+      // Call `token_bridge::attest_token` on Token Bridge.
+      const tx = new TransactionBlock();
+      const [wormholeFee] = tx.splitCoins(tx.gas, [tx.pure(feeAmount)]);
+      tx.moveCall({
+        target: `${TOKEN_BRIDGE_ID}::attest_token::attest_token`,
+        arguments: [
+          tx.object(TOKEN_BRIDGE_STATE_ID),
+          tx.object(WORMHOLE_STATE_ID),
+          wormholeFee,
+          tx.object(SUI_METADATA_ID),
+          tx.pure(nonce),
+          tx.object(SUI_CLOCK_OBJECT_ID),
+        ],
+        typeArguments: [SUI_TYPE],
+      });
+      const eventData = await wallet
+        .signAndExecuteTransactionBlock({
+          transactionBlock: tx,
+          options: {
+            showEvents: true,
+          },
+        })
+        .then((result) => {
+          if ("events" in result && result.events?.length == 1) {
+            return result.events[0];
+          }
+          throw new Error("event not found");
+        });
+
+      // Verify that the attest message was published.
+      expect(eventData.transactionModule).equal("attest_token");
+      expect(eventData.parsedJson!.nonce).equals(nonce);
+      expect(eventData.parsedJson!.sequence).equals("2");
+
+      // Verify that a token was registered in the token bridge state.
+      const tokenBridgeState = await getObjectFields(
+        provider,
+        TOKEN_BRIDGE_STATE_ID
+      );
+      expect(tokenBridgeState!.token_registry.fields.num_native).equals("3");
+    });
+  });
 });

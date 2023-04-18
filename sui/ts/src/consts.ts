@@ -44,6 +44,7 @@ export const COIN_10_TYPE = `${EXAMPLE_COINS_ID}::coin_10::COIN_10`;
 
 // SUI coin.
 export const SUI_TYPE = "0x2::sui::SUI";
+export const SUI_METADATA_ID = process.env.SUI_METADATA_ID!;
 
 // wrapped weth
 export const WRAPPED_WETH_COIN_TYPE =

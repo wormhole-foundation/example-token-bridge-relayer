@@ -19,6 +19,7 @@ import {
   COIN_10_TYPE,
   SUI_TYPE,
   WORMHOLE_ID,
+  SUI_METADATA_ID,
 } from "../src/consts";
 import {
   Ed25519Keypair,
@@ -389,7 +390,7 @@ describe("1: Token Bridge Relayer", () => {
         // Parse the emitted Wormhole message and verify the payload.
         const message = wormholeEvents![0].parsedJson;
         expect(message.consistency_level).equal(0);
-        expect(message.sequence).equals("2");
+        expect(message.sequence).equals("3");
         expect(message.nonce).equals(nonce);
 
         // Cache state.
@@ -750,7 +751,7 @@ describe("1: Token Bridge Relayer", () => {
         // Parse the emitted Wormhole message and verify the payload.
         const message = wormholeEvents![0].parsedJson;
         expect(message.consistency_level).equal(0);
-        expect(message.sequence).equals("3");
+        expect(message.sequence).equals("4");
         expect(message.nonce).equals(nonce);
 
         // Cache state.
@@ -1090,6 +1091,532 @@ describe("1: Token Bridge Relayer", () => {
         // the receipient should receive the full mintAmount.
         expect(recipientCoinChange).equals(
           tokenBridgeDenormalizeAmount(normalizedMintAmount, coin10Decimals)
+        );
+      });
+    });
+
+    describe("SUI Native Coin", () => {
+      // The `transferAmount` will be transferred outbound in the first
+      // The two following tests will use the `transferAmount` that is
+      // deposited in the bridge to test complete transfer functionality.
+      // For both tests to be successful, the following must be true:
+      //     * transferAmount >= mintAmount1 + mintAmount2
+      const outboundTransferAmount = "690000000000"; // 690 SUI
+      const suiDecimals = 9;
+
+      it("Transfer tokens with relay", async () => {
+        expect(localVariables.stateId).is.not.undefined;
+        const stateId: string = localVariables.stateId;
+
+        // Fetch wallet address.
+        const walletAddress = await wallet.getAddress();
+
+        // Amount of tokens to swap.
+        const toNativeAmount = "10000000000";
+
+        // Fetch sui coins to pay the wormhole fee.
+        const feeAmount = await getWormholeFee(provider);
+
+        // Balance check before transferring tokens.
+        const coinBalanceBefore = await provider.getBalance({
+          owner: walletAddress,
+          coinType: SUI_TYPE,
+        });
+
+        // Start new transaction.
+        const tx = new TransactionBlock();
+
+        // Coins to transfer to the target chain.
+        const [wormholeFee, coinsToTransfer] = tx.splitCoins(tx.gas, [
+          tx.pure(feeAmount),
+          tx.pure(outboundTransferAmount),
+        ]);
+
+        // Send the transfer with relay.
+        tx.moveCall({
+          target: `${RELAYER_ID}::transfer::transfer_tokens_with_relay`,
+          arguments: [
+            tx.object(stateId),
+            tx.object(WORMHOLE_STATE_ID),
+            tx.object(TOKEN_BRIDGE_STATE_ID),
+            coinsToTransfer,
+            tx.pure(toNativeAmount),
+            wormholeFee,
+            tx.pure(foreignChain),
+            tx.pure(nonce),
+            tx.pure(walletAddress),
+            tx.object(SUI_CLOCK_OBJECT_ID),
+          ],
+          typeArguments: [SUI_TYPE],
+        });
+
+        tx.setGasBudget(500_000);
+        const eventData = await wallet.signAndExecuteTransactionBlock({
+          transactionBlock: tx,
+          options: {
+            showEvents: true,
+          },
+        });
+
+        // Fetch wormhole events.
+        const wormholeEvents = getWormholeEvents(eventData);
+        expect(wormholeEvents!.length).equals(1);
+
+        // Parse the emitted Wormhole message and verify the payload.
+        const message = wormholeEvents![0].parsedJson;
+        expect(message.consistency_level).equal(0);
+        expect(message.sequence).equals("5");
+        expect(message.nonce).equals(nonce);
+
+        // Cache state.
+        const state = await getObjectFields(provider, stateId);
+
+        // Since SUI has 9 decimals, we need to verify that the amounts
+        // encoded in the payload are normalized.
+        const normalizedTransferAmount = tokenBridgeNormalizeAmount(
+          parseInt(outboundTransferAmount),
+          suiDecimals
+        );
+
+        // Verify the transfer payload.
+        {
+          const transferPayload = await parseTransferPayload(
+            Buffer.from(message.payload)
+          );
+
+          expect(transferPayload.amount.toString()).to.equal(
+            normalizedTransferAmount.toString()
+          );
+          expect(transferPayload.fromAddress!).equals(
+            state!.emitter_cap.fields.id.id.substring(2)
+          );
+          expect(transferPayload.originChain).to.equal(CHAIN_ID_SUI);
+          expect(transferPayload.targetAddress).to.equal(
+            foreignContractAddress.toString("hex")
+          );
+          expect(transferPayload.targetChain).to.equal(Number(foreignChain));
+        }
+
+        // Calculate the normalized target relayer fee and to native swap amount
+        // and compare it to the values in the encoded payload.
+        const expectedRelayerFee = await getTokenRelayerFee(
+          provider,
+          state,
+          Number(foreignChain),
+          suiDecimals,
+          SUI_TYPE
+        );
+        const normalizedExpectedRelayerFee = tokenBridgeNormalizeAmount(
+          expectedRelayerFee,
+          suiDecimals
+        );
+        const normalizedToNativeAmount = tokenBridgeNormalizeAmount(
+          parseInt(toNativeAmount),
+          suiDecimals
+        );
+
+        // Verify the additional payload.
+        {
+          const relayPayload = parseTransferWithRelay(
+            Buffer.from(message.payload)
+          );
+
+          expect(relayPayload.payloadType).equals(1);
+          expect(relayPayload.toNativeTokenAmount.toString()).equals(
+            normalizedToNativeAmount.toString()
+          );
+          expect(relayPayload.recipient).equals(walletAddress);
+          expect(relayPayload.targetRelayerFee.toString()).equals(
+            normalizedExpectedRelayerFee.toString()
+          );
+        }
+
+        // Balance check after transferring tokens. The balance should reflect
+        // the denormalized outboundTransferAmount. The balance chains should be
+        // slightly more than the encoded amount, since we are sending SUI
+        // in this test and the transaction costs some amount of gas (SUI).
+        const coinBalanceAfter = await provider.getBalance({
+          owner: walletAddress,
+          coinType: SUI_TYPE,
+        });
+        expect(
+          parseInt(coinBalanceBefore.totalBalance) -
+            parseInt(coinBalanceAfter.totalBalance)
+        ).gte(
+          tokenBridgeDenormalizeAmount(normalizedTransferAmount, suiDecimals)
+        );
+      });
+
+      it("Redeem transfer with relayer (no relayer refund)", async () => {
+        expect(localVariables.stateId).is.not.undefined;
+
+        // Cache stateId and fetch the state.
+        const stateId: string = localVariables.stateId;
+        const state = await getObjectFields(provider, stateId);
+
+        // Save wallet and relayer addresses.
+        const walletAddress = await wallet.getAddress();
+        const relayerAddress = await relayer.getAddress();
+
+        // Define transfer parameters.
+        const mintAmount = Math.floor(Number(outboundTransferAmount) / 3);
+        const recipient = walletAddress;
+        const tokenAddress = SUI_METADATA_ID;
+
+        // Raw amounts. These values will be normalized when added to the
+        // payload.
+        const toNativeTokenAmount = "10000000000";
+        const targetRelayerFee = await getTokenRelayerFee(
+          provider,
+          state,
+          Number(foreignChain),
+          suiDecimals,
+          SUI_TYPE
+        );
+
+        // Normalize values.
+        const normalizedMintAmount = tokenBridgeNormalizeAmount(
+          mintAmount,
+          suiDecimals
+        );
+        const normalizedToNativeAmount = tokenBridgeNormalizeAmount(
+          parseInt(toNativeTokenAmount),
+          suiDecimals
+        );
+        const normalizedTargetRelayerFee = tokenBridgeNormalizeAmount(
+          targetRelayerFee,
+          suiDecimals
+        );
+
+        // Encode the payload.
+        const payload = createTransferWithRelayPayload(
+          normalizedTargetRelayerFee,
+          normalizedToNativeAmount,
+          recipient
+        );
+
+        // Verify that the mintAmount is large enough to cover the relayer fee
+        // and swap amount.
+        expect(normalizedToNativeAmount + normalizedTargetRelayerFee).lt(
+          normalizedMintAmount
+        );
+
+        // Create a transfer tokens with payload message.
+        const published = ethereumTokenBridge.publishTransferTokensWithPayload(
+          tokenAddress!.substring(2),
+          CHAIN_ID_SUI, // tokenChain
+          BigInt(normalizedMintAmount),
+          CHAIN_ID_SUI, // recipientChain
+          state!.emitter_cap.fields.id.id.substring(2), // targetContractAddress
+          foreignContractAddress, // fromAddress
+          Buffer.from(payload.substring(2), "hex"),
+          nonce
+        );
+
+        // Sign the transfer message.
+        const signedWormholeMessage = guardians.addSignatures(published, [0]);
+
+        // Start new transaction.
+        const tx = new TransactionBlock();
+
+        // Native coins to swap. Set to zero, since SUI swaps are disabled.
+        const [coinsToTransfer] = tx.splitCoins(tx.gas, [tx.pure(0)]);
+
+        // Complete the tranfer with relay.
+        tx.moveCall({
+          target: `${RELAYER_ID}::redeem::complete_transfer_with_relay`,
+          arguments: [
+            tx.object(stateId),
+            tx.object(WORMHOLE_STATE_ID),
+            tx.object(TOKEN_BRIDGE_STATE_ID),
+            tx.pure(Array.from(signedWormholeMessage)),
+            coinsToTransfer,
+            tx.object(SUI_CLOCK_OBJECT_ID),
+          ],
+          typeArguments: [SUI_TYPE],
+        });
+
+        const gasBudget = 50_000n;
+        tx.setGasBudget(gasBudget);
+
+        const receipt = await relayer.signAndExecuteTransactionBlock({
+          transactionBlock: tx,
+          options: {
+            showEvents: true,
+            showBalanceChanges: true,
+          },
+        });
+
+        // Fetch balance changes.
+        const recipientSuiChange = getBalanceChangeFromTransaction(
+          walletAddress,
+          SUI_TYPE,
+          receipt.balanceChanges
+        );
+        const relayerSuiChange = getBalanceChangeFromTransaction(
+          relayerAddress,
+          SUI_TYPE,
+          receipt.balanceChanges
+        );
+
+        // Calculate denormalized test amounts.
+        const denormalizedTargetRelayerFee = tokenBridgeDenormalizeAmount(
+          normalizedTargetRelayerFee,
+          suiDecimals
+        );
+        const denormalizedMintAmount = tokenBridgeDenormalizeAmount(
+          normalizedMintAmount,
+          suiDecimals
+        );
+
+        // Validate relayer balance change. The SUI change should reflect
+        // the target relayer fee - gas spent.
+        expect(relayerSuiChange).gte(
+          denormalizedTargetRelayerFee - Number(gasBudget)
+        ); // GTE to account for gas.
+
+        // Validate recipient balance change. No swap should occur,
+        // but the contract will pay the relayer a fee.
+        expect(recipientSuiChange).equals(
+          denormalizedMintAmount - denormalizedTargetRelayerFee
+        );
+      });
+
+      it("Redeem transfer with relayer (with relayer refund)", async () => {
+        expect(localVariables.stateId).is.not.undefined;
+
+        // Cache stateId and fetch the state.
+        const stateId: string = localVariables.stateId;
+        const state = await getObjectFields(provider, stateId);
+
+        // Save wallet and relayer addresses.
+        const walletAddress = await wallet.getAddress();
+        const relayerAddress = await relayer.getAddress();
+
+        // Define transfer parameters.
+        const mintAmount = Math.floor(Number(outboundTransferAmount) / 3);
+        const recipient = walletAddress;
+        const tokenAddress = SUI_METADATA_ID;
+
+        // Raw amounts. These values will be normalized when added to the
+        // payload.
+        const toNativeTokenAmount = "0";
+        const targetRelayerFee = await getTokenRelayerFee(
+          provider,
+          state,
+          Number(foreignChain),
+          suiDecimals,
+          SUI_TYPE
+        );
+
+        // Normalize values.
+        const normalizedMintAmount = tokenBridgeNormalizeAmount(
+          mintAmount,
+          suiDecimals
+        );
+        const normalizedToNativeAmount = tokenBridgeNormalizeAmount(
+          parseInt(toNativeTokenAmount),
+          suiDecimals
+        );
+        const normalizedTargetRelayerFee = tokenBridgeNormalizeAmount(
+          targetRelayerFee,
+          suiDecimals
+        );
+
+        // Encode the payload.
+        const payload = createTransferWithRelayPayload(
+          normalizedTargetRelayerFee,
+          normalizedToNativeAmount,
+          recipient
+        );
+
+        // Verify that the mintAmount is large enough to cover the relayer fee
+        // and swap amount.
+        expect(normalizedToNativeAmount + normalizedTargetRelayerFee).lt(
+          normalizedMintAmount
+        );
+
+        // Create a transfer tokens with payload message.
+        const published = ethereumTokenBridge.publishTransferTokensWithPayload(
+          tokenAddress!.substring(2),
+          CHAIN_ID_SUI, // tokenChain
+          BigInt(normalizedMintAmount),
+          CHAIN_ID_SUI, // recipientChain
+          state!.emitter_cap.fields.id.id.substring(2), // targetContractAddress
+          foreignContractAddress, // fromAddress
+          Buffer.from(payload.substring(2), "hex"),
+          nonce
+        );
+
+        // Sign the transfer message.
+        const signedWormholeMessage = guardians.addSignatures(published, [0]);
+
+        // Start new transaction.
+        const tx = new TransactionBlock();
+
+        // Set the swapQuote to a nonzero number. This amount should be refunded
+        // to the relayer since swaps are disabled for SUI.
+        const swapQuote = 5000000000;
+
+        // Native coins to swap. Set to zero, since SUI swaps are disabled.
+        const [coinsToTransfer] = tx.splitCoins(tx.gas, [tx.pure(swapQuote)]);
+
+        // Complete the tranfer with relay.
+        tx.moveCall({
+          target: `${RELAYER_ID}::redeem::complete_transfer_with_relay`,
+          arguments: [
+            tx.object(stateId),
+            tx.object(WORMHOLE_STATE_ID),
+            tx.object(TOKEN_BRIDGE_STATE_ID),
+            tx.pure(Array.from(signedWormholeMessage)),
+            coinsToTransfer,
+            tx.object(SUI_CLOCK_OBJECT_ID),
+          ],
+          typeArguments: [SUI_TYPE],
+        });
+
+        const gasBudget = 50_000n;
+        tx.setGasBudget(gasBudget);
+
+        const receipt = await relayer.signAndExecuteTransactionBlock({
+          transactionBlock: tx,
+          options: {
+            showEvents: true,
+            showBalanceChanges: true,
+          },
+        });
+
+        // Only one event should be emitted since a swap didn't take place.
+        expect(receipt.events!.length).equals(1);
+
+        // Fetch balance changes.
+        const recipientSuiChange = getBalanceChangeFromTransaction(
+          walletAddress,
+          SUI_TYPE,
+          receipt.balanceChanges
+        );
+        const relayerSuiChange = getBalanceChangeFromTransaction(
+          relayerAddress,
+          SUI_TYPE,
+          receipt.balanceChanges
+        );
+
+        // Calculate denormalized test amounts.
+        const denormalizedTargetRelayerFee = tokenBridgeDenormalizeAmount(
+          normalizedTargetRelayerFee,
+          suiDecimals
+        );
+        const denormalizedMintAmount = tokenBridgeDenormalizeAmount(
+          normalizedMintAmount,
+          suiDecimals
+        );
+
+        /**
+         * Validate relayer balance change. The SUI change should reflect
+         * the target relayer fee - gas spent.
+         *
+         * NOTE: Even though the relayer provided coins to faciliate a swap,
+         * the contract should've returned the funds, since swaps are
+         * disabled for SUI.
+         */
+        expect(relayerSuiChange).gte(
+          denormalizedTargetRelayerFee - Number(gasBudget)
+        ); // GTE to account for gas.
+
+        // Validate recipient balance change. No swap should occur,
+        // but the contract will pay the relayer a fee.
+        expect(recipientSuiChange).equals(
+          denormalizedMintAmount - denormalizedTargetRelayerFee
+        );
+      });
+
+      it("Recipient self redeems transfer", async () => {
+        expect(localVariables.stateId).is.not.undefined;
+
+        // Cache stateId and fetch the state.
+        const stateId: string = localVariables.stateId;
+        const state = await getObjectFields(provider, stateId);
+
+        // Save wallet and relayer addresses.
+        const walletAddress = await wallet.getAddress();
+
+        // Define transfer parameters.
+        const mintAmount = Math.floor(Number(outboundTransferAmount) / 3);
+        const recipient = walletAddress;
+        const tokenAddress = SUI_METADATA_ID;
+
+        // NOTE: Since both the relayerFee and toNativeToken amount are zero,
+        // we do not need to normalized the values before encoding them in
+        // the payload.
+        const toNativeTokenAmount = "0";
+        const targetRelayerFee = "0";
+        const payload = createTransferWithRelayPayload(
+          parseInt(targetRelayerFee),
+          parseInt(toNativeTokenAmount),
+          recipient
+        );
+
+        // Normalize the `mintAmount`.
+        const normalizedMintAmount = tokenBridgeNormalizeAmount(
+          mintAmount,
+          suiDecimals
+        );
+
+        // Create a transfer tokens with payload message.
+        const published = ethereumTokenBridge.publishTransferTokensWithPayload(
+          tokenAddress!.substring(2),
+          CHAIN_ID_SUI, // tokenChain
+          BigInt(normalizedMintAmount),
+          CHAIN_ID_SUI, // recipientChain
+          state!.emitter_cap.fields.id.id.substring(2), // targetContractAddress
+          foreignContractAddress, // fromAddress
+          Buffer.from(payload.substring(2), "hex"),
+          nonce
+        );
+
+        // Sign the transfer message.
+        const signedWormholeMessage = guardians.addSignatures(published, [0]);
+
+        // Start new transaction.
+        const tx = new TransactionBlock();
+
+        // Complete the tranfer with relay.
+        tx.moveCall({
+          target: `${RELAYER_ID}::redeem::complete_transfer`,
+          arguments: [
+            tx.object(stateId),
+            tx.object(WORMHOLE_STATE_ID),
+            tx.object(TOKEN_BRIDGE_STATE_ID),
+            tx.pure(Array.from(signedWormholeMessage)),
+            tx.object(SUI_CLOCK_OBJECT_ID),
+          ],
+          typeArguments: [SUI_TYPE],
+        });
+
+        const gasBudget = 25_000n;
+        tx.setGasBudget(gasBudget);
+
+        const receipt = await wallet.signAndExecuteTransactionBlock({
+          transactionBlock: tx,
+          options: {
+            showEffects: true,
+            showEvents: true,
+            showBalanceChanges: true,
+          },
+        });
+
+        // Fetch balance change.
+        const recipientSuiChange = getBalanceChangeFromTransaction(
+          walletAddress,
+          SUI_TYPE,
+          receipt.balanceChanges
+        );
+
+        // Confirm recipient balance change. Since this is a self redeem
+        // the receipient should receive the full mintAmount less gas fees.
+        expect(recipientSuiChange).gte(
+          tokenBridgeDenormalizeAmount(normalizedMintAmount, suiDecimals) -
+            Number(gasBudget)
         );
       });
     });
