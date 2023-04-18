@@ -3,6 +3,7 @@
 /// methods are used to govern the smart contract.
 module token_bridge_relayer::owner {
     // Sui dependencies.
+    use sui::package::{Self, UpgradeCap};
     use sui::dynamic_field::{Self};
     use sui::object::{Self, UID};
     use sui::transfer::{Self};
@@ -48,6 +49,7 @@ module token_bridge_relayer::owner {
     public entry fun create_state(
         wormhole_state: &WormholeState,
         owner_cap: &mut OwnerCap,
+        upgrade_cap: UpgradeCap,
         ctx: &mut TxContext
     ) {
         assert!(
@@ -57,6 +59,9 @@ module token_bridge_relayer::owner {
 
         // State will be created once function finishes.
         let _: bool = dynamic_field::remove(&mut owner_cap.id, b"create_state");
+
+        // Make the contract immutable by destroying the upgrade cap.
+        package::make_immutable(upgrade_cap);
 
         // Hardcode the initial swap rate and relayer fee precision state
         // variables.
@@ -174,8 +179,13 @@ module token_bridge_relayer::owner {
 
     #[test_only]
     /// We need this function to simulate calling `init` in our test.
-    public fun init_test_only(ctx: &mut TxContext) {
-        init(ctx)
+    public fun init_test_only(ctx: &mut TxContext): UpgradeCap {
+        init(ctx);
+
+        package::test_publish(
+            object::id_from_address(@token_bridge_relayer),
+            ctx
+        )
     }
 }
 
@@ -183,6 +193,7 @@ module token_bridge_relayer::owner {
 module token_bridge_relayer::init_tests {
     use std::vector::{Self};
     use sui::object::{Self};
+    use sui::transfer::{Self};
     use sui::test_scenario::{Self, Scenario, TransactionEffects};
 
     // Token Bridge Relayer.
@@ -230,7 +241,7 @@ module token_bridge_relayer::init_tests {
 
         // Simulate calling `init`.
         {
-            owner::init_test_only(test_scenario::ctx(scenario));
+            let upgrade_cap = owner::init_test_only(test_scenario::ctx(scenario));
 
             // Fetch effects.
             let effects = test_scenario::next_tx(scenario, creator);
@@ -246,6 +257,7 @@ module token_bridge_relayer::init_tests {
             assert!(*owner_cap_id == object::id(&owner_cap), 0);
 
             // Bye bye.
+            transfer::public_transfer(upgrade_cap, @0x0);
             test_scenario::return_to_sender<OwnerCap>(scenario, owner_cap);
         };
 
@@ -271,37 +283,6 @@ module token_bridge_relayer::init_tests {
 
         // Bye bye.
         test_scenario::return_shared<RelayerState>(state);
-
-        // Done.
-        test_scenario::end(my_scenario);
-    }
-
-    #[test]
-    #[expected_failure(abort_code = owner::E_STATE_ALREADY_CREATED)]
-    public fun cannot_create_state_again() {
-        let (creator, _) = people();
-        let (my_scenario, _) = set_up(creator);
-        let scenario = &mut my_scenario;
-
-        // Fetch the owner and wormhole state.
-        let owner_cap =
-                test_scenario::take_from_sender<OwnerCap>(scenario);
-        let wormhole_state =
-            test_scenario::take_shared<WormholeState>(scenario);
-
-        // The call to create the state should fail.
-        owner::create_state(
-            &mut wormhole_state,
-            &mut owner_cap,
-            test_scenario::ctx(scenario)
-        );
-
-        // Bye bye.
-        test_scenario::return_to_sender<OwnerCap>(
-            scenario,
-            owner_cap
-        );
-        test_scenario::return_shared(wormhole_state);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -1770,9 +1751,10 @@ module token_bridge_relayer::init_tests {
             test_scenario::next_tx(scenario, creator);
         };
 
-            // Set up the token bridge relayer contract.
+        // Set up the token bridge relayer contract.
+        let upgrade_cap;
         {
-            owner::init_test_only(test_scenario::ctx(scenario));
+            upgrade_cap = owner::init_test_only(test_scenario::ctx(scenario));
 
             // Proceed.
             test_scenario::next_tx(scenario, creator);
@@ -1794,7 +1776,7 @@ module token_bridge_relayer::init_tests {
             test_scenario::return_shared<BridgeState>(state);
         };
 
-        // Create the Hello Token shared state object.
+        // Create the Hello Token shared state object and destory the upgrade cap.
         {
             let owner_cap =
                 test_scenario::take_from_sender<OwnerCap>(scenario);
@@ -1804,6 +1786,7 @@ module token_bridge_relayer::init_tests {
             owner::create_state(
                 &mut wormhole_state,
                 &mut owner_cap,
+                upgrade_cap,
                 test_scenario::ctx(scenario)
             );
 

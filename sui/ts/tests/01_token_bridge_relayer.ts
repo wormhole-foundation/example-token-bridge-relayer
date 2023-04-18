@@ -15,6 +15,7 @@ import {
   TOKEN_BRIDGE_STATE_ID,
   RELAYER_ID,
   RELAYER_OWNER_CAP_ID,
+  RELAYER_UPGRADE_CAP_ID,
   COIN_8_TYPE,
   COIN_10_TYPE,
   SUI_TYPE,
@@ -101,6 +102,7 @@ describe("1: Token Bridge Relayer", () => {
         arguments: [
           tx.object(WORMHOLE_STATE_ID),
           tx.object(RELAYER_OWNER_CAP_ID),
+          tx.object(RELAYER_UPGRADE_CAP_ID),
         ],
       });
       const result = await creator.signAndExecuteTransactionBlock({

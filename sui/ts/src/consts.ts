@@ -26,6 +26,8 @@ export const TOKEN_BRIDGE_STATE_ID = process.env.TESTING_TOKEN_BRIDGE_STATE_ID!;
 export const RELAYER_ID = process.env.TESTING_RELAYER_ID!;
 export const RELAYER_OWNER_CAP_ID =
   process.env.TESTING_RELAYER_OWNER_CAPABILITY_ID!;
+export const RELAYER_UPGRADE_CAP_ID =
+  process.env.TESTING_RELAYER_UPGRADE_CAP_ID!;
 
 // guardian signer
 export const GUARDIAN_PRIVATE_KEY =

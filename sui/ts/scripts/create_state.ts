@@ -9,6 +9,7 @@ import {
   RELAYER_ID,
   WORMHOLE_STATE_ID,
   RELAYER_OWNER_CAP_ID,
+  RELAYER_UPGRADE_CAP_ID,
   RPC,
 } from "./consts";
 import yargs from "yargs";
@@ -38,7 +39,11 @@ async function create_state(wallet: RawSigner) {
   const tx = new TransactionBlock();
   tx.moveCall({
     target: `${RELAYER_ID}::owner::create_state`,
-    arguments: [tx.object(WORMHOLE_STATE_ID), tx.object(RELAYER_OWNER_CAP_ID)],
+    arguments: [
+      tx.object(WORMHOLE_STATE_ID),
+      tx.object(RELAYER_OWNER_CAP_ID),
+      tx.object(RELAYER_UPGRADE_CAP_ID),
+    ],
   });
   const result = await wallet.signAndExecuteTransactionBlock({
     transactionBlock: tx,
