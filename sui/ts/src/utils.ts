@@ -1,9 +1,7 @@
-import {JsonRpcProvider, RawSigner, TransactionBlock} from "@mysten/sui.js";
-import {execSync} from "child_process";
+import {JsonRpcProvider, TransactionBlock} from "@mysten/sui.js";
 import {ethers} from "ethers";
 import {WORMHOLE_STATE_ID, RELAYER_ID} from "./consts";
-import * as fs from "fs";
-import {string} from "yargs";
+import {getSignedVAAHash} from "@certusone/wormhole-sdk";
 
 export async function getWormholeFee(provider: JsonRpcProvider) {
   // Fetch the wormhole state fields.
@@ -409,4 +407,50 @@ export function getBalanceChangeFromTransaction(
   }
 
   return Math.abs(parseInt(result[0].amount));
+}
+
+/////////////// DELETE THESE ONCE THE SDK IS DONE ///////////////////////
+export async function getIsTransferCompletedSui(
+  provider: JsonRpcProvider,
+  tokenBridgeStateObjectId: string,
+  coreBridgeAddress: string,
+  transferVAA: Uint8Array
+): Promise<boolean> {
+  const objectInfo = await provider.getObject({
+    id: tokenBridgeStateObjectId,
+    options: {showContent: true},
+  });
+  if (objectInfo.error) {
+    throw new Error(`getObject returned error code: ${objectInfo.error.code}`);
+  }
+  if (!(objectInfo.data?.content && "fields" in objectInfo.data.content)) {
+    throw new Error('Missing property "fields"');
+  }
+  const consumedVAAsTableObjectId =
+    objectInfo.data.content.fields.consumed_vaas.fields.hashes.fields.items
+      .fields.id.id;
+  try {
+    const signedVAAHash = getSignedVAAHash(transferVAA);
+    // This call errors if the type doesn't exist in ConsumedVAAs
+    await provider.getDynamicFieldObject({
+      parentId: consumedVAAsTableObjectId,
+      name: {
+        type: `${coreBridgeAddress}::bytes32::Bytes32`,
+        value: {
+          data: [...Buffer.from(signedVAAHash.slice(2), "hex")],
+        },
+      },
+    });
+    return true;
+  } catch (e: any) {
+    // TODO: is this right
+    if (e.code === -32000 && e.message?.includes("RPC Error")) {
+      return false;
+    }
+    throw e;
+  }
+}
+
+export function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

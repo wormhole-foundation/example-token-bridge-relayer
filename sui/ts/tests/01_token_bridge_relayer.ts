@@ -1,5 +1,9 @@
 import {expect} from "chai";
-import {CHAIN_ID_SUI, parseTransferPayload} from "@certusone/wormhole-sdk";
+import {
+  CHAIN_ID_SUI,
+  parseTransferPayload,
+  parseVaa,
+} from "@certusone/wormhole-sdk";
 import * as mock from "@certusone/wormhole-sdk/lib/cjs/mock";
 import {
   ETHEREUM_TOKEN_BRIDGE_ADDRESS,
@@ -14,6 +18,7 @@ import {
   COIN_8_TYPE,
   COIN_10_TYPE,
   SUI_TYPE,
+  WORMHOLE_ID,
 } from "../src/consts";
 import {
   Ed25519Keypair,
@@ -39,6 +44,8 @@ import {
   getSwapAmountIn,
   getBalanceChangeFromTransaction,
   getDynamicFieldsByType,
+  getIsTransferCompletedSui,
+  sleep,
 } from "../src";
 
 describe("1: Token Bridge Relayer", () => {
@@ -1188,12 +1195,12 @@ describe("1: Token Bridge Relayer", () => {
         const stateId: string = localVariables.stateId;
         const state = await getObjectFields(provider, stateId);
 
-        // Fetch the dynamic field for COIN_10 token info before deregistering
+        // Fetch the dynamic field for COIN_8 token info before deregistering
         // the coin type.
         const registeredCoinFieldBefore = await getDynamicFieldsByType(
           provider,
           state!.registered_tokens.fields.id.id,
-          COIN_10_TYPE
+          COIN_8_TYPE
         );
         expect(registeredCoinFieldBefore.length).equals(1);
 
@@ -1202,21 +1209,264 @@ describe("1: Token Bridge Relayer", () => {
         tx.moveCall({
           target: `${RELAYER_ID}::owner::deregister_token`,
           arguments: [tx.object(RELAYER_OWNER_CAP_ID), tx.object(stateId)],
-          typeArguments: [COIN_10_TYPE],
+          typeArguments: [COIN_8_TYPE],
         });
         const result = await creator.signAndExecuteTransactionBlock({
           transactionBlock: tx,
         });
         expect(result.digest).is.not.null;
 
-        // Fetch the dynamic field for COIN_10 token info after deregistering
+        // Fetch the dynamic field for COIN_8 token info after deregistering
         // the coin type.
         const registeredCoinFieldAfter = await getDynamicFieldsByType(
           provider,
           state!.registered_tokens.fields.id.id,
-          COIN_10_TYPE
+          COIN_8_TYPE
         );
         expect(registeredCoinFieldAfter.length).equals(0);
+      });
+    });
+
+    describe("Relay End-to-end", () => {
+      const depositAmount = 69420100000;
+
+      it("Deposit tokens into bridge", async () => {
+        expect(localVariables.stateId).is.not.undefined;
+        const stateId: string = localVariables.stateId;
+
+        // Fetch wallet address.
+        const walletAddress = await wallet.getAddress();
+
+        // Fetch sui coins to pay the wormhole fee.
+        const feeAmount = await getWormholeFee(provider);
+
+        // Fetch coin 10.
+        const coin = await getCoinWithHighestBalance(
+          provider,
+          walletAddress,
+          COIN_10_TYPE
+        );
+
+        // Start new transaction.
+        const tx = new TransactionBlock();
+
+        // Wormhole fee coins.
+        const [wormholeFee] = tx.splitCoins(tx.gas, [tx.pure(feeAmount)]);
+
+        // Coins to transfer to the target chain.
+        const [coinsToTransfer] = tx.splitCoins(tx.object(coin.coinObjectId), [
+          tx.pure(depositAmount),
+        ]);
+
+        // Send the transfer with relay (this deposits token into the token
+        // bridge).
+        tx.moveCall({
+          target: `${RELAYER_ID}::transfer::transfer_tokens_with_relay`,
+          arguments: [
+            tx.object(stateId),
+            tx.object(WORMHOLE_STATE_ID),
+            tx.object(TOKEN_BRIDGE_STATE_ID),
+            coinsToTransfer,
+            tx.pure(0),
+            wormholeFee,
+            tx.pure(foreignChain),
+            tx.pure(nonce),
+            tx.pure(walletAddress),
+            tx.object(SUI_CLOCK_OBJECT_ID),
+          ],
+          typeArguments: [COIN_10_TYPE],
+        });
+        await wallet.signAndExecuteTransactionBlock({
+          transactionBlock: tx,
+          options: {
+            showEvents: true,
+          },
+        });
+      });
+
+      it("Create signed VAA to be relayed", async () => {
+        expect(localVariables.stateId).is.not.undefined;
+        // Cache stateId and fetch the state.
+        const stateId: string = localVariables.stateId;
+        const state = await getObjectFields(provider, stateId);
+
+        // Save wallet and relayer addresses.
+        const walletAddress = await wallet.getAddress();
+
+        // Define transfer parameters.
+        const mintAmount = Number(depositAmount);
+        const recipient = walletAddress;
+        const tokenAddress = await provider
+          .getCoinMetadata({
+            coinType: COIN_10_TYPE,
+          })
+          .then((result) => result.id);
+
+        // Raw amounts. These values will be normalized when added to the
+        // payload.
+        const toNativeTokenAmount = "1000000000000";
+        const decimals = 10;
+        const targetRelayerFee = await getTokenRelayerFee(
+          provider,
+          state,
+          Number(foreignChain),
+          decimals,
+          COIN_10_TYPE
+        );
+
+        // Encode the payload.
+        const payload = createTransferWithRelayPayload(
+          tokenBridgeNormalizeAmount(targetRelayerFee, decimals),
+          tokenBridgeNormalizeAmount(parseInt(toNativeTokenAmount), decimals),
+          recipient
+        );
+
+        // Create a transfer tokens with payload message.
+        const published = ethereumTokenBridge.publishTransferTokensWithPayload(
+          tokenAddress!.substring(2),
+          CHAIN_ID_SUI, // tokenChain
+          BigInt(tokenBridgeNormalizeAmount(mintAmount, decimals)),
+          CHAIN_ID_SUI, // recipientChain
+          state!.emitter_cap.fields.id.id.substring(2), // targetContractAddress
+          foreignContractAddress, // fromAddress
+          Buffer.from(payload.substring(2), "hex"),
+          nonce
+        );
+
+        // Sign the transfer message.
+        localVariables.signedVaa = guardians.addSignatures(published, [0]);
+      });
+
+      it("Relay VAA", async () => {
+        expect(localVariables.stateId).is.not.undefined;
+        expect(localVariables.signedVaa).is.not.undefined;
+
+        // Fetch the state object.
+        const stateId: string = localVariables.stateId;
+        const state = await getObjectFields(provider, stateId);
+
+        // Assume you just fetched the VAA from the guardians (spy).
+        const vaaArray = Buffer.from(localVariables.signedVaa);
+
+        // Check to see if the VAA has been redeemed already.
+        const isRedeemed = await getIsTransferCompletedSui(
+          provider,
+          TOKEN_BRIDGE_STATE_ID,
+          WORMHOLE_ID,
+          vaaArray
+        );
+
+        if (isRedeemed) {
+          console.log("Vaa already redeemed");
+          return;
+        }
+
+        // Parse the VAA.
+        const parsedVaa = parseVaa(vaaArray);
+
+        // Make sure it's a payload 3.
+        const payloadType = parsedVaa.payload.readUint8(0);
+        if (payloadType != 3) {
+          console.log("Not a payload 3");
+          return;
+        }
+
+        // Parse the transfer payload.
+        const transferPayload = parseTransferPayload(parsedVaa.payload);
+
+        // Confirm that the destination is the relayer contract.
+        if (
+          state!.emitter_cap.fields.id.id != transferPayload.targetAddress &&
+          transferPayload.targetChain != CHAIN_ID_SUI
+        ) {
+          console.log("Destination is not a relayer contract");
+          return;
+        }
+
+        /**
+         * Confirm that the sender is a relayer contract.
+         *
+         * NOTE: The relayer should have a chainId to address mapping
+         * for all registered contracts to perform a lookup.
+         */
+        if (
+          transferPayload.fromAddress != foreignContractAddress.toString("hex")
+        ) {
+          console.log("Sender is not a registered relayer contract");
+          return;
+        }
+
+        // Parse the TransferWithRelay message.
+        const relayPayload = parseTransferWithRelay(parsedVaa.payload);
+
+        // NOTE: We need to use SDK method to look up the coinType here. This method is
+        // currently in active development. This is similar to looking up the local
+        // token address on EVM chains.
+        // const coinType = await getCoinTypeFromVAA(vaaArray);
+        const coinType = COIN_10_TYPE; // Replace this with the sdk method.
+
+        // Fetch the token decimals.
+        const decimals = await provider
+          .getCoinMetadata({
+            coinType: coinType,
+          })
+          .then((result) => result.decimals);
+
+        // Denormalize the to native token amount (swap amount).
+        const normalizedToNativeAmount = tokenBridgeNormalizeAmount(
+          relayPayload.toNativeTokenAmount,
+          decimals
+        );
+
+        // Fetch the swap quote.
+        const swapQuote = await getSwapQuote(
+          provider,
+          await relayer.getAddress(),
+          state,
+          normalizedToNativeAmount.toString(),
+          decimals,
+          coinType
+        );
+
+        // Start new transaction.
+        const tx = new TransactionBlock();
+
+        // Native coins to swap.
+        const [coinsToTransfer] = tx.splitCoins(tx.gas, [tx.pure(swapQuote)]);
+
+        // Complete the tranfer with relay.
+        tx.moveCall({
+          target: `${RELAYER_ID}::redeem::complete_transfer_with_relay`,
+          arguments: [
+            tx.object(stateId),
+            tx.object(WORMHOLE_STATE_ID),
+            tx.object(TOKEN_BRIDGE_STATE_ID),
+            tx.pure(Array.from(localVariables.signedVaa)),
+            coinsToTransfer,
+            tx.object(SUI_CLOCK_OBJECT_ID),
+          ],
+          typeArguments: [COIN_10_TYPE],
+        });
+        tx.setGasBudget(50_000n);
+
+        const receipt = await relayer.signAndExecuteTransactionBlock({
+          transactionBlock: tx,
+          options: {
+            showEvents: true,
+            showBalanceChanges: true,
+          },
+        });
+
+        // Confirm that the test worked!
+        {
+          const isRedeemed = await getIsTransferCompletedSui(
+            provider,
+            TOKEN_BRIDGE_STATE_ID,
+            WORMHOLE_ID,
+            vaaArray
+          );
+          expect(isRedeemed).is.true;
+        }
       });
     });
   });
