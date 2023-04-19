@@ -739,6 +739,131 @@ module token_bridge_relayer::init_tests {
     }
 
     #[test]
+    public fun calculate_token_relayer_fee() {
+        let (creator, _) = people();
+        let (my_scenario, _) = set_up(creator);
+        let scenario = &mut my_scenario;
+
+        // Fetch the relayer state object and owner capability.
+        let state = test_scenario::take_shared<RelayerState>(scenario);
+        let owner_cap =
+                test_scenario::take_from_sender<OwnerCap>(scenario);
+
+        // Register the target contract.
+        {
+            // Register the emitter.
+            owner::register_foreign_contract(
+                &owner_cap,
+                &mut state,
+                TEST_TARGET_CHAIN,
+                TEST_TARGET_CONTRACT,
+            );
+
+            // Proceed.
+            test_scenario::next_tx(scenario, creator);
+        };
+
+        // Set the initial relayer fee.
+        {
+            let initial_relayer_fee = 500000000;
+
+            // Set the relayer fee.
+            owner::update_relayer_fee(
+                &owner_cap,
+                &mut state,
+                TEST_TARGET_CHAIN,
+                initial_relayer_fee
+            );
+
+            // Proceed.
+            test_scenario::next_tx(scenario, creator);
+        };
+
+        // Set the initial swap rate.
+        {
+            let swap_rate = 100000000;
+
+            owner::register_token<COIN_8>(
+                &owner_cap,
+                &mut state,
+                swap_rate,
+                TEST_INITIAL_MAX_SWAP_AMOUNT,
+                TEST_ENABLE_SWAP
+            );
+
+            // Proceed.
+            test_scenario::next_tx(scenario, creator);
+        };
+
+        // Compute the relayer fee with the intial parameters.
+        {
+            let token_fee = relayer_state::token_relayer_fee<COIN_8>(
+                &state,
+                TEST_TARGET_CHAIN,
+                8 // decimals
+            );
+            assert!(token_fee == 500000000, 0);
+        };
+
+        // Compute the relayer fee with an increased swap rate.
+        {
+            owner::update_swap_rate<COIN_8>(
+                &owner_cap,
+                &mut state,
+                690000000000 // new swap rate $6900
+            );
+
+            let token_fee = relayer_state::token_relayer_fee<COIN_8>(
+                &state,
+                TEST_TARGET_CHAIN,
+                8 // decimals
+            );
+            assert!(token_fee == 72463, 0);
+        };
+
+        // Compute the relayer fee with a decreased swap rate.
+        {
+            owner::update_swap_rate<COIN_8>(
+                &owner_cap,
+                &mut state,
+                4200000 // new swap rate $0.042
+            );
+
+            let token_fee = relayer_state::token_relayer_fee<COIN_8>(
+                &state,
+                TEST_TARGET_CHAIN,
+                8 // decimals
+            );
+            assert!(token_fee == 11904761904, 0);
+        };
+
+        // Compute the relayer fee when the usd fee is zero.
+        {
+            // Set the relayer fee to zero.
+            owner::update_relayer_fee(
+                &owner_cap,
+                &mut state,
+                TEST_TARGET_CHAIN,
+                0
+            );
+
+            let token_fee = relayer_state::token_relayer_fee<COIN_8>(
+                &state,
+                TEST_TARGET_CHAIN,
+                8 // decimals
+            );
+            assert!(token_fee == 0, 0);
+        };
+
+        // Bye bye.
+        test_scenario::return_shared<RelayerState>(state);
+        test_scenario::return_to_sender<OwnerCap>(scenario, owner_cap);
+
+        // Done.
+        test_scenario::end(my_scenario);
+    }
+
+    #[test]
     #[expected_failure(abort_code = relayer_fees::E_CHAIN_NOT_REGISTERED)]
     public fun cannot_set_initial_relayer_fee_contract_not_registered() {
         let (creator, _) = people();
