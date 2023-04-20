@@ -219,6 +219,7 @@ describe("1: Token Bridge Relayer", () => {
       });
       const result = await creator.signAndExecuteTransactionBlock({
         transactionBlock: tx,
+        options: {showEffects: true},
       });
       expect(result.digest).is.not.null;
 
@@ -1943,7 +1944,13 @@ describe("1: Token Bridge Relayer", () => {
         // NOTE: We need to use SDK method to look up the coinType here. This method is
         // currently in active development. This is similar to looking up the local
         // token address on EVM chains.
-        // const coinType = await getCoinTypeFromVAA(vaaArray);
+        // const coinType = await getTokenCoinType(
+        //   provider,
+        //   TOKEN_BRIDGE_ID,
+        //   TOKEN_BRIDGE_STATE_ID,
+        //   Uint8Array.from(Buffer.from(transferPayload.originAddress)),
+        //   transferPayload.originChain
+        // );
         const coinType = COIN_10_TYPE; // Replace this with the sdk method.
 
         // Fetch the token decimals.

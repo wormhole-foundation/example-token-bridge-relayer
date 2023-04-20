@@ -69,8 +69,6 @@ describe("0: Wormhole", () => {
       expect(process.env.TESTING_EXAMPLE_COINS_ID).is.not.undefined;
       expect(process.env.TESTING_COIN_8_TREASURY_ID).is.not.undefined;
       expect(process.env.TESTING_COIN_10_TREASURY_ID).is.not.undefined;
-      expect(process.env.TESTING_WRAPPED_WETH_COIN_TYPE).is.not.undefined;
-      expect(process.env.TESTING_WRAPPED_WETH_ID).is.not.undefined;
     });
   });
 

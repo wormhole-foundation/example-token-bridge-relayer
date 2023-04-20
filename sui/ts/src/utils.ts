@@ -1,4 +1,8 @@
-import {JsonRpcProvider, TransactionBlock} from "@mysten/sui.js";
+import {
+  JsonRpcProvider,
+  TransactionBlock,
+  SuiObjectResponse,
+} from "@mysten/sui.js";
 import {ethers} from "ethers";
 import {WORMHOLE_STATE_ID, RELAYER_ID} from "./consts";
 import {getSignedVAAHash} from "@certusone/wormhole-sdk";
@@ -119,8 +123,9 @@ export async function getDynamicFieldsByType(
     .then((result) => result.data);
 
   // Fetch the target field by type.
-  const targetObject = dynamicFields.filter((id) =>
-    id.objectType.includes(type)
+  const targetObject = dynamicFields.filter(
+    (id) =>
+      id.objectType.includes(type) || id.objectType.includes(type.substring(3))
   );
 
   return targetObject;
@@ -414,7 +419,9 @@ export function getBalanceChangeFromTransaction(
 ): number {
   const result = balanceChanges.filter(
     (result: any) =>
-      result.owner.AddressOwner == wallet && result.coinType == coinType
+      result.owner.AddressOwner == wallet &&
+      (result.coinType == coinType ||
+        result.coinType.includes(coinType.substring(3)))
   );
 
   if (result.length != 1) {
@@ -466,6 +473,47 @@ export async function getIsTransferCompletedSui(
   }
 }
 
-export function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+export const getFieldsFromObjectResponse = (object: SuiObjectResponse) => {
+  const content = object.data?.content;
+  return content && content.dataType === "moveObject" ? content.fields : null;
+};
+
+export const getTokenCoinType = async (
+  provider: JsonRpcProvider,
+  tokenBridgeAddress: string,
+  tokenBridgeStateObjectId: string,
+  tokenAddress: Uint8Array,
+  tokenChain: number
+): Promise<string | null> => {
+  const tokenBridgeStateFields = await getObjectFields(
+    provider,
+    tokenBridgeStateObjectId
+  );
+  if (!tokenBridgeStateFields) {
+    throw new Error(
+      `Unable to fetch object fields from token bridge state. Object ID: ${tokenBridgeStateObjectId}`
+    );
+  }
+  const coinTypesObjectId =
+    tokenBridgeStateFields?.token_registry?.fields?.coin_types?.fields?.id?.id;
+  if (!coinTypesObjectId) {
+    throw new Error("Unable to fetch coin types object ID");
+  }
+  try {
+    // This call errors if the key doesn't exist in the coin_types table
+    const coinTypeValue = await provider.getDynamicFieldObject({
+      parentId: coinTypesObjectId,
+      name: {
+        type: `${tokenBridgeAddress}::token_registry::CoinTypeKey`,
+        value: {
+          addr: [...tokenAddress],
+          chain: tokenChain,
+        },
+      },
+    });
+    const fields = getFieldsFromObjectResponse(coinTypeValue);
+    return fields?.value || null;
+  } catch {
+    return null;
+  }
+};

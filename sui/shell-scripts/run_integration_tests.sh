@@ -15,7 +15,7 @@ rm -rf $SUI_CONFIG/*_db
 
 ### Start local node
 echo "Starting local validator."
- ~/gusc1a-ossdev-asl1/mysten/target/debug/sui start \
+sui start \
     --network.config $TEST_DIR/sui_config/network.yaml > /dev/null 2>&1 &
 
 sleep 1
