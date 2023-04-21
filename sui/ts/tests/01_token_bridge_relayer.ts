@@ -21,6 +21,7 @@ import {
   SUI_TYPE,
   WORMHOLE_ID,
   SUI_METADATA_ID,
+  TOKEN_BRIDGE_ID,
 } from "../src/consts";
 import {
   Ed25519Keypair,
@@ -516,34 +517,58 @@ describe("1: Token Bridge Relayer", () => {
           COIN_8_TYPE
         );
 
-        // Start new transaction.
-        const tx = new TransactionBlock();
+        // Complete the transfer with payload.
+        let receipt;
+        {
+          // Start new transaction.
+          const tx = new TransactionBlock();
 
-        // Native coins to swap.
-        const [coinsToTransfer] = tx.splitCoins(tx.gas, [tx.pure(swapQuote)]);
+          // Parse and verify the vaa.
+          const [parsedVaa] = tx.moveCall({
+            target: `${WORMHOLE_ID}::vaa::parse_and_verify`,
+            arguments: [
+              tx.object(WORMHOLE_STATE_ID),
+              tx.pure(Array.from(signedWormholeMessage)),
+              tx.object(SUI_CLOCK_OBJECT_ID),
+            ],
+          });
 
-        // Complete the tranfer with relay.
-        tx.moveCall({
-          target: `${RELAYER_ID}::redeem::complete_transfer_with_relay`,
-          arguments: [
-            tx.object(stateId),
-            tx.object(WORMHOLE_STATE_ID),
-            tx.object(TOKEN_BRIDGE_STATE_ID),
-            tx.pure(Array.from(signedWormholeMessage)),
-            coinsToTransfer,
-            tx.object(SUI_CLOCK_OBJECT_ID),
-          ],
-          typeArguments: [COIN_8_TYPE],
-        });
-        tx.setGasBudget(25_000n);
+          // Verify the VAA with the token bridge.
+          const [tokenBridgeMessage] = tx.moveCall({
+            target: `${TOKEN_BRIDGE_ID}::vaa::verify_only_once`,
+            arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), parsedVaa],
+          });
 
-        const receipt = await relayer.signAndExecuteTransactionBlock({
-          transactionBlock: tx,
-          options: {
-            showEvents: true,
-            showBalanceChanges: true,
-          },
-        });
+          // Authorize the transfer.
+          const [redeemerTicket] = tx.moveCall({
+            target: `${TOKEN_BRIDGE_ID}::complete_transfer_with_payload::authorize_transfer`,
+            arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), tokenBridgeMessage],
+            typeArguments: [COIN_8_TYPE],
+          });
+
+          // Native coins to swap.
+          const [coinsToTransfer] = tx.splitCoins(tx.gas, [tx.pure(swapQuote)]);
+
+          // Complete the tranfer with relay.
+          tx.moveCall({
+            target: `${RELAYER_ID}::redeem::complete_transfer_with_relay`,
+            arguments: [
+              tx.object(stateId),
+              tx.object(TOKEN_BRIDGE_STATE_ID),
+              redeemerTicket,
+              coinsToTransfer,
+            ],
+            typeArguments: [COIN_8_TYPE],
+          });
+
+          receipt = await relayer.signAndExecuteTransactionBlock({
+            transactionBlock: tx,
+            options: {
+              showEvents: true,
+              showBalanceChanges: true,
+            },
+          });
+        }
 
         // Fetch balance changes.
         const recipientCoinChange = getBalanceChangeFromTransaction(
@@ -639,31 +664,51 @@ describe("1: Token Bridge Relayer", () => {
         // Sign the transfer message.
         const signedWormholeMessage = guardians.addSignatures(published, [0]);
 
-        // Start new transaction.
-        const tx = new TransactionBlock();
+        // Complete the transfer with payload.
+        let receipt;
+        {
+          // Start new transaction.
+          const tx = new TransactionBlock();
 
-        // Complete the tranfer with relay.
-        tx.moveCall({
-          target: `${RELAYER_ID}::redeem::complete_transfer`,
-          arguments: [
-            tx.object(stateId),
-            tx.object(WORMHOLE_STATE_ID),
-            tx.object(TOKEN_BRIDGE_STATE_ID),
-            tx.pure(Array.from(signedWormholeMessage)),
-            tx.object(SUI_CLOCK_OBJECT_ID),
-          ],
-          typeArguments: [COIN_8_TYPE],
-        });
-        tx.setGasBudget(25_000n);
+          // Parse and verify the vaa.
+          const [parsedVaa] = tx.moveCall({
+            target: `${WORMHOLE_ID}::vaa::parse_and_verify`,
+            arguments: [
+              tx.object(WORMHOLE_STATE_ID),
+              tx.pure(Array.from(signedWormholeMessage)),
+              tx.object(SUI_CLOCK_OBJECT_ID),
+            ],
+          });
 
-        const receipt = await wallet.signAndExecuteTransactionBlock({
-          transactionBlock: tx,
-          options: {
-            showEffects: true,
-            showEvents: true,
-            showBalanceChanges: true,
-          },
-        });
+          // Verify the VAA with the token bridge.
+          const [tokenBridgeMessage] = tx.moveCall({
+            target: `${TOKEN_BRIDGE_ID}::vaa::verify_only_once`,
+            arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), parsedVaa],
+          });
+
+          // Authorize the transfer.
+          const [redeemerTicket] = tx.moveCall({
+            target: `${TOKEN_BRIDGE_ID}::complete_transfer_with_payload::authorize_transfer`,
+            arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), tokenBridgeMessage],
+            typeArguments: [COIN_8_TYPE],
+          });
+
+          // Complete the tranfer with relay.
+          tx.moveCall({
+            target: `${RELAYER_ID}::redeem::complete_transfer`,
+            arguments: [tx.object(stateId), redeemerTicket],
+            typeArguments: [COIN_8_TYPE],
+          });
+
+          receipt = await wallet.signAndExecuteTransactionBlock({
+            transactionBlock: tx,
+            options: {
+              showEvents: true,
+              showEffects: true,
+              showBalanceChanges: true,
+            },
+          });
+        }
 
         // Fetch balance change.
         const recipientCoinChange = getBalanceChangeFromTransaction(
@@ -924,34 +969,58 @@ describe("1: Token Bridge Relayer", () => {
           COIN_10_TYPE
         );
 
-        // Start new transaction.
-        const tx = new TransactionBlock();
+        // Complete the transfer with payload.
+        let receipt;
+        {
+          // Start new transaction.
+          const tx = new TransactionBlock();
 
-        // Native coins to swap.
-        const [coinsToTransfer] = tx.splitCoins(tx.gas, [tx.pure(swapQuote)]);
+          // Parse and verify the vaa.
+          const [parsedVaa] = tx.moveCall({
+            target: `${WORMHOLE_ID}::vaa::parse_and_verify`,
+            arguments: [
+              tx.object(WORMHOLE_STATE_ID),
+              tx.pure(Array.from(signedWormholeMessage)),
+              tx.object(SUI_CLOCK_OBJECT_ID),
+            ],
+          });
 
-        // Complete the tranfer with relay.
-        tx.moveCall({
-          target: `${RELAYER_ID}::redeem::complete_transfer_with_relay`,
-          arguments: [
-            tx.object(stateId),
-            tx.object(WORMHOLE_STATE_ID),
-            tx.object(TOKEN_BRIDGE_STATE_ID),
-            tx.pure(Array.from(signedWormholeMessage)),
-            coinsToTransfer,
-            tx.object(SUI_CLOCK_OBJECT_ID),
-          ],
-          typeArguments: [COIN_10_TYPE],
-        });
-        tx.setGasBudget(50_000n);
+          // Verify the VAA with the token bridge.
+          const [tokenBridgeMessage] = tx.moveCall({
+            target: `${TOKEN_BRIDGE_ID}::vaa::verify_only_once`,
+            arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), parsedVaa],
+          });
 
-        const receipt = await relayer.signAndExecuteTransactionBlock({
-          transactionBlock: tx,
-          options: {
-            showEvents: true,
-            showBalanceChanges: true,
-          },
-        });
+          // Authorize the transfer.
+          const [redeemerTicket] = tx.moveCall({
+            target: `${TOKEN_BRIDGE_ID}::complete_transfer_with_payload::authorize_transfer`,
+            arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), tokenBridgeMessage],
+            typeArguments: [COIN_10_TYPE],
+          });
+
+          // Native coins to swap.
+          const [coinsToTransfer] = tx.splitCoins(tx.gas, [tx.pure(swapQuote)]);
+
+          // Complete the tranfer with relay.
+          tx.moveCall({
+            target: `${RELAYER_ID}::redeem::complete_transfer_with_relay`,
+            arguments: [
+              tx.object(stateId),
+              tx.object(TOKEN_BRIDGE_STATE_ID),
+              redeemerTicket,
+              coinsToTransfer,
+            ],
+            typeArguments: [COIN_10_TYPE],
+          });
+
+          receipt = await relayer.signAndExecuteTransactionBlock({
+            transactionBlock: tx,
+            options: {
+              showEvents: true,
+              showBalanceChanges: true,
+            },
+          });
+        }
 
         // Fetch balance changes.
         const recipientCoinChange = getBalanceChangeFromTransaction(
@@ -1069,31 +1138,50 @@ describe("1: Token Bridge Relayer", () => {
         // Sign the transfer message.
         const signedWormholeMessage = guardians.addSignatures(published, [0]);
 
-        // Start new transaction.
-        const tx = new TransactionBlock();
+        // Complete the transfer with payload.
+        let receipt;
+        {
+          // Start new transaction.
+          const tx = new TransactionBlock();
 
-        // Complete the tranfer with relay.
-        tx.moveCall({
-          target: `${RELAYER_ID}::redeem::complete_transfer`,
-          arguments: [
-            tx.object(stateId),
-            tx.object(WORMHOLE_STATE_ID),
-            tx.object(TOKEN_BRIDGE_STATE_ID),
-            tx.pure(Array.from(signedWormholeMessage)),
-            tx.object(SUI_CLOCK_OBJECT_ID),
-          ],
-          typeArguments: [COIN_10_TYPE],
-        });
-        tx.setGasBudget(25_000n);
+          // Parse and verify the vaa.
+          const [parsedVaa] = tx.moveCall({
+            target: `${WORMHOLE_ID}::vaa::parse_and_verify`,
+            arguments: [
+              tx.object(WORMHOLE_STATE_ID),
+              tx.pure(Array.from(signedWormholeMessage)),
+              tx.object(SUI_CLOCK_OBJECT_ID),
+            ],
+          });
 
-        const receipt = await wallet.signAndExecuteTransactionBlock({
-          transactionBlock: tx,
-          options: {
-            showEffects: true,
-            showEvents: true,
-            showBalanceChanges: true,
-          },
-        });
+          // Verify the VAA with the token bridge.
+          const [tokenBridgeMessage] = tx.moveCall({
+            target: `${TOKEN_BRIDGE_ID}::vaa::verify_only_once`,
+            arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), parsedVaa],
+          });
+
+          // Authorize the transfer.
+          const [redeemerTicket] = tx.moveCall({
+            target: `${TOKEN_BRIDGE_ID}::complete_transfer_with_payload::authorize_transfer`,
+            arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), tokenBridgeMessage],
+            typeArguments: [COIN_10_TYPE],
+          });
+
+          // Complete the tranfer with relay.
+          tx.moveCall({
+            target: `${RELAYER_ID}::redeem::complete_transfer`,
+            arguments: [tx.object(stateId), redeemerTicket],
+            typeArguments: [COIN_10_TYPE],
+          });
+
+          receipt = await wallet.signAndExecuteTransactionBlock({
+            transactionBlock: tx,
+            options: {
+              showEvents: true,
+              showBalanceChanges: true,
+            },
+          });
+        }
 
         // Fetch balance change.
         const recipientCoinChange = getBalanceChangeFromTransaction(
@@ -1331,36 +1419,64 @@ describe("1: Token Bridge Relayer", () => {
         // Sign the transfer message.
         const signedWormholeMessage = guardians.addSignatures(published, [0]);
 
-        // Start new transaction.
-        const tx = new TransactionBlock();
-
-        // Native coins to swap. Set to zero, since SUI swaps are disabled.
-        const [coinsToTransfer] = tx.splitCoins(tx.gas, [tx.pure(0)]);
-
-        // Complete the tranfer with relay.
-        tx.moveCall({
-          target: `${RELAYER_ID}::redeem::complete_transfer_with_relay`,
-          arguments: [
-            tx.object(stateId),
-            tx.object(WORMHOLE_STATE_ID),
-            tx.object(TOKEN_BRIDGE_STATE_ID),
-            tx.pure(Array.from(signedWormholeMessage)),
-            coinsToTransfer,
-            tx.object(SUI_CLOCK_OBJECT_ID),
-          ],
-          typeArguments: [SUI_TYPE],
-        });
-
+        // Set the gas budget.
         const gasBudget = 50_000n;
-        tx.setGasBudget(gasBudget);
 
-        const receipt = await relayer.signAndExecuteTransactionBlock({
-          transactionBlock: tx,
-          options: {
-            showEvents: true,
-            showBalanceChanges: true,
-          },
-        });
+        // Complete the transfer with payload.
+        let receipt;
+        {
+          // Start new transaction.
+          const tx = new TransactionBlock();
+
+          // Parse and verify the vaa.
+          const [parsedVaa] = tx.moveCall({
+            target: `${WORMHOLE_ID}::vaa::parse_and_verify`,
+            arguments: [
+              tx.object(WORMHOLE_STATE_ID),
+              tx.pure(Array.from(signedWormholeMessage)),
+              tx.object(SUI_CLOCK_OBJECT_ID),
+            ],
+          });
+
+          // Verify the VAA with the token bridge.
+          const [tokenBridgeMessage] = tx.moveCall({
+            target: `${TOKEN_BRIDGE_ID}::vaa::verify_only_once`,
+            arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), parsedVaa],
+          });
+
+          // Authorize the transfer.
+          const [redeemerTicket] = tx.moveCall({
+            target: `${TOKEN_BRIDGE_ID}::complete_transfer_with_payload::authorize_transfer`,
+            arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), tokenBridgeMessage],
+            typeArguments: [SUI_TYPE],
+          });
+
+          // Coins to swap should be zero for this test, since swaps are disabled
+          // for SUI.
+          const [coinsToTransfer] = tx.splitCoins(tx.gas, [tx.pure(0)]);
+
+          tx.setGasBudget(gasBudget);
+
+          // Complete the tranfer with relay.
+          tx.moveCall({
+            target: `${RELAYER_ID}::redeem::complete_transfer_with_relay`,
+            arguments: [
+              tx.object(stateId),
+              tx.object(TOKEN_BRIDGE_STATE_ID),
+              redeemerTicket,
+              coinsToTransfer,
+            ],
+            typeArguments: [SUI_TYPE],
+          });
+
+          receipt = await relayer.signAndExecuteTransactionBlock({
+            transactionBlock: tx,
+            options: {
+              showEvents: true,
+              showBalanceChanges: true,
+            },
+          });
+        }
 
         // Fetch balance changes.
         const recipientSuiChange = getBalanceChangeFromTransaction(
@@ -1466,40 +1582,66 @@ describe("1: Token Bridge Relayer", () => {
         // Sign the transfer message.
         const signedWormholeMessage = guardians.addSignatures(published, [0]);
 
-        // Start new transaction.
-        const tx = new TransactionBlock();
-
-        // Set the swapQuote to a nonzero number. This amount should be refunded
-        // to the relayer since swaps are disabled for SUI.
-        const swapQuote = 5000000000;
-
-        // Native coins to swap. Set to zero, since SUI swaps are disabled.
-        const [coinsToTransfer] = tx.splitCoins(tx.gas, [tx.pure(swapQuote)]);
-
-        // Complete the tranfer with relay.
-        tx.moveCall({
-          target: `${RELAYER_ID}::redeem::complete_transfer_with_relay`,
-          arguments: [
-            tx.object(stateId),
-            tx.object(WORMHOLE_STATE_ID),
-            tx.object(TOKEN_BRIDGE_STATE_ID),
-            tx.pure(Array.from(signedWormholeMessage)),
-            coinsToTransfer,
-            tx.object(SUI_CLOCK_OBJECT_ID),
-          ],
-          typeArguments: [SUI_TYPE],
-        });
-
+        // Set the gas budget for the transaction block.
         const gasBudget = 50_000n;
-        tx.setGasBudget(gasBudget);
 
-        const receipt = await relayer.signAndExecuteTransactionBlock({
-          transactionBlock: tx,
-          options: {
-            showEvents: true,
-            showBalanceChanges: true,
-          },
-        });
+        // Complete the transfer with payload.
+        let receipt;
+        {
+          // Start new transaction.
+          const tx = new TransactionBlock();
+
+          // Parse and verify the vaa.
+          const [parsedVaa] = tx.moveCall({
+            target: `${WORMHOLE_ID}::vaa::parse_and_verify`,
+            arguments: [
+              tx.object(WORMHOLE_STATE_ID),
+              tx.pure(Array.from(signedWormholeMessage)),
+              tx.object(SUI_CLOCK_OBJECT_ID),
+            ],
+          });
+
+          // Verify the VAA with the token bridge.
+          const [tokenBridgeMessage] = tx.moveCall({
+            target: `${TOKEN_BRIDGE_ID}::vaa::verify_only_once`,
+            arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), parsedVaa],
+          });
+
+          // Authorize the transfer.
+          const [redeemerTicket] = tx.moveCall({
+            target: `${TOKEN_BRIDGE_ID}::complete_transfer_with_payload::authorize_transfer`,
+            arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), tokenBridgeMessage],
+            typeArguments: [SUI_TYPE],
+          });
+
+          // Set the swapQuote to a nonzero number. This amount should be refunded
+          // to the relayer since swaps are disabled for SUI.
+          const swapQuote = 5000000000;
+
+          // Native coins to swap. Set to zero, since SUI swaps are disabled.
+          const [coinsToTransfer] = tx.splitCoins(tx.gas, [tx.pure(swapQuote)]);
+
+          // Complete the tranfer with relay.
+          tx.setGasBudget(gasBudget);
+          tx.moveCall({
+            target: `${RELAYER_ID}::redeem::complete_transfer_with_relay`,
+            arguments: [
+              tx.object(stateId),
+              tx.object(TOKEN_BRIDGE_STATE_ID),
+              redeemerTicket,
+              coinsToTransfer,
+            ],
+            typeArguments: [SUI_TYPE],
+          });
+
+          receipt = await relayer.signAndExecuteTransactionBlock({
+            transactionBlock: tx,
+            options: {
+              showEvents: true,
+              showBalanceChanges: true,
+            },
+          });
+        }
 
         // Only one event should be emitted since a swap didn't take place.
         expect(receipt.events!.length).equals(1);
@@ -1592,33 +1734,54 @@ describe("1: Token Bridge Relayer", () => {
         // Sign the transfer message.
         const signedWormholeMessage = guardians.addSignatures(published, [0]);
 
-        // Start new transaction.
-        const tx = new TransactionBlock();
+        // Set gas budget for transaction block.
+        const gasBudget = 50_000n;
 
-        // Complete the tranfer with relay.
-        tx.moveCall({
-          target: `${RELAYER_ID}::redeem::complete_transfer`,
-          arguments: [
-            tx.object(stateId),
-            tx.object(WORMHOLE_STATE_ID),
-            tx.object(TOKEN_BRIDGE_STATE_ID),
-            tx.pure(Array.from(signedWormholeMessage)),
-            tx.object(SUI_CLOCK_OBJECT_ID),
-          ],
-          typeArguments: [SUI_TYPE],
-        });
+        // Complete the transfer with payload.
+        let receipt;
+        {
+          // Start new transaction.
+          const tx = new TransactionBlock();
 
-        const gasBudget = 25_000n;
-        tx.setGasBudget(gasBudget);
+          // Parse and verify the vaa.
+          const [parsedVaa] = tx.moveCall({
+            target: `${WORMHOLE_ID}::vaa::parse_and_verify`,
+            arguments: [
+              tx.object(WORMHOLE_STATE_ID),
+              tx.pure(Array.from(signedWormholeMessage)),
+              tx.object(SUI_CLOCK_OBJECT_ID),
+            ],
+          });
 
-        const receipt = await wallet.signAndExecuteTransactionBlock({
-          transactionBlock: tx,
-          options: {
-            showEffects: true,
-            showEvents: true,
-            showBalanceChanges: true,
-          },
-        });
+          // Verify the VAA with the token bridge.
+          const [tokenBridgeMessage] = tx.moveCall({
+            target: `${TOKEN_BRIDGE_ID}::vaa::verify_only_once`,
+            arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), parsedVaa],
+          });
+
+          // Authorize the transfer.
+          const [redeemerTicket] = tx.moveCall({
+            target: `${TOKEN_BRIDGE_ID}::complete_transfer_with_payload::authorize_transfer`,
+            arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), tokenBridgeMessage],
+            typeArguments: [SUI_TYPE],
+          });
+
+          // Complete the tranfer with relay.
+          tx.setGasBudget(gasBudget);
+          tx.moveCall({
+            target: `${RELAYER_ID}::redeem::complete_transfer`,
+            arguments: [tx.object(stateId), redeemerTicket],
+            typeArguments: [SUI_TYPE],
+          });
+
+          receipt = await wallet.signAndExecuteTransactionBlock({
+            transactionBlock: tx,
+            options: {
+              showEvents: true,
+              showBalanceChanges: true,
+            },
+          });
+        }
 
         // Fetch balance change.
         const recipientSuiChange = getBalanceChangeFromTransaction(
@@ -1976,34 +2139,59 @@ describe("1: Token Bridge Relayer", () => {
           coinType
         );
 
-        // Start new transaction.
-        const tx = new TransactionBlock();
+        // Complete the transfer with payload.
+        let receipt;
+        {
+          // Start new transaction.
+          const tx = new TransactionBlock();
 
-        // Native coins to swap.
-        const [coinsToTransfer] = tx.splitCoins(tx.gas, [tx.pure(swapQuote)]);
+          // Parse and verify the vaa.
+          const [parsedVaa] = tx.moveCall({
+            target: `${WORMHOLE_ID}::vaa::parse_and_verify`,
+            arguments: [
+              tx.object(WORMHOLE_STATE_ID),
+              tx.pure(Array.from(localVariables.signedVaa)),
+              tx.object(SUI_CLOCK_OBJECT_ID),
+            ],
+          });
 
-        // Complete the tranfer with relay.
-        tx.moveCall({
-          target: `${RELAYER_ID}::redeem::complete_transfer_with_relay`,
-          arguments: [
-            tx.object(stateId),
-            tx.object(WORMHOLE_STATE_ID),
-            tx.object(TOKEN_BRIDGE_STATE_ID),
-            tx.pure(Array.from(localVariables.signedVaa)),
-            coinsToTransfer,
-            tx.object(SUI_CLOCK_OBJECT_ID),
-          ],
-          typeArguments: [COIN_10_TYPE],
-        });
-        tx.setGasBudget(50_000n);
+          // Verify the VAA with the token bridge.
+          const [tokenBridgeMessage] = tx.moveCall({
+            target: `${TOKEN_BRIDGE_ID}::vaa::verify_only_once`,
+            arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), parsedVaa],
+          });
 
-        const receipt = await relayer.signAndExecuteTransactionBlock({
-          transactionBlock: tx,
-          options: {
-            showEvents: true,
-            showBalanceChanges: true,
-          },
-        });
+          // Authorize the transfer.
+          const [redeemerTicket] = tx.moveCall({
+            target: `${TOKEN_BRIDGE_ID}::complete_transfer_with_payload::authorize_transfer`,
+            arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), tokenBridgeMessage],
+            typeArguments: [COIN_10_TYPE],
+          });
+
+          // Native coins to swap.
+          const [coinsToTransfer] = tx.splitCoins(tx.gas, [tx.pure(swapQuote)]);
+
+          // Complete the tranfer with relay.
+          tx.moveCall({
+            target: `${RELAYER_ID}::redeem::complete_transfer_with_relay`,
+            arguments: [
+              tx.object(stateId),
+              tx.object(TOKEN_BRIDGE_STATE_ID),
+              redeemerTicket,
+              coinsToTransfer,
+            ],
+            typeArguments: [COIN_10_TYPE],
+          });
+
+          tx.setGasBudget(50_000n);
+          receipt = await relayer.signAndExecuteTransactionBlock({
+            transactionBlock: tx,
+            options: {
+              showEvents: true,
+              showBalanceChanges: true,
+            },
+          });
+        }
 
         // Confirm that the test worked!
         {

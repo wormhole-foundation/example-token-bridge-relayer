@@ -46,7 +46,7 @@ module token_bridge_relayer::owner {
 
     /// Only owner. This creates a new state object that also acts as dynamic
     /// storage.
-    public entry fun create_state(
+    public fun create_state(
         wormhole_state: &WormholeState,
         owner_cap: &mut OwnerCap,
         upgrade_cap: UpgradeCap,
@@ -80,7 +80,7 @@ module token_bridge_relayer::owner {
     }
 
     /// Only owner. This method registers a `foreign_contract` address.
-    public entry fun register_foreign_contract(
+    public fun register_foreign_contract(
         _: &OwnerCap,
         t_state: &mut State,
         chain: u16,
@@ -95,7 +95,7 @@ module token_bridge_relayer::owner {
 
     /// Only owner. This method updates the `relayer_fee` for foreign target
     /// contracts.
-    public entry fun update_relayer_fee(
+    public fun update_relayer_fee(
         _: &OwnerCap,
         t_state: &mut State,
         chain: u16,
@@ -106,7 +106,7 @@ module token_bridge_relayer::owner {
 
     /// Only owner. This method updates the `relayer_fee_precision` for this
     /// chain.
-    public entry fun update_relayer_fee_precision(
+    public fun update_relayer_fee_precision(
         _: &OwnerCap,
         t_state: &mut State,
         relayer_fee_precision: u64
@@ -116,7 +116,7 @@ module token_bridge_relayer::owner {
 
     /// Only owner. This method registers a token, and sets the initial
     /// `swap_rate` and `max_native_swap_amount` for the registered token.
-    public entry fun register_token<C>(
+    public fun register_token<C>(
         _: &OwnerCap,
         t_state: &mut State,
         swap_rate: u64,
@@ -132,7 +132,7 @@ module token_bridge_relayer::owner {
     }
 
     /// Only owner. This method deregesters a token.
-    public entry fun deregister_token<C>(
+    public fun deregister_token<C>(
         _: &OwnerCap,
         t_state: &mut State
     ) {
@@ -140,7 +140,7 @@ module token_bridge_relayer::owner {
     }
 
     /// Only owner. This method updates the `swap_rate` for a registered token.
-    public entry fun update_swap_rate<C>(
+    public fun update_swap_rate<C>(
         _: &OwnerCap,
         t_state: &mut State,
         swap_rate: u64
@@ -149,7 +149,7 @@ module token_bridge_relayer::owner {
     }
 
     /// Only owner. This method updates the `swap_rate_precision` for this chain.
-    public entry fun update_swap_rate_precision(
+    public fun update_swap_rate_precision(
         _: &OwnerCap,
         t_state: &mut State,
         swap_rate_precision: u64
@@ -159,7 +159,7 @@ module token_bridge_relayer::owner {
 
     /// Only owner. This method updates the `max_native_swap_amount` for a
     /// registered token.
-    public entry fun update_max_native_swap_amount<C>(
+    public fun update_max_native_swap_amount<C>(
         _: &OwnerCap,
         t_state: &mut State,
         max_native_swap_amount: u64
@@ -169,7 +169,7 @@ module token_bridge_relayer::owner {
 
     /// Only owner. This method toggles the `swap_enabled` boolean for a
     /// registered token.
-    public entry fun toggle_swap_enabled<C>(
+    public fun toggle_swap_enabled<C>(
         _: &OwnerCap,
         t_state: &mut State,
         enable_swap: bool

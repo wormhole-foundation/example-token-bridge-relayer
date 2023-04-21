@@ -3,7 +3,6 @@ module token_bridge_relayer::redeem {
     use sui::sui::SUI;
     use sui::coin::{Self, Coin};
     use sui::math::{Self};
-    use sui::clock::{Clock};
     use sui::transfer::{Self};
     use sui::event::{Self};
     use sui::pay::{Self};
@@ -12,14 +11,13 @@ module token_bridge_relayer::redeem {
     // Token Bridge dependencies.
     use token_bridge::coin_utils::{Self};
     use token_bridge::state::{Self as bridge_state, State as TokenBridgeState};
-    use token_bridge::complete_transfer_with_payload::{Self as bridge};
+    use token_bridge::complete_transfer_with_payload::{Self as bridge, RedeemerTicket};
     use token_bridge::transfer_with_payload::{Self, TransferWithPayload};
     use token_bridge::normalized_amount::{Self};
     use token_bridge::token_registry::{Self};
 
     // Wormhole dependencies.
     use wormhole::external_address::{Self, ExternalAddress};
-    use wormhole::state::{State as WormholeState};
 
     // Token Bridge Relayer modules.
     use token_bridge_relayer::message::{Self};
@@ -51,25 +49,18 @@ module token_bridge_relayer::redeem {
     ///
     /// This method will revert if the caller is not the `recipient` and should
     /// only be used for self redeeming transfer VAAs.
-    public entry fun complete_transfer<C>(
+    public fun complete_transfer<C>(
         t_state: &State,
-        wormhole_state: &mut WormholeState,
-        token_bridge_state: &mut TokenBridgeState,
-        vaa: vector<u8>,
-        the_clock: &Clock,
+        ticket: RedeemerTicket<C>,
         ctx: &mut TxContext
     ) {
         // Complete the transfer on the Token Bridge. This call returns the
         // coin object for the amount transferred via the Token Bridge. It
         // also returns the chain ID of the message sender.
         let (coins, transfer_payload, emitter_chain_id) =
-            bridge::complete_transfer_with_payload<C>(
-                token_bridge_state,
+            bridge::redeem_coin<C>(
                 relayer_state::emitter_cap(t_state),
-                wormhole_state,
-                vaa,
-                the_clock,
-                ctx
+                ticket
             );
 
         // Verify that the token is accepted by this contract and that
@@ -92,7 +83,7 @@ module token_bridge_relayer::redeem {
         );
 
         // Send the tokens to the recipient.
-        pay::keep(coins, ctx);
+        pay::keep<C>(coins, ctx);
     }
 
     /// `complete_transfer_with_relay` calls Wormhole's Token Bridge contract
@@ -105,26 +96,20 @@ module token_bridge_relayer::redeem {
     ///
     /// This method will revert if the caller is the `recipient` and is intended
     /// to be called by relayers only.
-    public entry fun complete_transfer_with_relay<C>(
+    public fun complete_transfer_with_relay<C>(
         t_state: &State,
-        wormhole_state: &mut WormholeState,
-        token_bridge_state: &mut TokenBridgeState,
-        vaa: vector<u8>,
+        token_bridge_state: &TokenBridgeState,
+        ticket: RedeemerTicket<C>,
         native_coins: Coin<SUI>,
-        the_clock: &Clock,
         ctx: &mut TxContext
      ) {
         // Complete the transfer on the Token Bridge. This call returns the
         // coin object for the amount transferred via the Token Bridge. It
         // also returns the chain ID of the message sender.
         let (coins, transfer_payload, emitter_chain_id) =
-            bridge::complete_transfer_with_payload<C>(
-                token_bridge_state,
+            bridge::redeem_coin<C>(
                 relayer_state::emitter_cap(t_state),
-                wormhole_state,
-                vaa,
-                the_clock,
-                ctx
+                ticket
             );
 
         // Verify that the token is accepted by this contract and that
@@ -458,18 +443,21 @@ module token_bridge_relayer::complete_transfer_tests {
     use token_bridge::token_bridge_scenario::{Self};
     use token_bridge::state::{State as BridgeState};
     use token_bridge::attest_token::{Self};
+    use token_bridge::complete_transfer_with_payload::{authorize_transfer};
 
     // Wormhole.
     use wormhole::state::{
         Self as wormhole_state_module,
         State as WormholeState
     };
+    use wormhole::wormhole_scenario::{parse_and_verify_vaa};
 
     // Token Bridge Relayer modules.
     use token_bridge_relayer::owner::{Self, OwnerCap};
     use token_bridge_relayer::state::{State};
     use token_bridge_relayer::init_tests::{Self, set_up as owner_set_up};
     use token_bridge_relayer::redeem::{Self};
+    use token_bridge::vaa::{Self};
 
     // Example coins.
     use example_coins::coin_8::{Self, COIN_8};
@@ -519,20 +507,32 @@ module token_bridge_relayer::complete_transfer_tests {
             test_metadata
         );
 
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
         test_scenario::next_tx(scenario, recipient);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
+        test_scenario::next_tx(scenario, recipient);
+
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_8>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer<COIN_8>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
-            &the_clock,
+            ticket,
             test_scenario::ctx(scenario)
         );
 
@@ -558,8 +558,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -600,20 +598,32 @@ module token_bridge_relayer::complete_transfer_tests {
             test_metadata
         );
 
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
         test_scenario::next_tx(scenario, recipient);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
+        test_scenario::next_tx(scenario, recipient);
+
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_8>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer<COIN_8>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
-            &the_clock,
+            ticket,
             test_scenario::ctx(scenario)
         );
 
@@ -639,8 +649,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -681,20 +689,32 @@ module token_bridge_relayer::complete_transfer_tests {
             test_metadata
         );
 
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
         test_scenario::next_tx(scenario, recipient);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
+        test_scenario::next_tx(scenario, recipient);
+
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_8>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer<COIN_8>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
-            &the_clock,
+            ticket,
             test_scenario::ctx(scenario)
         );
 
@@ -720,8 +740,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -763,13 +781,6 @@ module token_bridge_relayer::complete_transfer_tests {
             test_metadata
         );
 
-        // Deposit tokens into the bridge.
-        token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
-        test_scenario::next_tx(scenario, recipient);
-
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
-
         // Deregister COIN_8 on the token bridge relayer contract.
         {
             let owner_cap =
@@ -783,13 +794,32 @@ module token_bridge_relayer::complete_transfer_tests {
             test_scenario::return_to_sender(scenario, owner_cap);
         };
 
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+        test_scenario::next_tx(scenario, recipient);
+
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
+        test_scenario::next_tx(scenario, recipient);
+
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_8>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
+
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer<COIN_8>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
-            &the_clock,
+            ticket,
             test_scenario::ctx(scenario)
         );
 
@@ -799,8 +829,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -842,20 +870,32 @@ module token_bridge_relayer::complete_transfer_tests {
             test_metadata
         );
 
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
         test_scenario::next_tx(scenario, recipient);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
+        test_scenario::next_tx(scenario, recipient);
+
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_8>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer<COIN_8>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
-            &the_clock,
+            ticket,
             test_scenario::ctx(scenario)
         );
 
@@ -865,8 +905,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -908,12 +946,24 @@ module token_bridge_relayer::complete_transfer_tests {
             test_metadata
         );
 
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
         test_scenario::next_tx(scenario, recipient);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_8>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // NOTE: Switch the context to the relayer for this test.
         test_scenario::next_tx(scenario, relayer);
@@ -921,10 +971,7 @@ module token_bridge_relayer::complete_transfer_tests {
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer<COIN_8>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
-            &the_clock,
+            ticket,
             test_scenario::ctx(scenario)
         );
 
@@ -934,8 +981,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -980,13 +1025,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // NOTE: Switch the context to the relayer for this test.
         test_scenario::next_tx(scenario, relayer);
 
-        // Deposit tokens into the bridge.
-        token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
-        test_scenario::next_tx(scenario, relayer);
-
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
-
         // Mint sui tokens for the relayer to swap with the contract.
         let (sui_coins_for_swap, _) = mint_sui_for_swap<COIN_8>(
             &token_bridge_relayer_state,
@@ -996,14 +1034,33 @@ module token_bridge_relayer::complete_transfer_tests {
         );
         assert!(coin::value(&sui_coins_for_swap) == 0, 0);
 
+        // Deposit tokens into the bridge.
+        token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
+        test_scenario::next_tx(scenario, relayer);
+
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_8>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
+
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
+            &bridge_state,
+            ticket,
             sui_coins_for_swap,
-            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -1030,8 +1087,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -1087,19 +1142,31 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_10>(&mut bridge_state, test_amount);
+
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
         test_scenario::next_tx(scenario, relayer);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_10>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
+            &bridge_state,
+            ticket,
             sui_coins_for_swap,
-            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -1126,8 +1193,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -1184,19 +1249,31 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
         test_scenario::next_tx(scenario, relayer);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_8>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
+            &bridge_state,
+            ticket,
             sui_coins_for_swap,
-            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -1222,7 +1299,7 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Balance check the relayer.
         {
-            // Switch the context to the recipient.
+            // Switch the context to the relayer.
             test_scenario::next_tx(scenario, relayer);
 
             // Check COIN_8 balances.
@@ -1239,8 +1316,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -1297,19 +1372,31 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_10>(&mut bridge_state, test_amount);
+
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
         test_scenario::next_tx(scenario, relayer);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_10>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
+            &bridge_state,
+            ticket,
             sui_coins_for_swap,
-            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -1335,10 +1422,10 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Balance check the relayer.
         {
-            // Switch the context to the recipient.
+            // Switch the context to the relayer.
             test_scenario::next_tx(scenario, relayer);
 
-            // Check COIN_8 balances.
+            // Check COIN_10 balances.
             let token_object =
                 test_scenario::take_from_sender<Coin<COIN_10>>(scenario);
 
@@ -1352,8 +1439,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -1412,19 +1497,31 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
         test_scenario::next_tx(scenario, relayer);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_8>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
+            &bridge_state,
+            ticket,
             sui_coins_for_swap,
-            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -1478,8 +1575,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -1538,19 +1633,31 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_10>(&mut bridge_state, test_amount);
+
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
         test_scenario::next_tx(scenario, relayer);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_10>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
+            &bridge_state,
+            ticket,
             sui_coins_for_swap,
-            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -1604,8 +1711,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -1663,19 +1768,31 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
         test_scenario::next_tx(scenario, relayer);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_8>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
+            &bridge_state,
+            ticket,
             sui_coins_for_swap,
-            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -1729,8 +1846,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -1788,19 +1903,31 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_10>(&mut bridge_state, test_amount);
+
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
         test_scenario::next_tx(scenario, relayer);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_10>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
+            &bridge_state,
+            ticket,
             sui_coins_for_swap,
-            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -1854,8 +1981,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -1916,19 +2041,31 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
         test_scenario::next_tx(scenario, relayer);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_8>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
+            &bridge_state,
+            ticket,
             sui_coins_for_swap,
-            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -1982,8 +2119,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -2044,19 +2179,31 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_10>(&mut bridge_state, test_amount);
+
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
         test_scenario::next_tx(scenario, relayer);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_10>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
+            &bridge_state,
+            ticket,
             sui_coins_for_swap,
-            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -2110,8 +2257,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -2171,19 +2316,31 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
         test_scenario::next_tx(scenario, relayer);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_8>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
+            &bridge_state,
+            ticket,
             sui_coins_for_swap,
-            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -2224,8 +2381,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -2289,19 +2444,31 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_10>(&mut bridge_state, test_amount);
+
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
         test_scenario::next_tx(scenario, relayer);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_10>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
+            &bridge_state,
+            ticket,
             sui_coins_for_swap,
-            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -2342,8 +2509,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -2404,19 +2569,31 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
         test_scenario::next_tx(scenario, relayer);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_8>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
+            &bridge_state,
+            ticket,
             sui_coins_for_swap,
-            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -2477,8 +2654,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -2539,19 +2714,31 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_10>(&mut bridge_state, test_amount);
+
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
         test_scenario::next_tx(scenario, relayer);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_10>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
+            &bridge_state,
+            ticket,
             sui_coins_for_swap,
-            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -2612,8 +2799,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -2669,19 +2854,31 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
         test_scenario::next_tx(scenario, relayer);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_8>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
+            &bridge_state,
+            ticket,
             sui_coins_for_swap,
-            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -2708,8 +2905,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -2768,19 +2963,31 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_10>(&mut bridge_state, test_amount);
+
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
         test_scenario::next_tx(scenario, relayer);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_10>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
+            &bridge_state,
+            ticket,
             sui_coins_for_swap,
-            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -2807,8 +3014,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -2864,19 +3069,31 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
         test_scenario::next_tx(scenario, relayer);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_8>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
+            &bridge_state,
+            ticket,
             sui_coins_for_swap,
-            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -2903,8 +3120,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -2960,19 +3175,31 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_10>(&mut bridge_state, test_amount);
+
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
         test_scenario::next_tx(scenario, relayer);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_10>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
+            &bridge_state,
+            ticket,
             sui_coins_for_swap,
-            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -2999,8 +3226,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -3079,19 +3304,31 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
         test_scenario::next_tx(scenario, relayer);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_8>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
+            &bridge_state,
+            ticket,
             sui_coins_for_swap,
-            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -3122,8 +3359,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -3194,19 +3429,31 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
         test_scenario::next_tx(scenario, relayer);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_8>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
+            &bridge_state,
+            ticket,
             sui_coins_for_swap,
-            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -3216,8 +3463,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -3272,19 +3517,31 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
         test_scenario::next_tx(scenario, relayer);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_8>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
+            &bridge_state,
+            ticket,
             sui_coins_for_swap,
-            &the_clock,
             test_scenario::ctx(scenario)
         );
 
@@ -3294,8 +3551,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -3337,9 +3592,6 @@ module token_bridge_relayer::complete_transfer_tests {
             test_metadata
         );
 
-        // NOTE: Do not switch to the relayer for this test.
-        test_scenario::next_tx(scenario, recipient);
-
         // Mint SUI for the swap. We avoid calling the `mint_sui_for_swap`
         // method here to avoid hitting the overflow exception outside
         // of the contract call.
@@ -3351,32 +3603,36 @@ module token_bridge_relayer::complete_transfer_tests {
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
 
-        // NOTE: Explicitly set the context to the recipient to test that the
-        // contract correctly reverts.
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
         test_scenario::next_tx(scenario, recipient);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_8>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
+            &bridge_state,
+            ticket,
             sui_coins_for_swap,
-            &the_clock,
             test_scenario::ctx(scenario)
         );
-
-        // Proceed.
-        test_scenario::next_tx(scenario, recipient);
 
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -3444,28 +3700,38 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
         test_scenario::next_tx(scenario, relayer);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_8>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
+            &bridge_state,
+            ticket,
             actual_sui_coins_for_swap,
-            &the_clock,
             test_scenario::ctx(scenario)
         );
 
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
         native_transfer::public_transfer(expected_sui_coins_for_swap, @0x0);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -3533,28 +3799,38 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_10>(&mut bridge_state, test_amount);
+
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
         test_scenario::next_tx(scenario, relayer);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_10>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
+            &bridge_state,
+            ticket,
             actual_sui_coins_for_swap,
-            &the_clock,
             test_scenario::ctx(scenario)
         );
 
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
         native_transfer::public_transfer(expected_sui_coins_for_swap, @0x0);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -3628,27 +3904,37 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Deposit tokens into the bridge.
         token_bridge_scenario::deposit_native<COIN_8>(&mut bridge_state, test_amount);
+
+        // Return Wormhole state.
+        test_scenario::return_shared(wormhole_state);
+
+        // Verify the VAA.
+        let verified_vaa = parse_and_verify_vaa(scenario, vaa);
+        let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
+
+        // Ignore effects.
         test_scenario::next_tx(scenario, relayer);
 
-        // Take clock.
-        let the_clock = token_bridge_scenario::take_clock(scenario);
+        // Execute authorize_transfer.
+        let ticket =
+            authorize_transfer<COIN_8>(
+                &mut bridge_state,
+                parsed,
+                test_scenario::ctx(scenario)
+            );
 
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
-            vaa,
+            &bridge_state,
+            ticket,
             sui_coins_for_swap,
-            &the_clock,
             test_scenario::ctx(scenario)
         );
 
         // Return state objects.
         test_scenario::return_shared(token_bridge_relayer_state);
         test_scenario::return_shared(bridge_state);
-        test_scenario::return_shared(wormhole_state);
-        token_bridge_scenario::return_clock(the_clock);
 
         // Done.
         test_scenario::end(my_scenario);
@@ -4431,7 +4717,7 @@ module token_bridge_relayer::complete_transfer_tests {
 
     /// Utilities.
 
-     public fun get_coin_8_metadata(
+    public fun get_coin_8_metadata(
         ctx: &mut TxContext
     ): CoinMetadata<COIN_8> {
         // Initialize token 8.

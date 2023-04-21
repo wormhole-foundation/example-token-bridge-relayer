@@ -17,6 +17,7 @@ import {
   COIN_10_TYPE,
   SUI_TYPE,
   SUI_METADATA_ID,
+  WORMHOLE_ID,
 } from "../src/consts";
 import {
   Ed25519Keypair,
@@ -191,14 +192,27 @@ describe("0: Wormhole", () => {
       // Register an emitter from Ethereum on the token bridge.
       {
         const tx = new TransactionBlock();
-        tx.moveCall({
-          target: `${TOKEN_BRIDGE_ID}::register_chain::register_chain`,
+
+        // Parse and verify the vaa.
+        const [parsedVaa] = tx.moveCall({
+          target: `${WORMHOLE_ID}::vaa::parse_and_verify`,
           arguments: [
-            tx.object(TOKEN_BRIDGE_STATE_ID),
             tx.object(WORMHOLE_STATE_ID),
             tx.pure(Array.from(signedWormholeMessage)),
             tx.object(SUI_CLOCK_OBJECT_ID),
           ],
+        });
+
+        // Fetch the governance message.
+        const [governanceMessage] = tx.moveCall({
+          target: `${WORMHOLE_ID}::governance_message::verify_vaa`,
+          arguments: [tx.object(WORMHOLE_STATE_ID), parsedVaa],
+        });
+
+        // Register the chain.
+        tx.moveCall({
+          target: `${TOKEN_BRIDGE_ID}::register_chain::register_chain`,
+          arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), governanceMessage],
         });
         const result = await creator.signAndExecuteTransactionBlock({
           transactionBlock: tx,

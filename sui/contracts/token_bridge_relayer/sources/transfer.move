@@ -34,7 +34,7 @@ module token_bridge_relayer::transfer {
     /// an arbitrary payload with instructions for how to handle relayer
     /// payments on the target contract. Optionally, the payload will include
     /// a quantity of tokens to swap into native assets on the target chain.
-    public entry fun transfer_tokens_with_relay<C>(
+    public fun transfer_tokens_with_relay<C>(
         t_state: &State,
         wormhole_state: &mut WormholeState,
         token_bridge_state: &mut TokenBridgeState,
