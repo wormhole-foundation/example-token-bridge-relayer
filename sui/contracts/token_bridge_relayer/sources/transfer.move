@@ -126,7 +126,12 @@ module token_bridge_relayer::transfer {
             coins,
             wormhole_fee,
             target_chain,
-            relayer_state::foreign_contract_address(t_state, target_chain),
+            external_address::to_bytes(
+                relayer_state::foreign_contract_address(
+                    t_state,
+                    target_chain
+                )
+            ),
             msg,
             nonce,
             the_clock
