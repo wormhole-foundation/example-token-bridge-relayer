@@ -10,8 +10,14 @@ module token_bridge_relayer::redeem {
 
     // Token Bridge dependencies.
     use token_bridge::coin_utils::{Self};
-    use token_bridge::state::{Self as bridge_state, State as TokenBridgeState};
-    use token_bridge::complete_transfer_with_payload::{Self as bridge, RedeemerTicket};
+    use token_bridge::state::{
+        Self as bridge_state,
+        State as TokenBridgeState
+    };
+    use token_bridge::complete_transfer_with_payload::{
+        Self as bridge,
+        RedeemerReceipt
+    };
     use token_bridge::transfer_with_payload::{Self, TransferWithPayload};
     use token_bridge::normalized_amount::{Self};
     use token_bridge::token_registry::{Self};
@@ -51,7 +57,7 @@ module token_bridge_relayer::redeem {
     /// only be used for self redeeming transfer VAAs.
     public fun complete_transfer<C>(
         t_state: &State,
-        ticket: RedeemerTicket<C>,
+        receipt: RedeemerReceipt<C>,
         ctx: &mut TxContext
     ) {
         // Complete the transfer on the Token Bridge. This call returns the
@@ -60,7 +66,7 @@ module token_bridge_relayer::redeem {
         let (coins, transfer_payload, emitter_chain_id) =
             bridge::redeem_coin<C>(
                 relayer_state::emitter_cap(t_state),
-                ticket
+                receipt
             );
 
         // Verify that the token is accepted by this contract and that
@@ -99,7 +105,7 @@ module token_bridge_relayer::redeem {
     public fun complete_transfer_with_relay<C>(
         t_state: &State,
         token_bridge_state: &TokenBridgeState,
-        ticket: RedeemerTicket<C>,
+        receipt: RedeemerReceipt<C>,
         native_coins: Coin<SUI>,
         ctx: &mut TxContext
      ) {
@@ -109,7 +115,7 @@ module token_bridge_relayer::redeem {
         let (coins, transfer_payload, emitter_chain_id) =
             bridge::redeem_coin<C>(
                 relayer_state::emitter_cap(t_state),
-                ticket
+                receipt
             );
 
         // Verify that the token is accepted by this contract and that
@@ -447,10 +453,10 @@ module token_bridge_relayer::complete_transfer_tests {
 
     // Wormhole.
     use wormhole::state::{
-        Self as wormhole_state_module,
         State as WormholeState
     };
     use wormhole::wormhole_scenario::{parse_and_verify_vaa};
+    use wormhole::publish_message::{Self};
 
     // Token Bridge Relayer modules.
     use token_bridge_relayer::owner::{Self, OwnerCap};
@@ -501,7 +507,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -522,7 +527,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, recipient);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_8>(
                 &mut bridge_state,
                 parsed,
@@ -532,7 +537,7 @@ module token_bridge_relayer::complete_transfer_tests {
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer<COIN_8>(
             &token_bridge_relayer_state,
-            ticket,
+            receipt,
             test_scenario::ctx(scenario)
         );
 
@@ -592,7 +597,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -613,7 +617,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, recipient);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_8>(
                 &mut bridge_state,
                 parsed,
@@ -623,7 +627,7 @@ module token_bridge_relayer::complete_transfer_tests {
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer<COIN_8>(
             &token_bridge_relayer_state,
-            ticket,
+            receipt,
             test_scenario::ctx(scenario)
         );
 
@@ -683,7 +687,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -704,7 +707,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, recipient);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_8>(
                 &mut bridge_state,
                 parsed,
@@ -714,7 +717,7 @@ module token_bridge_relayer::complete_transfer_tests {
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer<COIN_8>(
             &token_bridge_relayer_state,
-            ticket,
+            receipt,
             test_scenario::ctx(scenario)
         );
 
@@ -775,7 +778,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -809,7 +811,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, recipient);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_8>(
                 &mut bridge_state,
                 parsed,
@@ -819,7 +821,7 @@ module token_bridge_relayer::complete_transfer_tests {
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer<COIN_8>(
             &token_bridge_relayer_state,
-            ticket,
+            receipt,
             test_scenario::ctx(scenario)
         );
 
@@ -864,7 +866,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -885,7 +886,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, recipient);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_8>(
                 &mut bridge_state,
                 parsed,
@@ -895,7 +896,7 @@ module token_bridge_relayer::complete_transfer_tests {
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer<COIN_8>(
             &token_bridge_relayer_state,
-            ticket,
+            receipt,
             test_scenario::ctx(scenario)
         );
 
@@ -940,7 +941,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -958,7 +958,7 @@ module token_bridge_relayer::complete_transfer_tests {
         let parsed = vaa::verify_only_once(&mut bridge_state, verified_vaa);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_8>(
                 &mut bridge_state,
                 parsed,
@@ -971,7 +971,7 @@ module token_bridge_relayer::complete_transfer_tests {
         // Redeem the transfer on the Token Bridge Relayer contract.
         redeem::complete_transfer<COIN_8>(
             &token_bridge_relayer_state,
-            ticket,
+            receipt,
             test_scenario::ctx(scenario)
         );
 
@@ -1016,7 +1016,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -1048,7 +1047,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, relayer);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_8>(
                 &mut bridge_state,
                 parsed,
@@ -1059,7 +1058,7 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
             &bridge_state,
-            ticket,
+            receipt,
             sui_coins_for_swap,
             test_scenario::ctx(scenario)
         );
@@ -1122,7 +1121,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_10>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -1154,7 +1152,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, relayer);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_10>(
                 &mut bridge_state,
                 parsed,
@@ -1165,7 +1163,7 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
             &bridge_state,
-            ticket,
+            receipt,
             sui_coins_for_swap,
             test_scenario::ctx(scenario)
         );
@@ -1229,7 +1227,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -1261,7 +1258,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, relayer);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_8>(
                 &mut bridge_state,
                 parsed,
@@ -1272,7 +1269,7 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
             &bridge_state,
-            ticket,
+            receipt,
             sui_coins_for_swap,
             test_scenario::ctx(scenario)
         );
@@ -1352,7 +1349,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_10>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -1384,7 +1380,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, relayer);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_10>(
                 &mut bridge_state,
                 parsed,
@@ -1395,7 +1391,7 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
             &bridge_state,
-            ticket,
+            receipt,
             sui_coins_for_swap,
             test_scenario::ctx(scenario)
         );
@@ -1475,7 +1471,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -1509,7 +1504,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, relayer);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_8>(
                 &mut bridge_state,
                 parsed,
@@ -1520,7 +1515,7 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
             &bridge_state,
-            ticket,
+            receipt,
             sui_coins_for_swap,
             test_scenario::ctx(scenario)
         );
@@ -1611,7 +1606,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_10>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -1645,7 +1639,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, relayer);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_10>(
                 &mut bridge_state,
                 parsed,
@@ -1656,7 +1650,7 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
             &bridge_state,
-            ticket,
+            receipt,
             sui_coins_for_swap,
             test_scenario::ctx(scenario)
         );
@@ -1746,7 +1740,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -1780,7 +1773,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, relayer);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_8>(
                 &mut bridge_state,
                 parsed,
@@ -1791,7 +1784,7 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
             &bridge_state,
-            ticket,
+            receipt,
             sui_coins_for_swap,
             test_scenario::ctx(scenario)
         );
@@ -1881,7 +1874,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_10>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -1915,7 +1907,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, relayer);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_10>(
                 &mut bridge_state,
                 parsed,
@@ -1926,7 +1918,7 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
             &bridge_state,
-            ticket,
+            receipt,
             sui_coins_for_swap,
             test_scenario::ctx(scenario)
         );
@@ -2016,7 +2008,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -2053,7 +2044,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, relayer);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_8>(
                 &mut bridge_state,
                 parsed,
@@ -2064,7 +2055,7 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
             &bridge_state,
-            ticket,
+            receipt,
             sui_coins_for_swap,
             test_scenario::ctx(scenario)
         );
@@ -2154,7 +2145,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_10>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -2191,7 +2181,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, relayer);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_10>(
                 &mut bridge_state,
                 parsed,
@@ -2202,7 +2192,7 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
             &bridge_state,
-            ticket,
+            receipt,
             sui_coins_for_swap,
             test_scenario::ctx(scenario)
         );
@@ -2291,7 +2281,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -2328,7 +2317,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, relayer);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_8>(
                 &mut bridge_state,
                 parsed,
@@ -2339,7 +2328,7 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
             &bridge_state,
-            ticket,
+            receipt,
             sui_coins_for_swap,
             test_scenario::ctx(scenario)
         );
@@ -2419,7 +2408,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_10>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -2456,7 +2444,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, relayer);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_10>(
                 &mut bridge_state,
                 parsed,
@@ -2467,7 +2455,7 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
             &bridge_state,
-            ticket,
+            receipt,
             sui_coins_for_swap,
             test_scenario::ctx(scenario)
         );
@@ -2545,7 +2533,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -2581,7 +2568,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, relayer);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_8>(
                 &mut bridge_state,
                 parsed,
@@ -2592,7 +2579,7 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
             &bridge_state,
-            ticket,
+            receipt,
             sui_coins_for_swap,
             test_scenario::ctx(scenario)
         );
@@ -2690,7 +2677,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_10>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -2726,7 +2712,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, relayer);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_10>(
                 &mut bridge_state,
                 parsed,
@@ -2737,7 +2723,7 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
             &bridge_state,
-            ticket,
+            receipt,
             sui_coins_for_swap,
             test_scenario::ctx(scenario)
         );
@@ -2834,7 +2820,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -2866,7 +2851,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, relayer);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_8>(
                 &mut bridge_state,
                 parsed,
@@ -2877,7 +2862,7 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
             &bridge_state,
-            ticket,
+            receipt,
             sui_coins_for_swap,
             test_scenario::ctx(scenario)
         );
@@ -2943,7 +2928,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_10>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -2975,7 +2959,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, relayer);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_10>(
                 &mut bridge_state,
                 parsed,
@@ -2986,7 +2970,7 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
             &bridge_state,
-            ticket,
+            receipt,
             sui_coins_for_swap,
             test_scenario::ctx(scenario)
         );
@@ -3049,7 +3033,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -3081,7 +3064,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, relayer);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_8>(
                 &mut bridge_state,
                 parsed,
@@ -3092,7 +3075,7 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
             &bridge_state,
-            ticket,
+            receipt,
             sui_coins_for_swap,
             test_scenario::ctx(scenario)
         );
@@ -3155,7 +3138,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_10>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -3187,7 +3169,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, relayer);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_10>(
                 &mut bridge_state,
                 parsed,
@@ -3198,7 +3180,7 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
             &bridge_state,
-            ticket,
+            receipt,
             sui_coins_for_swap,
             test_scenario::ctx(scenario)
         );
@@ -3262,7 +3244,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -3316,7 +3297,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, relayer);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_8>(
                 &mut bridge_state,
                 parsed,
@@ -3327,7 +3308,7 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
             &bridge_state,
-            ticket,
+            receipt,
             sui_coins_for_swap,
             test_scenario::ctx(scenario)
         );
@@ -3394,7 +3375,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -3441,7 +3421,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, relayer);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_8>(
                 &mut bridge_state,
                 parsed,
@@ -3452,7 +3432,7 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
             &bridge_state,
-            ticket,
+            receipt,
             sui_coins_for_swap,
             test_scenario::ctx(scenario)
         );
@@ -3498,7 +3478,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -3529,7 +3508,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, relayer);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_8>(
                 &mut bridge_state,
                 parsed,
@@ -3540,7 +3519,7 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
             &bridge_state,
-            ticket,
+            receipt,
             sui_coins_for_swap,
             test_scenario::ctx(scenario)
         );
@@ -3586,7 +3565,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -3614,7 +3592,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, recipient);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_8>(
                 &mut bridge_state,
                 parsed,
@@ -3625,7 +3603,7 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
             &bridge_state,
-            ticket,
+            receipt,
             sui_coins_for_swap,
             test_scenario::ctx(scenario)
         );
@@ -3669,7 +3647,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -3712,7 +3689,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, relayer);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_8>(
                 &mut bridge_state,
                 parsed,
@@ -3723,7 +3700,7 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
             &bridge_state,
-            ticket,
+            receipt,
             actual_sui_coins_for_swap,
             test_scenario::ctx(scenario)
         );
@@ -3768,7 +3745,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_10>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -3811,7 +3787,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, relayer);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_10>(
                 &mut bridge_state,
                 parsed,
@@ -3822,7 +3798,7 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem::complete_transfer_with_relay<COIN_10>(
             &token_bridge_relayer_state,
             &bridge_state,
-            ticket,
+            receipt,
             actual_sui_coins_for_swap,
             test_scenario::ctx(scenario)
         );
@@ -3867,7 +3843,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -3916,7 +3891,7 @@ module token_bridge_relayer::complete_transfer_tests {
         test_scenario::next_tx(scenario, relayer);
 
         // Execute authorize_transfer.
-        let ticket =
+        let receipt =
             authorize_transfer<COIN_8>(
                 &mut bridge_state,
                 parsed,
@@ -3927,7 +3902,7 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem::complete_transfer_with_relay<COIN_8>(
             &token_bridge_relayer_state,
             &bridge_state,
-            ticket,
+            receipt,
             sui_coins_for_swap,
             test_scenario::ctx(scenario)
         );
@@ -3965,7 +3940,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -4078,7 +4052,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_10>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -4191,7 +4164,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -4313,7 +4285,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_10>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -4436,7 +4407,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -4501,7 +4471,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -4598,7 +4567,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -4670,7 +4638,6 @@ module token_bridge_relayer::complete_transfer_tests {
         redeem_set_up<COIN_8>(
             &mut token_bridge_relayer_state,
             &mut bridge_state,
-            &mut wormhole_state,
             recipient,
             scenario,
             test_metadata
@@ -4792,7 +4759,6 @@ module token_bridge_relayer::complete_transfer_tests {
     public fun redeem_set_up<C>(
         token_bridge_relayer_state: &mut State,
         bridge_state: &mut BridgeState,
-        wormhole_state: &mut WormholeState,
         recipient: address,
         scenario: &mut Scenario,
         coin_meta: CoinMetadata<C>
@@ -4800,7 +4766,6 @@ module token_bridge_relayer::complete_transfer_tests {
         // Fetch necessary objects.
         let owner_cap =
             test_scenario::take_from_sender<OwnerCap>(scenario);
-        let the_clock = token_bridge_scenario::take_clock(scenario);
 
         // Register a foreign contract.
         {
@@ -4816,24 +4781,16 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Attest token.
         {
-            // Attest SUI.
-            let fee_coin = mint_sui(
-                wormhole_state_module::message_fee(wormhole_state),
-                test_scenario::ctx(scenario)
-            );
-
-            attest_token::attest_token<C>(
+            let prepared_message = attest_token::attest_token<C>(
                 bridge_state,
-                wormhole_state,
-                fee_coin,
                 &coin_meta,
                 0, // nonce
-                &the_clock
             );
 
             // Proceed.
             test_scenario::next_tx(scenario, recipient);
             native_transfer::public_transfer(coin_meta, @0x0);
+            publish_message::destroy(prepared_message);
         };
 
         // Register each token.
@@ -4865,7 +4822,6 @@ module token_bridge_relayer::complete_transfer_tests {
 
         // Return owner cap.
         test_scenario::return_to_sender(scenario, owner_cap);
-        token_bridge_scenario::return_clock(the_clock);
 
         let effects = test_scenario::next_tx(scenario, recipient);
         (effects)

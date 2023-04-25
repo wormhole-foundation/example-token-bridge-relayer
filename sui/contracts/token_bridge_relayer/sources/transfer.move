@@ -1,22 +1,22 @@
-/// This module composes on Wormhole's Token Bridge contract to faciliate
-/// one-click transfers of Token Bridge supported assets to registered
-/// (foreign) Token Bridge Relayer contracts.
+// This module composes on Wormhole's Token Bridge contract to faciliate
+// one-click transfers of Token Bridge supported assets to registered
+// (foreign) Token Bridge Relayer contracts.
 module token_bridge_relayer::transfer {
     // Sui dependencies.
-    use sui::sui::SUI;
-    use sui::clock::{Clock};
     use sui::coin::{Self, Coin};
     use sui::tx_context::{TxContext};
 
     // Token Bridge dependencies.
     use token_bridge::normalized_amount::{Self};
     use token_bridge::coin_utils::{Self};
-    use token_bridge::state::{Self as bridge_state, State as TokenBridgeState};
-    use token_bridge::transfer_tokens_with_payload::{transfer_tokens_with_payload};
+    use token_bridge::transfer_tokens_with_payload::{
+        prepare_transfer,
+        TransferTicket
+    };
+    use token_bridge::token_registry::{Self, VerifiedAsset};
 
     // Wormhole dependencies.
     use wormhole::external_address::{Self};
-    use wormhole::state::{State as WormholeState};
 
     // Token Bridge Relayer modules.
     use token_bridge_relayer::message::{Self};
@@ -36,17 +36,14 @@ module token_bridge_relayer::transfer {
     /// a quantity of tokens to swap into native assets on the target chain.
     public fun transfer_tokens_with_relay<C>(
         t_state: &State,
-        wormhole_state: &mut WormholeState,
-        token_bridge_state: &mut TokenBridgeState,
         coins: Coin<C>,
+        asset_info: VerifiedAsset<C>,
         to_native_token_amount: u64,
-        wormhole_fee: Coin<SUI>,
         target_chain: u16,
-        nonce: u32,
         target_recipient: address,
-        the_clock: &Clock,
+        nonce: u32,
         ctx: &TxContext
-    ): u64 {
+    ): TransferTicket<C> {
         // Confirm that the coin type is registered with this contract.
         assert!(
             relayer_state::is_registered_token<C>(t_state),
@@ -71,7 +68,7 @@ module token_bridge_relayer::transfer {
 
         // Fetch the token decimals from the token bridge, and cache the token
         // amount.
-        let decimals = bridge_state::coin_decimals<C>(token_bridge_state);
+        let decimals = token_registry::coin_decimals<C>(&asset_info);
         let amount_received = coin::value(&coins);
 
         // Compute the normalized `to_native_token_amount`.
@@ -118,13 +115,11 @@ module token_bridge_relayer::transfer {
             )
         );
 
-        // Finally, call the Token Bridge.
-        let (sequence, dust) = transfer_tokens_with_payload<C>(
-            token_bridge_state,
+        // Prepare the transfer on the token bridge.
+        let (prepared_transfer, dust) = prepare_transfer<C>(
             relayer_state::emitter_cap(t_state),
-            wormhole_state,
+            asset_info,
             coins,
-            wormhole_fee,
             target_chain,
             external_address::to_bytes(
                 relayer_state::foreign_contract_address(
@@ -133,14 +128,13 @@ module token_bridge_relayer::transfer {
                 )
             ),
             msg,
-            nonce,
-            the_clock
+            nonce
         );
 
         // Return to sender.
         coin_utils::return_nonzero(dust, ctx);
 
-        sequence
+        (prepared_transfer)
     }
 }
 
@@ -162,14 +156,16 @@ module token_bridge_relayer::transfer_tests {
 
     // Wormhole.
     use wormhole::state::{
-        Self as wormhole_state_module,
         State as WormholeState
     };
+    use wormhole::publish_message::{Self};
 
     // Token Bridge.
-    use token_bridge::state::{State as BridgeState};
+    use token_bridge::state::{Self as bridge_state, State as BridgeState};
     use token_bridge::attest_token::{Self};
-    use token_bridge::token_bridge_scenario::{Self};
+    use token_bridge::transfer_tokens_with_payload::{
+        transfer_tokens_with_payload
+    };
 
     // Example coins.
     use example_coins::coin_8::{Self, COIN_8};
@@ -1133,14 +1129,6 @@ module token_bridge_relayer::transfer_tests {
             test_scenario::take_shared<WormholeState>(scenario);
         let owner_cap =
             test_scenario::take_from_sender<OwnerCap>(scenario);
-        let the_clock = token_bridge_scenario::take_clock(scenario);
-
-        // Mint SUI coins to pay the Wormhole fee.
-        let sui_coin = mint_sui(
-            wormhole_state_module::message_fee(&wormhole_state),
-            test_scenario::ctx(scenario)
-        );
-        test_scenario::next_tx(scenario, creator);
 
         // Register the target contract and set the relayer fee.
         if (should_register_contract) {
@@ -1169,23 +1157,15 @@ module token_bridge_relayer::transfer_tests {
         // Attest the token on the token bridge, and register it with
         // the token bridge relayer.
         {
-            // Perform the attestation.
-            let fee_coin = mint_sui(
-                wormhole_state_module::message_fee(&wormhole_state),
-                test_scenario::ctx(scenario)
-            );
-
-            attest_token::attest_token<C>(
+            let prepared_message = attest_token::attest_token<C>(
                 &mut bridge_state,
-                &mut wormhole_state,
-                fee_coin,
                 &coin_metadata,
-                0, // Nonce.
-                &the_clock
+                0, // Nonce
             );
 
             // Proceed.
             test_scenario::next_tx(scenario, creator);
+            publish_message::destroy(prepared_message);
 
             // Register the token.
             if (should_register_token) {
@@ -1205,19 +1185,25 @@ module token_bridge_relayer::transfer_tests {
             test_scenario::next_tx(scenario, creator);
         };
 
+        // Fetch the asset info.
+        let asset_info = bridge_state::verified_asset<C>(&bridge_state);
+
         // Send a test transfer.
-        transfer::transfer_tokens_with_relay(
+        let prepared_transfer = transfer::transfer_tokens_with_relay(
             &token_bridge_relayer_state,
-            &mut wormhole_state,
-            &mut bridge_state,
             coins,
+            asset_info,
             to_native_token_amount,
-            sui_coin,
             target_chain,
-            0, // nonce
             target_recipient,
-            &the_clock,
+            0, // nonce
             test_scenario::ctx(scenario)
+        );
+
+        // Call `transfer_tokens_with_payload`.
+        let prepared_message = transfer_tokens_with_payload(
+            &mut bridge_state,
+            prepared_transfer
         );
 
         // Return the goods.
@@ -1226,7 +1212,7 @@ module token_bridge_relayer::transfer_tests {
         test_scenario::return_shared(wormhole_state);
         test_scenario::return_to_sender(scenario, owner_cap);
         native_transfer::public_transfer(coin_metadata, @0x0);
-        token_bridge_scenario::return_clock(the_clock);
+        publish_message::destroy(prepared_message);
 
         let effects = test_scenario::next_tx(scenario, creator);
         (effects)

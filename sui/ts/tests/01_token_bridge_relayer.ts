@@ -363,23 +363,46 @@ describe("1: Token Bridge Relayer", () => {
           tx.pure(outboundTransferAmount),
         ]);
 
-        // Send the transfer with relay.
-        tx.moveCall({
+        // Fetch the asset info.
+        const [assetInfo] = tx.moveCall({
+          target: `${TOKEN_BRIDGE_ID}::state::verified_asset`,
+          arguments: [tx.object(TOKEN_BRIDGE_STATE_ID)],
+          typeArguments: [COIN_8_TYPE],
+        });
+
+        // Fetch the transfer ticket.
+        const [transferTicket] = tx.moveCall({
           target: `${RELAYER_ID}::transfer::transfer_tokens_with_relay`,
           arguments: [
             tx.object(stateId),
-            tx.object(WORMHOLE_STATE_ID),
-            tx.object(TOKEN_BRIDGE_STATE_ID),
             coinsToTransfer,
+            assetInfo,
             tx.pure(toNativeAmount),
-            wormholeFee,
             tx.pure(foreignChain),
-            tx.pure(nonce),
             tx.pure(walletAddress),
-            tx.object(SUI_CLOCK_OBJECT_ID),
+            tx.pure(nonce),
           ],
           typeArguments: [COIN_8_TYPE],
         });
+
+        // Transfer the tokens with payload.
+        const [messageTicket] = tx.moveCall({
+          target: `${TOKEN_BRIDGE_ID}::transfer_tokens_with_payload::transfer_tokens_with_payload`,
+          arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), transferTicket],
+          typeArguments: [COIN_8_TYPE],
+        });
+
+        // Publish the message.
+        tx.moveCall({
+          target: `${WORMHOLE_ID}::publish_message::publish_message`,
+          arguments: [
+            tx.object(WORMHOLE_STATE_ID),
+            wormholeFee,
+            messageTicket,
+            tx.object(SUI_CLOCK_OBJECT_ID),
+          ],
+        });
+
         const eventData = await wallet.signAndExecuteTransactionBlock({
           transactionBlock: tx,
           options: {
@@ -540,7 +563,7 @@ describe("1: Token Bridge Relayer", () => {
           });
 
           // Authorize the transfer.
-          const [redeemerTicket] = tx.moveCall({
+          const [redeemerReceipt] = tx.moveCall({
             target: `${TOKEN_BRIDGE_ID}::complete_transfer_with_payload::authorize_transfer`,
             arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), tokenBridgeMessage],
             typeArguments: [COIN_8_TYPE],
@@ -555,7 +578,7 @@ describe("1: Token Bridge Relayer", () => {
             arguments: [
               tx.object(stateId),
               tx.object(TOKEN_BRIDGE_STATE_ID),
-              redeemerTicket,
+              redeemerReceipt,
               coinsToTransfer,
             ],
             typeArguments: [COIN_8_TYPE],
@@ -687,7 +710,7 @@ describe("1: Token Bridge Relayer", () => {
           });
 
           // Authorize the transfer.
-          const [redeemerTicket] = tx.moveCall({
+          const [redeemerReceipt] = tx.moveCall({
             target: `${TOKEN_BRIDGE_ID}::complete_transfer_with_payload::authorize_transfer`,
             arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), tokenBridgeMessage],
             typeArguments: [COIN_8_TYPE],
@@ -696,7 +719,7 @@ describe("1: Token Bridge Relayer", () => {
           // Complete the tranfer with relay.
           tx.moveCall({
             target: `${RELAYER_ID}::redeem::complete_transfer`,
-            arguments: [tx.object(stateId), redeemerTicket],
+            arguments: [tx.object(stateId), redeemerReceipt],
             typeArguments: [COIN_8_TYPE],
           });
 
@@ -768,23 +791,46 @@ describe("1: Token Bridge Relayer", () => {
           tx.pure(outboundTransferAmount),
         ]);
 
-        // Send the transfer with relay.
-        tx.moveCall({
+        // Fetch the asset info.
+        const [assetInfo] = tx.moveCall({
+          target: `${TOKEN_BRIDGE_ID}::state::verified_asset`,
+          arguments: [tx.object(TOKEN_BRIDGE_STATE_ID)],
+          typeArguments: [COIN_10_TYPE],
+        });
+
+        // Fetch the transfer ticket.
+        const [transferTicket] = tx.moveCall({
           target: `${RELAYER_ID}::transfer::transfer_tokens_with_relay`,
           arguments: [
             tx.object(stateId),
-            tx.object(WORMHOLE_STATE_ID),
-            tx.object(TOKEN_BRIDGE_STATE_ID),
             coinsToTransfer,
+            assetInfo,
             tx.pure(toNativeAmount),
-            wormholeFee,
             tx.pure(foreignChain),
-            tx.pure(nonce),
             tx.pure(walletAddress),
-            tx.object(SUI_CLOCK_OBJECT_ID),
+            tx.pure(nonce),
           ],
           typeArguments: [COIN_10_TYPE],
         });
+
+        // Transfer the tokens with payload.
+        const [messageTicket] = tx.moveCall({
+          target: `${TOKEN_BRIDGE_ID}::transfer_tokens_with_payload::transfer_tokens_with_payload`,
+          arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), transferTicket],
+          typeArguments: [COIN_10_TYPE],
+        });
+
+        // Publish the message.
+        tx.moveCall({
+          target: `${WORMHOLE_ID}::publish_message::publish_message`,
+          arguments: [
+            tx.object(WORMHOLE_STATE_ID),
+            wormholeFee,
+            messageTicket,
+            tx.object(SUI_CLOCK_OBJECT_ID),
+          ],
+        });
+
         const eventData = await wallet.signAndExecuteTransactionBlock({
           transactionBlock: tx,
           options: {
@@ -992,7 +1038,7 @@ describe("1: Token Bridge Relayer", () => {
           });
 
           // Authorize the transfer.
-          const [redeemerTicket] = tx.moveCall({
+          const [redeemerReceipt] = tx.moveCall({
             target: `${TOKEN_BRIDGE_ID}::complete_transfer_with_payload::authorize_transfer`,
             arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), tokenBridgeMessage],
             typeArguments: [COIN_10_TYPE],
@@ -1007,7 +1053,7 @@ describe("1: Token Bridge Relayer", () => {
             arguments: [
               tx.object(stateId),
               tx.object(TOKEN_BRIDGE_STATE_ID),
-              redeemerTicket,
+              redeemerReceipt,
               coinsToTransfer,
             ],
             typeArguments: [COIN_10_TYPE],
@@ -1161,7 +1207,7 @@ describe("1: Token Bridge Relayer", () => {
           });
 
           // Authorize the transfer.
-          const [redeemerTicket] = tx.moveCall({
+          const [redeemerReceipt] = tx.moveCall({
             target: `${TOKEN_BRIDGE_ID}::complete_transfer_with_payload::authorize_transfer`,
             arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), tokenBridgeMessage],
             typeArguments: [COIN_10_TYPE],
@@ -1170,7 +1216,7 @@ describe("1: Token Bridge Relayer", () => {
           // Complete the tranfer with relay.
           tx.moveCall({
             target: `${RELAYER_ID}::redeem::complete_transfer`,
-            arguments: [tx.object(stateId), redeemerTicket],
+            arguments: [tx.object(stateId), redeemerReceipt],
             typeArguments: [COIN_10_TYPE],
           });
 
@@ -1235,22 +1281,44 @@ describe("1: Token Bridge Relayer", () => {
           tx.pure(outboundTransferAmount),
         ]);
 
-        // Send the transfer with relay.
-        tx.moveCall({
+        // Fetch the asset info.
+        const [assetInfo] = tx.moveCall({
+          target: `${TOKEN_BRIDGE_ID}::state::verified_asset`,
+          arguments: [tx.object(TOKEN_BRIDGE_STATE_ID)],
+          typeArguments: [SUI_TYPE],
+        });
+
+        // Fetch the transfer ticket.
+        const [transferTicket] = tx.moveCall({
           target: `${RELAYER_ID}::transfer::transfer_tokens_with_relay`,
           arguments: [
             tx.object(stateId),
-            tx.object(WORMHOLE_STATE_ID),
-            tx.object(TOKEN_BRIDGE_STATE_ID),
             coinsToTransfer,
+            assetInfo,
             tx.pure(toNativeAmount),
-            wormholeFee,
             tx.pure(foreignChain),
-            tx.pure(nonce),
             tx.pure(walletAddress),
-            tx.object(SUI_CLOCK_OBJECT_ID),
+            tx.pure(nonce),
           ],
           typeArguments: [SUI_TYPE],
+        });
+
+        // Transfer the tokens with payload.
+        const [messageTicket] = tx.moveCall({
+          target: `${TOKEN_BRIDGE_ID}::transfer_tokens_with_payload::transfer_tokens_with_payload`,
+          arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), transferTicket],
+          typeArguments: [SUI_TYPE],
+        });
+
+        // Publish the message.
+        tx.moveCall({
+          target: `${WORMHOLE_ID}::publish_message::publish_message`,
+          arguments: [
+            tx.object(WORMHOLE_STATE_ID),
+            wormholeFee,
+            messageTicket,
+            tx.object(SUI_CLOCK_OBJECT_ID),
+          ],
         });
 
         tx.setGasBudget(500_000);
@@ -1445,7 +1513,7 @@ describe("1: Token Bridge Relayer", () => {
           });
 
           // Authorize the transfer.
-          const [redeemerTicket] = tx.moveCall({
+          const [redeemerReceipt] = tx.moveCall({
             target: `${TOKEN_BRIDGE_ID}::complete_transfer_with_payload::authorize_transfer`,
             arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), tokenBridgeMessage],
             typeArguments: [SUI_TYPE],
@@ -1463,7 +1531,7 @@ describe("1: Token Bridge Relayer", () => {
             arguments: [
               tx.object(stateId),
               tx.object(TOKEN_BRIDGE_STATE_ID),
-              redeemerTicket,
+              redeemerReceipt,
               coinsToTransfer,
             ],
             typeArguments: [SUI_TYPE],
@@ -1608,7 +1676,7 @@ describe("1: Token Bridge Relayer", () => {
           });
 
           // Authorize the transfer.
-          const [redeemerTicket] = tx.moveCall({
+          const [redeemerReceipt] = tx.moveCall({
             target: `${TOKEN_BRIDGE_ID}::complete_transfer_with_payload::authorize_transfer`,
             arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), tokenBridgeMessage],
             typeArguments: [SUI_TYPE],
@@ -1628,7 +1696,7 @@ describe("1: Token Bridge Relayer", () => {
             arguments: [
               tx.object(stateId),
               tx.object(TOKEN_BRIDGE_STATE_ID),
-              redeemerTicket,
+              redeemerReceipt,
               coinsToTransfer,
             ],
             typeArguments: [SUI_TYPE],
@@ -1760,7 +1828,7 @@ describe("1: Token Bridge Relayer", () => {
           });
 
           // Authorize the transfer.
-          const [redeemerTicket] = tx.moveCall({
+          const [redeemerReceipt] = tx.moveCall({
             target: `${TOKEN_BRIDGE_ID}::complete_transfer_with_payload::authorize_transfer`,
             arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), tokenBridgeMessage],
             typeArguments: [SUI_TYPE],
@@ -1770,7 +1838,7 @@ describe("1: Token Bridge Relayer", () => {
           tx.setGasBudget(gasBudget);
           tx.moveCall({
             target: `${RELAYER_ID}::redeem::complete_transfer`,
-            arguments: [tx.object(stateId), redeemerTicket],
+            arguments: [tx.object(stateId), redeemerReceipt],
             typeArguments: [SUI_TYPE],
           });
 
@@ -1963,24 +2031,46 @@ describe("1: Token Bridge Relayer", () => {
           tx.pure(depositAmount),
         ]);
 
-        // Send the transfer with relay (this deposits token into the token
-        // bridge).
-        tx.moveCall({
+        // Fetch the asset info.
+        const [assetInfo] = tx.moveCall({
+          target: `${TOKEN_BRIDGE_ID}::state::verified_asset`,
+          arguments: [tx.object(TOKEN_BRIDGE_STATE_ID)],
+          typeArguments: [COIN_10_TYPE],
+        });
+
+        // Fetch the transfer ticket.
+        const [transferTicket] = tx.moveCall({
           target: `${RELAYER_ID}::transfer::transfer_tokens_with_relay`,
           arguments: [
             tx.object(stateId),
-            tx.object(WORMHOLE_STATE_ID),
-            tx.object(TOKEN_BRIDGE_STATE_ID),
             coinsToTransfer,
+            assetInfo,
             tx.pure(0),
-            wormholeFee,
             tx.pure(foreignChain),
-            tx.pure(nonce),
             tx.pure(walletAddress),
-            tx.object(SUI_CLOCK_OBJECT_ID),
+            tx.pure(nonce),
           ],
           typeArguments: [COIN_10_TYPE],
         });
+
+        // Transfer the tokens with payload.
+        const [messageTicket] = tx.moveCall({
+          target: `${TOKEN_BRIDGE_ID}::transfer_tokens_with_payload::transfer_tokens_with_payload`,
+          arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), transferTicket],
+          typeArguments: [COIN_10_TYPE],
+        });
+
+        // Publish the message.
+        tx.moveCall({
+          target: `${WORMHOLE_ID}::publish_message::publish_message`,
+          arguments: [
+            tx.object(WORMHOLE_STATE_ID),
+            wormholeFee,
+            messageTicket,
+            tx.object(SUI_CLOCK_OBJECT_ID),
+          ],
+        });
+
         await wallet.signAndExecuteTransactionBlock({
           transactionBlock: tx,
           options: {
@@ -2162,7 +2252,7 @@ describe("1: Token Bridge Relayer", () => {
           });
 
           // Authorize the transfer.
-          const [redeemerTicket] = tx.moveCall({
+          const [redeemerReceipt] = tx.moveCall({
             target: `${TOKEN_BRIDGE_ID}::complete_transfer_with_payload::authorize_transfer`,
             arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), tokenBridgeMessage],
             typeArguments: [COIN_10_TYPE],
@@ -2177,7 +2267,7 @@ describe("1: Token Bridge Relayer", () => {
             arguments: [
               tx.object(stateId),
               tx.object(TOKEN_BRIDGE_STATE_ID),
-              redeemerTicket,
+              redeemerReceipt,
               coinsToTransfer,
             ],
             typeArguments: [COIN_10_TYPE],

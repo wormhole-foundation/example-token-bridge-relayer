@@ -237,18 +237,29 @@ describe("0: Wormhole", () => {
         // Call `token_bridge::attest_token` on Token Bridge.
         const tx = new TransactionBlock();
         const [wormholeFee] = tx.splitCoins(tx.gas, [tx.pure(feeAmount)]);
-        tx.moveCall({
+
+        // Fetch message ticket.
+        const [messageTicket] = tx.moveCall({
           target: `${TOKEN_BRIDGE_ID}::attest_token::attest_token`,
           arguments: [
             tx.object(TOKEN_BRIDGE_STATE_ID),
-            tx.object(WORMHOLE_STATE_ID),
-            wormholeFee,
             tx.object(metadata.id!),
             tx.pure(nonce),
-            tx.object(SUI_CLOCK_OBJECT_ID),
           ],
           typeArguments: [COIN_10_TYPE],
         });
+
+        // Publish the message.
+        tx.moveCall({
+          target: `${WORMHOLE_ID}::publish_message::publish_message`,
+          arguments: [
+            tx.object(WORMHOLE_STATE_ID),
+            wormholeFee,
+            messageTicket,
+            tx.object(SUI_CLOCK_OBJECT_ID),
+          ],
+        });
+
         const eventData = await wallet
           .signAndExecuteTransactionBlock({
             transactionBlock: tx,
@@ -265,7 +276,7 @@ describe("0: Wormhole", () => {
           });
 
         // Verify that the attest message was published.
-        expect(eventData.transactionModule).equal("attest_token");
+        expect(eventData.transactionModule).equal("publish_message");
         expect(eventData.parsedJson!.nonce).equals(nonce);
         expect(eventData.parsedJson!.sequence).equals("0");
 
@@ -288,17 +299,27 @@ describe("0: Wormhole", () => {
         // Call `token_bridge::attest_token` on Token Bridge.
         const tx = new TransactionBlock();
         const [wormholeFee] = tx.splitCoins(tx.gas, [tx.pure(feeAmount)]);
-        tx.moveCall({
+
+        // Fetch message ticket.
+        const [messageTicket] = tx.moveCall({
           target: `${TOKEN_BRIDGE_ID}::attest_token::attest_token`,
           arguments: [
             tx.object(TOKEN_BRIDGE_STATE_ID),
-            tx.object(WORMHOLE_STATE_ID),
-            wormholeFee,
             tx.object(metadata.id!),
             tx.pure(nonce),
-            tx.object(SUI_CLOCK_OBJECT_ID),
           ],
           typeArguments: [COIN_8_TYPE],
+        });
+
+        // Publish the message.
+        tx.moveCall({
+          target: `${WORMHOLE_ID}::publish_message::publish_message`,
+          arguments: [
+            tx.object(WORMHOLE_STATE_ID),
+            wormholeFee,
+            messageTicket,
+            tx.object(SUI_CLOCK_OBJECT_ID),
+          ],
         });
         const eventData = await wallet
           .signAndExecuteTransactionBlock({
@@ -316,7 +337,7 @@ describe("0: Wormhole", () => {
           });
 
         // Verify that the attest message was published.
-        expect(eventData.transactionModule).equal("attest_token");
+        expect(eventData.transactionModule).equal("publish_message");
         expect(eventData.parsedJson!.nonce).equals(nonce);
         expect(eventData.parsedJson!.sequence).equals("1");
 
@@ -337,18 +358,29 @@ describe("0: Wormhole", () => {
       // Call `token_bridge::attest_token` on Token Bridge.
       const tx = new TransactionBlock();
       const [wormholeFee] = tx.splitCoins(tx.gas, [tx.pure(feeAmount)]);
-      tx.moveCall({
+
+      // Fetch message ticket.
+      const [messageTicket] = tx.moveCall({
         target: `${TOKEN_BRIDGE_ID}::attest_token::attest_token`,
         arguments: [
           tx.object(TOKEN_BRIDGE_STATE_ID),
-          tx.object(WORMHOLE_STATE_ID),
-          wormholeFee,
           tx.object(SUI_METADATA_ID),
           tx.pure(nonce),
-          tx.object(SUI_CLOCK_OBJECT_ID),
         ],
         typeArguments: [SUI_TYPE],
       });
+
+      // Publish the message.
+      tx.moveCall({
+        target: `${WORMHOLE_ID}::publish_message::publish_message`,
+        arguments: [
+          tx.object(WORMHOLE_STATE_ID),
+          wormholeFee,
+          messageTicket,
+          tx.object(SUI_CLOCK_OBJECT_ID),
+        ],
+      });
+
       const eventData = await wallet
         .signAndExecuteTransactionBlock({
           transactionBlock: tx,
@@ -364,7 +396,7 @@ describe("0: Wormhole", () => {
         });
 
       // Verify that the attest message was published.
-      expect(eventData.transactionModule).equal("attest_token");
+      expect(eventData.transactionModule).equal("publish_message");
       expect(eventData.parsedJson!.nonce).equals(nonce);
       expect(eventData.parsedJson!.sequence).equals("2");
 
