@@ -24,7 +24,7 @@ function validateContractAddress(address: string) {
 /**
  * Registers a foreign Token Bridge Relayer contract on the SUI contract.
  */
-async function register_foreign_contract(
+async function register_foreign_contracts(
   provider: JsonRpcProvider,
   wallet: RawSigner,
   config: Config[]
@@ -114,7 +114,7 @@ async function main() {
   }
 
   // Register all contracts.
-  await register_foreign_contract(provider, wallet, config);
+  await register_foreign_contracts(provider, wallet, config);
 }
 
 main();

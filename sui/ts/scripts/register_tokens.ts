@@ -18,7 +18,7 @@ import * as fs from "fs";
 /**
  * Register token.
  */
-async function register_token(
+async function register_tokens(
   provider: JsonRpcProvider,
   wallet: RawSigner,
   config: TokenConfig[]
@@ -115,7 +115,7 @@ async function main() {
   }
 
   // Create state.
-  await register_token(provider, wallet, config);
+  await register_tokens(provider, wallet, config);
 }
 
 main();

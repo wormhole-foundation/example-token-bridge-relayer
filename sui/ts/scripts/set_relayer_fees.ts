@@ -18,7 +18,7 @@ import * as fs from "fs";
 /**
  * Sets the relayer fee for a target foreign contract.
  */
-async function set_relayer_fee(
+async function set_relayer_fees(
   provider: JsonRpcProvider,
   wallet: RawSigner,
   config: Config[]
@@ -102,7 +102,7 @@ async function main() {
   }
 
   // Create state.
-  await set_relayer_fee(provider, wallet, config);
+  await set_relayer_fees(provider, wallet, config);
 }
 
 main();
