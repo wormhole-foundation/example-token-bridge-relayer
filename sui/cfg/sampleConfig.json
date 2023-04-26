@@ -1,0 +1,41 @@
+{
+  "deployedContracts": {
+    "2": "000000000000000000000000631C7bc094895b35E15EA23CDe5b2BdC74Ed18bf",
+    "4": "0000000000000000000000003a03c903690ed20b5e087647617dd5d582375fab",
+    "5": "00000000000000000000000064A09E0cd839456d64c9Ab8F8AFe7C2B24b65b76",
+    "6": "00000000000000000000000099a0b432b9a2bd2be70788825e3232c6f0a17f11",
+    "10": "0000000000000000000000004cb9c625e657d9ccb91fa2270f420d005e2715d2",
+    "14": "000000000000000000000000e0cdc52c477028bc293a21ef172a9a8b763d2113"
+  },
+  "acceptedTokensList": [
+    {
+      "symbol": "SUI",
+      "coinType": "0x2::sui::SUI",
+      "swapRate": "100000000",
+      "maxNativeSwapAmount": "1000000000",
+      "enableSwaps": false
+    },
+    {
+      "symbol": "COIN_10",
+      "coinType": "0xdc3b1fff80b3a1818c48ad22a4eb3ad6709fd2da5e4621146d2c9c3591bdc533::coin_10::COIN_10",
+      "maxNativeSwapAmount": "2000000000",
+      "swapRate": "200000000",
+      "enableSwaps": true
+    },
+    {
+      "symbol": "COIN_10",
+      "coinType": "0xdc3b1fff80b3a1818c48ad22a4eb3ad6709fd2da5e4621146d2c9c3591bdc533::coin_8::COIN_8",
+      "maxNativeSwapAmount": "3000000000",
+      "swapRate": "300000000",
+      "enableSwaps": true
+    }
+  ],
+  "relayerFeesInUsd": {
+    "2": "25000000",
+    "4": "10000000",
+    "5": "5000000",
+    "6": "5000000",
+    "10": "5000000",
+    "14": "5000000"
+  }
+}

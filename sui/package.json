@@ -1,8 +1,19 @@
 {
+  "name": "token-bridge-relayer",
+  "version": "0.1.0",
+  "license": "ISC",
   "scripts": {
     "deploy": "ts-node ts/scripts/deploy-contract.ts -p",
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
-    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
+    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
+    "create-state": "npx ts-node ts/scripts/create_state.ts",
+    "register-contracts": "npx ts-node ts/scripts/register_foreign_contract.ts",
+    "set-relayer-fees": "npx ts-node ts/scripts/set_relayer_fee.ts",
+    "register-tokens": "npx ts-node ts/scripts/register_token.ts",
+    "deregister-token": "npx ts-node ts/scripts/deregister_token.ts",
+    "toggle-swaps": "npx ts-node ts/scripts/toggle_swap_enabled.ts",
+    "update-max-swap-amount": "npx ts-node ts/scripts/update_max_swap_amount.ts",
+    "update-swap-rate": "npx ts-node ts/scripts/update_swap_rate.ts"
   },
   "dependencies": {
     "@certusone/wormhole-sdk": "^0.9.9",

@@ -10,63 +10,10 @@ import {
   RELAYER_STATE_ID,
   RELAYER_OWNER_CAP_ID,
   RPC,
+  KEY,
 } from "./consts";
 import {getTokenInfo, getObjectFields} from "../src";
-import yargs from "yargs";
-
-export function getArgs() {
-  const argv = yargs.options({
-    key: {
-      alias: "k",
-      describe: "Custom private key to sign txs",
-      required: true,
-      type: "string",
-    },
-    coinType: {
-      alias: "c",
-      describe: "Coin type to register",
-      require: true,
-      type: "string",
-    },
-    swapRate: {
-      alias: "s",
-      describe: "Swap rate for registered token",
-      require: true,
-      type: "string",
-    },
-    maxNativeSwapAmount: {
-      alias: "m",
-      describe: "Max native swap amount for registered token",
-      require: true,
-      type: "string",
-    },
-    swapsEnabled: {
-      alias: "e",
-      describe: "Determines if swaps are enabled for the token",
-      require: true,
-      type: "string",
-    },
-  }).argv;
-
-  if (
-    "key" in argv &&
-    "coinType" in argv &&
-    "swapRate" in argv &&
-    "maxNativeSwapAmount" in argv &&
-    "swapsEnabled" in argv &&
-    (argv.swapsEnabled == "true" || argv.swapsEnabled == "false")
-  ) {
-    return {
-      key: argv.key,
-      coinType: argv.coinType,
-      swapRate: argv.swapRate,
-      maxNativeSwapAmount: argv.maxNativeSwapAmount,
-      swapsEnabled: argv.swapsEnabled,
-    };
-  } else {
-    throw Error("Invalid arguments");
-  }
-}
+import * as fs from "fs";
 
 /**
  * Register token.
@@ -74,24 +21,24 @@ export function getArgs() {
 async function register_token(
   provider: JsonRpcProvider,
   wallet: RawSigner,
-  coinType: string,
-  swapRate: string,
-  maxSwapAmount: string,
-  swapsEnabled: boolean
+  config: TokenConfig[]
 ) {
-  // Register the token.
   const tx = new TransactionBlock();
-  tx.moveCall({
-    target: `${RELAYER_ID}::owner::register_token`,
-    arguments: [
-      tx.object(RELAYER_OWNER_CAP_ID),
-      tx.object(RELAYER_STATE_ID),
-      tx.pure(swapRate),
-      tx.pure(maxSwapAmount),
-      tx.pure(swapsEnabled),
-    ],
-    typeArguments: [coinType],
-  });
+
+  // Register each token.
+  for (const tokenConfig of config) {
+    tx.moveCall({
+      target: `${RELAYER_ID}::owner::register_token`,
+      arguments: [
+        tx.object(RELAYER_OWNER_CAP_ID),
+        tx.object(RELAYER_STATE_ID),
+        tx.pure(tokenConfig.swapRate),
+        tx.pure(tokenConfig.maxNativeSwapAmount),
+        tx.pure(tokenConfig.enableSwaps),
+      ],
+      typeArguments: [tokenConfig.coinType],
+    });
+  }
   const result = await wallet.signAndExecuteTransactionBlock({
     transactionBlock: tx,
   });
@@ -100,42 +47,75 @@ async function register_token(
     return Promise.reject("Failed to register the token.");
   }
 
+  console.log(`Transaction digest: ${result.digest}`);
+
   // Fetch state.
   const state = await getObjectFields(provider, RELAYER_STATE_ID);
 
-  // Verify state.
-  const tokenInfo = await getTokenInfo(provider, state, coinType);
-  const coinName = coinType.split("::", 3)[2];
+  for (const tokenConfig of config) {
+    // Verify state.
+    const tokenInfo = await getTokenInfo(provider, state, tokenConfig.coinType);
+    const coinName = tokenConfig.coinType.split("::", 3)[2];
 
-  console.log(`${coinName} has been registered.`);
-  console.log(`swapRate: ${tokenInfo.swap_rate}`);
-  console.log(`maxSwapAmount: ${tokenInfo.max_native_swap_amount}`);
-  console.log(`swapEnabled: ${tokenInfo.swap_enabled}`);
+    console.log(`${coinName} has been registered.`);
+    console.log(`swapRate: ${tokenInfo.swap_rate}`);
+    console.log(`maxSwapAmount: ${tokenInfo.max_native_swap_amount}`);
+    console.log(`swapEnabled: ${tokenInfo.swap_enabled}`);
+    console.log("\n");
+  }
+}
+
+interface TokenConfig {
+  symbol: string;
+  coinType: string;
+  swapRate: string;
+  maxNativeSwapAmount: string;
+  enableSwaps: boolean;
+}
+
+function createConfig(object: any) {
+  let config = [] as TokenConfig[];
+
+  for (const info of object) {
+    let member: TokenConfig = {
+      symbol: info.symbol as string,
+      coinType: info.coinType as string,
+      swapRate: info.swapRate as string,
+      maxNativeSwapAmount: info.maxNativeSwapAmount as string,
+      enableSwaps: info.enableSwaps,
+    };
+
+    config.push(member);
+  }
+
+  return config;
 }
 
 async function main() {
-  // Fetch args.
-  const args = getArgs();
-
   // Set up provider.
   const connection = new Connection({fullnode: RPC});
   const provider = new JsonRpcProvider(connection);
 
   // Owner wallet.
   const key = Ed25519Keypair.fromSecretKey(
-    Buffer.from(args.key, "base64").subarray(1)
+    Buffer.from(KEY, "base64").subarray(1)
   );
   const wallet = new RawSigner(key, provider);
 
-  // Create state.
-  await register_token(
-    provider,
-    wallet,
-    args.coinType,
-    args.swapRate,
-    args.maxNativeSwapAmount,
-    args.swapsEnabled == "true"
+  // Read in config file.
+  const deploymentConfig = JSON.parse(
+    fs.readFileSync(`${__dirname}/../../cfg/deploymentConfig.json`, "utf8")
   );
+
+  // Convert to Config type.
+  const config = createConfig(deploymentConfig["acceptedTokensList"]);
+
+  if (config.length == undefined) {
+    throw Error("Deployed contracts not found");
+  }
+
+  // Create state.
+  await register_token(provider, wallet, config);
 }
 
 main();

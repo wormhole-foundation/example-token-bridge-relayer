@@ -10,38 +10,10 @@ import {
   RELAYER_STATE_ID,
   RELAYER_OWNER_CAP_ID,
   RPC,
+  KEY,
 } from "./consts";
 import {getTableByName} from "../src";
-import yargs from "yargs";
-
-export function getArgs() {
-  const argv = yargs.options({
-    key: {
-      alias: "k",
-      describe: "Custom private key to sign txs",
-      required: true,
-      type: "string",
-    },
-    chain: {
-      alias: "c",
-      describe: "Wormhole chain ID of the target contract",
-      require: true,
-      type: "string",
-    },
-    fee: {
-      alias: "f",
-      describe: "Relayer fee denominated in US dollars",
-      require: true,
-      type: "string",
-    },
-  }).argv;
-
-  if ("key" in argv && "chain" in argv && "fee" in argv) {
-    return {key: argv.key, chain: argv.chain, fee: argv.fee};
-  } else {
-    throw Error("Invalid arguments");
-  }
-}
+import * as fs from "fs";
 
 /**
  * Sets the relayer fee for a target foreign contract.
@@ -49,20 +21,23 @@ export function getArgs() {
 async function set_relayer_fee(
   provider: JsonRpcProvider,
   wallet: RawSigner,
-  chainId: string,
-  relayerFee: string
+  config: Config[]
 ) {
-  // Set the relayer fee for the registered foreign contract.
   const tx = new TransactionBlock();
-  tx.moveCall({
-    target: `${RELAYER_ID}::owner::update_relayer_fee`,
-    arguments: [
-      tx.object(RELAYER_OWNER_CAP_ID),
-      tx.object(RELAYER_STATE_ID),
-      tx.pure(chainId),
-      tx.pure(relayerFee),
-    ],
-  });
+
+  // Set the relayer fee for each registered foreign contract.
+  for (const feeMap of config) {
+    tx.moveCall({
+      target: `${RELAYER_ID}::owner::update_relayer_fee`,
+      arguments: [
+        tx.object(RELAYER_OWNER_CAP_ID),
+        tx.object(RELAYER_STATE_ID),
+        tx.pure(feeMap.chain),
+        tx.pure(feeMap.fee),
+      ],
+    });
+  }
+
   const result = await wallet.signAndExecuteTransactionBlock({
     transactionBlock: tx,
   });
@@ -70,6 +45,8 @@ async function set_relayer_fee(
   if (result.digest === null) {
     return Promise.reject("Failed to set the relayer fee.");
   }
+
+  console.log(`Transaction digest: ${result.digest}`);
 
   // Fetch the relayer fees table from state.
   const relayerFees = await getTableByName(
@@ -85,22 +62,47 @@ async function set_relayer_fee(
   }
 }
 
-async function main() {
-  // Fetch args.
-  const args = getArgs();
+interface Config {
+  chain: string;
+  fee: string;
+}
 
+function createConfig(object: any) {
+  let config = [] as Config[];
+
+  for (let key of Object.keys(object)) {
+    let member = {chain: key, fee: object[key]};
+    config.push(member);
+  }
+
+  return config;
+}
+
+async function main() {
   // Set up provider.
   const connection = new Connection({fullnode: RPC});
   const provider = new JsonRpcProvider(connection);
 
   // Owner wallet.
   const key = Ed25519Keypair.fromSecretKey(
-    Buffer.from(args.key, "base64").subarray(1)
+    Buffer.from(KEY, "base64").subarray(1)
   );
   const wallet = new RawSigner(key, provider);
 
+  // Read in config file.
+  const deploymentConfig = JSON.parse(
+    fs.readFileSync(`${__dirname}/../../cfg/deploymentConfig.json`, "utf8")
+  );
+
+  // Convert to Config type.
+  const config = createConfig(deploymentConfig["relayerFeesInUsd"]);
+
+  if (config.length == undefined) {
+    throw Error("Deployed contracts not found");
+  }
+
   // Create state.
-  await set_relayer_fee(provider, wallet, args.chain, args.fee);
+  await set_relayer_fee(provider, wallet, config);
 }
 
 main();

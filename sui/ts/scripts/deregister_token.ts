@@ -10,18 +10,13 @@ import {
   RELAYER_STATE_ID,
   RELAYER_OWNER_CAP_ID,
   RPC,
+  KEY,
 } from "./consts";
 import {getDynamicFieldsByType, getObjectFields} from "../src";
 import yargs from "yargs";
 
 export function getArgs() {
   const argv = yargs.options({
-    key: {
-      alias: "k",
-      describe: "Custom private key to sign txs",
-      required: true,
-      type: "string",
-    },
     coinType: {
       alias: "c",
       describe: "Coin type to deregister",
@@ -30,9 +25,8 @@ export function getArgs() {
     },
   }).argv;
 
-  if ("key" in argv && "coinType" in argv) {
+  if ("coinType" in argv) {
     return {
-      key: argv.key,
       coinType: argv.coinType,
     };
   } else {
@@ -63,6 +57,8 @@ async function deregister_token(
     return Promise.reject("Failed to deregister the token.");
   }
 
+  console.log(`Transaction digest: ${result.digest}`);
+
   // Fetch state.
   const state = await getObjectFields(provider, RELAYER_STATE_ID);
 
@@ -91,7 +87,7 @@ async function main() {
 
   // Owner wallet.
   const key = Ed25519Keypair.fromSecretKey(
-    Buffer.from(args.key, "base64").subarray(1)
+    Buffer.from(KEY, "base64").subarray(1)
   );
   const wallet = new RawSigner(key, provider);
 

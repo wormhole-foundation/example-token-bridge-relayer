@@ -11,25 +11,8 @@ import {
   RELAYER_OWNER_CAP_ID,
   RELAYER_UPGRADE_CAP_ID,
   RPC,
+  KEY,
 } from "./consts";
-import yargs from "yargs";
-
-export function getArgs() {
-  const argv = yargs.options({
-    key: {
-      alias: "k",
-      describe: "Custom private key to sign txs",
-      required: true,
-      type: "string",
-    },
-  }).argv;
-
-  if ("key" in argv) {
-    return {key: argv.key, rpc: RPC};
-  } else {
-    throw Error("Invalid arguments");
-  }
-}
 
 /**
  * Creates the state object for the specified Token Bridge Relayer contract.
@@ -37,6 +20,7 @@ export function getArgs() {
 async function create_state(wallet: RawSigner) {
   // Call `owner::create_state` on the Token Bridge Relayer.
   const tx = new TransactionBlock();
+
   tx.moveCall({
     target: `${RELAYER_ID}::owner::create_state`,
     arguments: [
@@ -45,6 +29,7 @@ async function create_state(wallet: RawSigner) {
       tx.object(RELAYER_UPGRADE_CAP_ID),
     ],
   });
+
   const result = await wallet.signAndExecuteTransactionBlock({
     transactionBlock: tx,
     options: {showObjectChanges: true},
@@ -66,16 +51,13 @@ async function create_state(wallet: RawSigner) {
 }
 
 async function main() {
-  // Fetch args.
-  const args = getArgs();
-
   // Set up provider.
-  const connection = new Connection({fullnode: args.rpc});
+  const connection = new Connection({fullnode: RPC});
   const provider = new JsonRpcProvider(connection);
 
   // Owner wallet.
   const key = Ed25519Keypair.fromSecretKey(
-    Buffer.from(args.key, "base64").subarray(1)
+    Buffer.from(KEY, "base64").subarray(1)
   );
   const wallet = new RawSigner(key, provider);
 

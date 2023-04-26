@@ -10,21 +10,16 @@ import {
   RELAYER_STATE_ID,
   RELAYER_OWNER_CAP_ID,
   RPC,
+  KEY,
 } from "./consts";
 import {getTokenInfo, getObjectFields} from "../src";
 import yargs from "yargs";
 
 export function getArgs() {
   const argv = yargs.options({
-    key: {
-      alias: "k",
-      describe: "Custom private key to sign txs",
-      required: true,
-      type: "string",
-    },
     coinType: {
       alias: "c",
-      describe: "Coin type to register",
+      describe: "Coin type",
       require: true,
       type: "string",
     },
@@ -36,9 +31,8 @@ export function getArgs() {
     },
   }).argv;
 
-  if ("key" in argv && "coinType" in argv && "swapRate" in argv) {
+  if ("coinType" in argv && "swapRate" in argv) {
     return {
-      key: argv.key,
       coinType: argv.coinType,
       swapRate: argv.swapRate,
     };
@@ -75,6 +69,8 @@ async function update_swap_rate(
     return Promise.reject("Failed to update the swap rate.");
   }
 
+  console.log(`Transaction digest: ${result.digest}`);
+
   // Fetch state.
   const state = await getObjectFields(provider, RELAYER_STATE_ID);
 
@@ -95,7 +91,7 @@ async function main() {
 
   // Owner wallet.
   const key = Ed25519Keypair.fromSecretKey(
-    Buffer.from(args.key, "base64").subarray(1)
+    Buffer.from(KEY, "base64").subarray(1)
   );
   const wallet = new RawSigner(key, provider);
 
