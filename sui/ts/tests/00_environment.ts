@@ -213,6 +213,9 @@ describe("0: Wormhole", () => {
         const [decreeReceipt] = tx.moveCall({
           target: `${WORMHOLE_ID}::governance_message::verify_vaa`,
           arguments: [tx.object(WORMHOLE_STATE_ID), verifiedVaa, decreeTicket],
+          typeArguments: [
+            `${TOKEN_BRIDGE_ID}::register_chain::GovernanceWitness`,
+          ],
         });
 
         // Register the chain.
