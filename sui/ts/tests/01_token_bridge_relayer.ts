@@ -2230,7 +2230,6 @@ describe("1: Token Bridge Relayer", () => {
         );
 
         // Complete the transfer with payload.
-        let receipt;
         {
           // Start new transaction.
           const tx = new TransactionBlock();
@@ -2274,7 +2273,7 @@ describe("1: Token Bridge Relayer", () => {
           });
 
           tx.setGasBudget(50_000n);
-          receipt = await relayer.signAndExecuteTransactionBlock({
+          await relayer.signAndExecuteTransactionBlock({
             transactionBlock: tx,
             options: {
               showEvents: true,

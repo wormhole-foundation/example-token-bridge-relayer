@@ -13,6 +13,7 @@ import {
   RPC,
   KEY,
 } from "./consts";
+import {executeTransactionBlock, pollTransactionForEffectsCert} from "./poll";
 
 /**
  * Creates the state object for the specified Token Bridge Relayer contract.
@@ -29,18 +30,10 @@ async function create_state(wallet: RawSigner) {
       tx.object(RELAYER_UPGRADE_CAP_ID),
     ],
   });
+  const {digest, objectChanges} = await executeTransactionBlock(wallet, tx);
+  await pollTransactionForEffectsCert(wallet, digest); // Log the state ID.
 
-  const result = await wallet.signAndExecuteTransactionBlock({
-    transactionBlock: tx,
-    options: {showObjectChanges: true},
-  });
-
-  if (result.digest === null) {
-    return Promise.reject("Failed to create state.");
-  }
-
-  // Log the state ID.
-  for (const objectEvent of result.objectChanges!) {
+  for (const objectEvent of objectChanges!) {
     if (
       objectEvent["type"] == "created" &&
       objectEvent["objectType"].includes("state::State")

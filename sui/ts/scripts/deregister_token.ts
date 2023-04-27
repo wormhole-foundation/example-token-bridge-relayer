@@ -13,6 +13,7 @@ import {
   KEY,
 } from "./consts";
 import {getDynamicFieldsByType, getObjectFields} from "../src";
+import {executeTransactionBlock, pollTransactionForEffectsCert} from "./poll";
 import yargs from "yargs";
 
 export function getArgs() {
@@ -49,15 +50,8 @@ async function deregister_token(
     arguments: [tx.object(RELAYER_OWNER_CAP_ID), tx.object(RELAYER_STATE_ID)],
     typeArguments: [coinType],
   });
-  const result = await wallet.signAndExecuteTransactionBlock({
-    transactionBlock: tx,
-  });
-
-  if (result.digest === null) {
-    return Promise.reject("Failed to deregister the token.");
-  }
-
-  console.log(`Transaction digest: ${result.digest}`);
+  const {digest} = await executeTransactionBlock(wallet, tx);
+  await pollTransactionForEffectsCert(wallet, digest);
 
   // Fetch state.
   const state = await getObjectFields(provider, RELAYER_STATE_ID);

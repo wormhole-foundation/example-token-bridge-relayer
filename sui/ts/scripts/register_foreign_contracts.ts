@@ -12,6 +12,7 @@ import {
   RPC,
   KEY,
 } from "./consts";
+import {executeTransactionBlock, pollTransactionForEffectsCert} from "./poll";
 import {getTableByName} from "../src";
 import * as fs from "fs";
 
@@ -47,16 +48,8 @@ async function register_foreign_contracts(
       ],
     });
   }
-
-  const result = await wallet.signAndExecuteTransactionBlock({
-    transactionBlock: tx,
-  });
-
-  if (result.digest === null) {
-    return Promise.reject("Failed to register contract.");
-  }
-
-  console.log(`Transaction digest: ${result.digest}`);
+  const {digest} = await executeTransactionBlock(wallet, tx);
+  await pollTransactionForEffectsCert(wallet, digest);
 
   // Fetch the registered contracts table.
   const registeredContracts = await getTableByName(

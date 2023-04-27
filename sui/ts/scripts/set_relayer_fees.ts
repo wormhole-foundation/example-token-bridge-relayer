@@ -13,6 +13,7 @@ import {
   KEY,
 } from "./consts";
 import {getTableByName} from "../src";
+import {executeTransactionBlock, pollTransactionForEffectsCert} from "./poll";
 import * as fs from "fs";
 
 /**
@@ -37,16 +38,8 @@ async function set_relayer_fees(
       ],
     });
   }
-
-  const result = await wallet.signAndExecuteTransactionBlock({
-    transactionBlock: tx,
-  });
-
-  if (result.digest === null) {
-    return Promise.reject("Failed to set the relayer fee.");
-  }
-
-  console.log(`Transaction digest: ${result.digest}`);
+  const {digest} = await executeTransactionBlock(wallet, tx);
+  await pollTransactionForEffectsCert(wallet, digest);
 
   // Fetch the relayer fees table from state.
   const relayerFees = await getTableByName(
