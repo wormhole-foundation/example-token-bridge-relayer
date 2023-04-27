@@ -194,7 +194,7 @@ describe("0: Wormhole", () => {
         const tx = new TransactionBlock();
 
         // Parse and verify the vaa.
-        const [parsedVaa] = tx.moveCall({
+        const [verifiedVaa] = tx.moveCall({
           target: `${WORMHOLE_ID}::vaa::parse_and_verify`,
           arguments: [
             tx.object(WORMHOLE_STATE_ID),
@@ -203,16 +203,22 @@ describe("0: Wormhole", () => {
           ],
         });
 
+        // Authorize the governance.
+        const [decreeTicket] = tx.moveCall({
+          target: `${TOKEN_BRIDGE_ID}::register_chain::authorize_governance`,
+          arguments: [tx.object(TOKEN_BRIDGE_STATE_ID)],
+        });
+
         // Fetch the governance message.
-        const [governanceMessage] = tx.moveCall({
+        const [decreeReceipt] = tx.moveCall({
           target: `${WORMHOLE_ID}::governance_message::verify_vaa`,
-          arguments: [tx.object(WORMHOLE_STATE_ID), parsedVaa],
+          arguments: [tx.object(WORMHOLE_STATE_ID), verifiedVaa, decreeTicket],
         });
 
         // Register the chain.
         tx.moveCall({
           target: `${TOKEN_BRIDGE_ID}::register_chain::register_chain`,
-          arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), governanceMessage],
+          arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), decreeReceipt],
         });
         const result = await creator.signAndExecuteTransactionBlock({
           transactionBlock: tx,

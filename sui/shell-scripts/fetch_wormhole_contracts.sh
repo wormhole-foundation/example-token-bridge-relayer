@@ -20,7 +20,7 @@ fi
 echo "fetching Sui programs from wormhole repo"
 git clone \
     --depth 1 \
-    --branch sui/outbound-types \
+    --branch sui/upgrade-deja-vu \
     --filter=blob:none \
     --sparse \
     https://github.com/wormhole-foundation/wormhole \

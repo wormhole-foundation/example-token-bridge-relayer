@@ -211,10 +211,8 @@ module token_bridge_relayer::init_tests {
     use wormhole::external_address::{Self};
 
     // Token Bridge.
-    use token_bridge::state::{
-        Self as bridge_state,
-        State as BridgeState
-    };
+    use token_bridge::state::{State as BridgeState};
+    use token_bridge::register_chain::{Self};
     use token_bridge::token_bridge_scenario::{Self};
 
     // Example coins.
@@ -1888,7 +1886,7 @@ module token_bridge_relayer::init_tests {
         // Register a test emitter on the token bridge.
         {
             let state = test_scenario::take_shared<BridgeState>(scenario);
-            bridge_state::register_new_emitter_test_only(
+            register_chain::register_new_emitter_test_only(
                 &mut state,
                 2, // Ethereum chain ID
                 external_address::from_address(@0x3ee18B2214AFF97000D974cf647E7C347E8fa585),
