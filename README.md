@@ -10,6 +10,25 @@ This repository was generated from the [wormhole-scaffolding](https://github.com
 
 Install [Foundry tools](https://book.getfoundry.sh/getting-started/installation), which include `forge`, `anvil` and `cast` CLI tools.
 
+### SUI
+
+Install the `Sui` CLI. This tool is used to compile the contracts and run the tests.
+
+```sh
+cargo install --locked --git https://github.com/MystenLabs/sui.git --rev a63f425b9999c7fdfe483598720a9effc0acdc9e sui sui-faucet
+```
+
+### Worm CLI
+
+First, checkout the [Wormhole](https://github.com/wormhole-foundation/wormhole) repo, then install the CLI tool by running:
+
+```sh
+wormhole/clients/js $ make install
+```
+
+`worm` is the swiss army knife for interacting with wormhole contracts on all
+supported chains, and generating signed messages (VAAs) for testing.
+
 ## Build, Test and Deploy Smart Contracts
 
 Each directory represents Wormhole integrations for specific blockchain networks. Please navigate to a network subdirectory to see more details (see the relevant README.md) on building, testing and deploying the smart contracts.
