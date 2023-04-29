@@ -2,10 +2,12 @@ import {
   JsonRpcProvider,
   TransactionBlock,
   SuiObjectResponse,
+  isValidSuiAddress as isValidFullSuiAddress,
+  normalizeSuiAddress,
 } from "@mysten/sui.js";
 import {ethers} from "ethers";
 import {WORMHOLE_STATE_ID, RELAYER_ID} from "./consts";
-import {getSignedVAAHash} from "@certusone/wormhole-sdk";
+import {getSignedVAAHash, ensureHexPrefix} from "@certusone/wormhole-sdk";
 
 export async function getWormholeFee(provider: JsonRpcProvider) {
   // Fetch the wormhole state fields.
@@ -345,7 +347,7 @@ export async function getSwapQuote(
   tx.moveCall({
     target: `${RELAYER_ID}::redeem::calculate_native_swap_amount_out`,
     arguments: [
-      tx.object(relayerState.id.id),
+      tx.object(relayerState!.id.id),
       tx.pure(toNativeTokenAmount),
       tx.pure(decimals),
     ],
@@ -432,40 +434,69 @@ export function getBalanceChangeFromTransaction(
 }
 
 /////////////// DELETE THESE ONCE THE SDK IS DONE ///////////////////////
+export const getTableKeyType = (tableType: string): string | null => {
+  if (!tableType) return null;
+  const match = tableType.match(/0x2::table::Table<(.*)>/);
+  if (!match) return null;
+  const [keyType] = match[1].split(",");
+  if (!isValidSuiType(keyType)) return null;
+  return keyType;
+};
+
+/**
+ * This method validates any Sui address, even if it's not 32 bytes long, i.e.
+ * "0x2". This differs from Mysten's implementation, which requires that the
+ * given address is 32 bytes long.
+ * @param address Address to check
+ * @returns If given address is a valid Sui address or not
+ */
+export const isValidSuiAddress = (address: string): boolean =>
+  isValidFullSuiAddress(normalizeSuiAddress(address));
+
+export const isValidSuiType = (type: string): boolean => {
+  const tokens = type.split("::");
+  if (tokens.length !== 3) {
+    return false;
+  }
+
+  return isValidSuiAddress(tokens[0]) && !!tokens[1] && !!tokens[2];
+};
+
 export async function getIsTransferCompletedSui(
   provider: JsonRpcProvider,
   tokenBridgeStateObjectId: string,
-  coreBridgeAddress: string,
   transferVAA: Uint8Array
 ): Promise<boolean> {
-  const objectInfo = await provider.getObject({
-    id: tokenBridgeStateObjectId,
-    options: {showContent: true},
-  });
-  if (objectInfo.error) {
-    throw new Error(`getObject returned error code: ${objectInfo.error.code}`);
+  const tokenBridgeStateFields = await getObjectFields(
+    provider,
+    tokenBridgeStateObjectId
+  );
+  if (!tokenBridgeStateFields) {
+    throw new Error("Unable to fetch object fields from token bridge state");
   }
-  if (!(objectInfo.data?.content && "fields" in objectInfo.data.content)) {
-    throw new Error('Missing property "fields"');
+  const hashes = tokenBridgeStateFields.consumed_vaas?.fields?.hashes;
+  const tableObjectId = hashes?.fields?.items?.fields?.id?.id;
+  if (!tableObjectId) {
+    throw new Error("Unable to fetch consumed VAAs table");
   }
-  const consumedVAAsTableObjectId =
-    objectInfo.data.content.fields.consumed_vaas.fields.hashes.fields.items
-      .fields.id.id;
+  const keyType = getTableKeyType(hashes?.fields?.items?.type);
+  if (!keyType) {
+    throw new Error("Unable to get key type");
+  }
+  const hash = getSignedVAAHash(transferVAA);
   try {
-    const signedVAAHash = getSignedVAAHash(transferVAA);
-    // This call errors if the type doesn't exist in ConsumedVAAs
+    // This call throws if the VAA doesn't exist in ConsumedVAAs
     await provider.getDynamicFieldObject({
-      parentId: consumedVAAsTableObjectId,
+      parentId: tableObjectId,
       name: {
-        type: `${coreBridgeAddress}::bytes32::Bytes32`,
+        type: keyType,
         value: {
-          data: [...Buffer.from(signedVAAHash.slice(2), "hex")],
+          data: [...Buffer.from(hash.slice(2), "hex")],
         },
       },
     });
     return true;
   } catch (e: any) {
-    // TODO: is this right
     if (e.code === -32000 && e.message?.includes("RPC Error")) {
       return false;
     }
@@ -480,7 +511,6 @@ export const getFieldsFromObjectResponse = (object: SuiObjectResponse) => {
 
 export const getTokenCoinType = async (
   provider: JsonRpcProvider,
-  tokenBridgeAddress: string,
   tokenBridgeStateObjectId: string,
   tokenAddress: Uint8Array,
   tokenChain: number
@@ -490,21 +520,23 @@ export const getTokenCoinType = async (
     tokenBridgeStateObjectId
   );
   if (!tokenBridgeStateFields) {
-    throw new Error(
-      `Unable to fetch object fields from token bridge state. Object ID: ${tokenBridgeStateObjectId}`
-    );
+    throw new Error("Unable to fetch object fields from token bridge state");
   }
-  const coinTypesObjectId =
-    tokenBridgeStateFields?.token_registry?.fields?.coin_types?.fields?.id?.id;
+  const coinTypes = tokenBridgeStateFields?.token_registry?.fields?.coin_types;
+  const coinTypesObjectId = coinTypes?.fields?.id?.id;
   if (!coinTypesObjectId) {
-    throw new Error("Unable to fetch coin types object ID");
+    throw new Error("Unable to fetch coin types");
+  }
+  const keyType = getTableKeyType(coinTypes?.type);
+  if (!keyType) {
+    throw new Error("Unable to get key type");
   }
   try {
-    // This call errors if the key doesn't exist in the coin_types table
+    // This call throws if the key doesn't exist in CoinTypes
     const coinTypeValue = await provider.getDynamicFieldObject({
       parentId: coinTypesObjectId,
       name: {
-        type: `${tokenBridgeAddress}::token_registry::CoinTypeKey`,
+        type: keyType,
         value: {
           addr: [...tokenAddress],
           chain: tokenChain,
@@ -512,8 +544,11 @@ export const getTokenCoinType = async (
       },
     });
     const fields = getFieldsFromObjectResponse(coinTypeValue);
-    return fields?.value || null;
-  } catch {
-    return null;
+    return fields?.value ? ensureHexPrefix(fields.value) : null;
+  } catch (e: any) {
+    if (e.code === -32000 && e.message?.includes("RPC Error")) {
+      return null;
+    }
+    throw e;
   }
 };

@@ -12,6 +12,13 @@ export const RELAYER_OWNER_CAP_ID = process.env.RELAYER_OWNER_CAPABILITY_ID!;
 export const RELAYER_STATE_ID = process.env.RELAYER_STATE_ID!;
 export const RELAYER_UPGRADE_CAP_ID = process.env.RELAYER_UPGRADE_CAP_ID!;
 
+// Tokens
+export const COIN_10_TYPE = process.env.COIN_10_TYPE!;
+export const COIN_10_TREASURY_CAP = process.env.COIN_10_TREASURY_CAP!;
+export const COIN_8_TYPE = process.env.COIN_8_TYPE!;
+export const COIN_8_TREASURY_CAP = process.env.COIN_8_TREASURY_CAP!;
+export const SUI_TYPE = "0x2::sui::SUI";
+
 // rpc and private key
 export const RPC = process.env.RPC!;
 export const KEY = process.env.KEY!;

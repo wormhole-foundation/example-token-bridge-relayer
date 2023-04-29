@@ -43,6 +43,7 @@ export const executeTransactionBlock = async (
       showInput: true,
       showEvents: true,
       showObjectChanges: true,
+      showBalanceChanges: true,
     },
   });
 };
