@@ -5,7 +5,7 @@ version = "0.1.0"
 [dependencies.Sui]
 git = "https://github.com/MystenLabs/sui.git"
 subdir = "crates/sui-framework/packages/sui-framework"
-rev = "3a70c4374090b020b95465787f3220a95d8ab0ba"
+rev = "c525ba6489261ff6db65e87bf9a3fdda0a6c7be3"
 
 [dependencies.Wormhole]
 local = "../../dependencies/wormhole"

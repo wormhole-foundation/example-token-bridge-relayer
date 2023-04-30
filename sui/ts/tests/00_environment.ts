@@ -56,11 +56,6 @@ describe("0: Wormhole", () => {
   // for governance actions to modify programs
   const governance = new mock.GovernanceEmitter(GOVERNANCE_EMITTER_ID, 20);
 
-  // Ethereum mock token bridge.
-  const ethereumTokenBridge = new mock.MockEthereumTokenBridge(
-    ETHEREUM_TOKEN_BRIDGE_ADDRESS
-  );
-
   describe("Environment", () => {
     it("Variables", () => {
       expect(process.env.TESTING_WORMHOLE_ID).is.not.undefined;
@@ -108,11 +103,11 @@ describe("0: Wormhole", () => {
         const metadata = await provider.getCoinMetadata({
           coinType: COIN_10_TYPE,
         });
-        expect(metadata.decimals).equals(10);
+        expect(metadata!.decimals).equals(10);
 
         // Format the amount based on the coin decimals.
         const amount = ethers.utils
-          .parseUnits("69420", metadata.decimals)
+          .parseUnits("69420", metadata!.decimals)
           .add(10) // for outbound transfer later
           .toString();
 
@@ -127,6 +122,7 @@ describe("0: Wormhole", () => {
           ],
           typeArguments: [COIN_10_TYPE],
         });
+        tx.setGasBudget(50_000);
         const result = await creator.signAndExecuteTransactionBlock({
           transactionBlock: tx,
         });
@@ -146,11 +142,11 @@ describe("0: Wormhole", () => {
         const metadata = await provider.getCoinMetadata({
           coinType: COIN_8_TYPE,
         });
-        expect(metadata.decimals).equals(8);
+        expect(metadata!.decimals).equals(8);
 
         // Format the amount based on the coin decimals.
         const amount = ethers.utils
-          .parseUnits("42069", metadata.decimals)
+          .parseUnits("42069", metadata!.decimals)
           .add(10) // for outbound transfer later
           .toString();
 
@@ -165,6 +161,7 @@ describe("0: Wormhole", () => {
           ],
           typeArguments: [COIN_8_TYPE],
         });
+        tx.setGasBudget(50_000);
         const result = await creator.signAndExecuteTransactionBlock({
           transactionBlock: tx,
         });
@@ -223,6 +220,7 @@ describe("0: Wormhole", () => {
           target: `${TOKEN_BRIDGE_ID}::register_chain::register_chain`,
           arguments: [tx.object(TOKEN_BRIDGE_STATE_ID), decreeReceipt],
         });
+        tx.setGasBudget(50_000);
         const result = await creator.signAndExecuteTransactionBlock({
           transactionBlock: tx,
         });
@@ -252,7 +250,7 @@ describe("0: Wormhole", () => {
           target: `${TOKEN_BRIDGE_ID}::attest_token::attest_token`,
           arguments: [
             tx.object(TOKEN_BRIDGE_STATE_ID),
-            tx.object(metadata.id!),
+            tx.object(metadata!.id!),
             tx.pure(nonce),
           ],
           typeArguments: [COIN_10_TYPE],
@@ -268,7 +266,7 @@ describe("0: Wormhole", () => {
             tx.object(SUI_CLOCK_OBJECT_ID),
           ],
         });
-
+        tx.setGasBudget(50_000);
         const eventData = await wallet
           .signAndExecuteTransactionBlock({
             transactionBlock: tx,
@@ -314,7 +312,7 @@ describe("0: Wormhole", () => {
           target: `${TOKEN_BRIDGE_ID}::attest_token::attest_token`,
           arguments: [
             tx.object(TOKEN_BRIDGE_STATE_ID),
-            tx.object(metadata.id!),
+            tx.object(metadata!.id!),
             tx.pure(nonce),
           ],
           typeArguments: [COIN_8_TYPE],
@@ -330,6 +328,7 @@ describe("0: Wormhole", () => {
             tx.object(SUI_CLOCK_OBJECT_ID),
           ],
         });
+        tx.setGasBudget(50_000);
         const eventData = await wallet
           .signAndExecuteTransactionBlock({
             transactionBlock: tx,
@@ -389,7 +388,7 @@ describe("0: Wormhole", () => {
           tx.object(SUI_CLOCK_OBJECT_ID),
         ],
       });
-
+      tx.setGasBudget(50_000);
       const eventData = await wallet
         .signAndExecuteTransactionBlock({
           transactionBlock: tx,

@@ -186,7 +186,7 @@ async function relay(
       .getCoinMetadata({
         coinType: coinType,
       })
-      .then((result) => result.decimals);
+      .then((result) => result!.decimals);
 
     if (decimals == null) {
       throw Error("Failed to fetch token decimals");

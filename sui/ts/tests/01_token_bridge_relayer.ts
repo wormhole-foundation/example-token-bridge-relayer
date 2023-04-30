@@ -106,6 +106,7 @@ describe("1: Token Bridge Relayer", () => {
           tx.object(RELAYER_UPGRADE_CAP_ID),
         ],
       });
+      tx.setGasBudget(50_000);
       const result = await creator.signAndExecuteTransactionBlock({
         transactionBlock: tx,
         options: {showObjectChanges: true},
@@ -146,6 +147,7 @@ describe("1: Token Bridge Relayer", () => {
           tx.pure(foreignContractAddress),
         ],
       });
+      tx.setGasBudget(50_000);
       const result = await creator.signAndExecuteTransactionBlock({
         transactionBlock: tx,
       });
@@ -183,6 +185,7 @@ describe("1: Token Bridge Relayer", () => {
           tx.pure(relayerFee),
         ],
       });
+      tx.setGasBudget(50_000);
       const result = await creator.signAndExecuteTransactionBlock({
         transactionBlock: tx,
       });
@@ -218,6 +221,7 @@ describe("1: Token Bridge Relayer", () => {
         ],
         typeArguments: [COIN_10_TYPE],
       });
+      tx.setGasBudget(50_000);
       const result = await creator.signAndExecuteTransactionBlock({
         transactionBlock: tx,
         options: {showEffects: true},
@@ -253,6 +257,7 @@ describe("1: Token Bridge Relayer", () => {
         ],
         typeArguments: [COIN_8_TYPE],
       });
+      tx.setGasBudget(50_000);
       const result = await creator.signAndExecuteTransactionBlock({
         transactionBlock: tx,
       });
@@ -287,6 +292,7 @@ describe("1: Token Bridge Relayer", () => {
         ],
         typeArguments: [SUI_TYPE],
       });
+      tx.setGasBudget(50_000);
       const result = await creator.signAndExecuteTransactionBlock({
         transactionBlock: tx,
       });
@@ -402,7 +408,7 @@ describe("1: Token Bridge Relayer", () => {
             tx.object(SUI_CLOCK_OBJECT_ID),
           ],
         });
-
+        tx.setGasBudget(50_000);
         const eventData = await wallet.signAndExecuteTransactionBlock({
           transactionBlock: tx,
           options: {
@@ -583,7 +589,7 @@ describe("1: Token Bridge Relayer", () => {
             ],
             typeArguments: [COIN_8_TYPE],
           });
-
+          tx.setGasBudget(50_000);
           receipt = await relayer.signAndExecuteTransactionBlock({
             transactionBlock: tx,
             options: {
@@ -722,7 +728,7 @@ describe("1: Token Bridge Relayer", () => {
             arguments: [tx.object(stateId), redeemerReceipt],
             typeArguments: [COIN_8_TYPE],
           });
-
+          tx.setGasBudget(50_000);
           receipt = await wallet.signAndExecuteTransactionBlock({
             transactionBlock: tx,
             options: {
@@ -830,7 +836,7 @@ describe("1: Token Bridge Relayer", () => {
             tx.object(SUI_CLOCK_OBJECT_ID),
           ],
         });
-
+        tx.setGasBudget(50_000);
         const eventData = await wallet.signAndExecuteTransactionBlock({
           transactionBlock: tx,
           options: {
@@ -1058,7 +1064,7 @@ describe("1: Token Bridge Relayer", () => {
             ],
             typeArguments: [COIN_10_TYPE],
           });
-
+          tx.setGasBudget(50_000);
           receipt = await relayer.signAndExecuteTransactionBlock({
             transactionBlock: tx,
             options: {
@@ -1219,7 +1225,7 @@ describe("1: Token Bridge Relayer", () => {
             arguments: [tx.object(stateId), redeemerReceipt],
             typeArguments: [COIN_10_TYPE],
           });
-
+          tx.setGasBudget(50_000);
           receipt = await wallet.signAndExecuteTransactionBlock({
             transactionBlock: tx,
             options: {
@@ -1536,7 +1542,7 @@ describe("1: Token Bridge Relayer", () => {
             ],
             typeArguments: [SUI_TYPE],
           });
-
+          tx.setGasBudget(50_000);
           receipt = await relayer.signAndExecuteTransactionBlock({
             transactionBlock: tx,
             options: {
@@ -1701,7 +1707,7 @@ describe("1: Token Bridge Relayer", () => {
             ],
             typeArguments: [SUI_TYPE],
           });
-
+          tx.setGasBudget(50_000);
           receipt = await relayer.signAndExecuteTransactionBlock({
             transactionBlock: tx,
             options: {
@@ -1841,7 +1847,7 @@ describe("1: Token Bridge Relayer", () => {
             arguments: [tx.object(stateId), redeemerReceipt],
             typeArguments: [SUI_TYPE],
           });
-
+          tx.setGasBudget(50_000);
           receipt = await wallet.signAndExecuteTransactionBlock({
             transactionBlock: tx,
             options: {
@@ -1891,6 +1897,7 @@ describe("1: Token Bridge Relayer", () => {
           ],
           typeArguments: [COIN_10_TYPE],
         });
+        tx.setGasBudget(50_000);
         const result = await creator.signAndExecuteTransactionBlock({
           transactionBlock: tx,
         });
@@ -1923,6 +1930,7 @@ describe("1: Token Bridge Relayer", () => {
           ],
           typeArguments: [COIN_10_TYPE],
         });
+        tx.setGasBudget(50_000);
         const result = await creator.signAndExecuteTransactionBlock({
           transactionBlock: tx,
         });
@@ -1953,6 +1961,7 @@ describe("1: Token Bridge Relayer", () => {
           ],
           typeArguments: [COIN_10_TYPE],
         });
+        tx.setGasBudget(50_000);
         const result = await creator.signAndExecuteTransactionBlock({
           transactionBlock: tx,
         });
@@ -1984,6 +1993,7 @@ describe("1: Token Bridge Relayer", () => {
           arguments: [tx.object(RELAYER_OWNER_CAP_ID), tx.object(stateId)],
           typeArguments: [COIN_8_TYPE],
         });
+        tx.setGasBudget(50_000);
         const result = await creator.signAndExecuteTransactionBlock({
           transactionBlock: tx,
         });
