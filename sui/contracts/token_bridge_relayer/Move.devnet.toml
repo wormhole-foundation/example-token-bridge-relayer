@@ -1,7 +1,6 @@
 [package]
 name = "TokenBridgeRelayer"
 version = "0.1.0"
-published-at = "0xe0a6346b8f87def3544b668bed9c99de8eaabc265d20113bc32189d253a611cd"
 
 [dependencies.Sui]
 git = "https://github.com/MystenLabs/sui.git"
@@ -15,4 +14,4 @@ local = "../../dependencies/wormhole"
 local = "../../dependencies/token_bridge"
 
 [addresses]
-token_bridge_relayer = "0xe0a6346b8f87def3544b668bed9c99de8eaabc265d20113bc32189d253a611cd"
+token_bridge_relayer = "0x0"
