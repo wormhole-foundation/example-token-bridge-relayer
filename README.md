@@ -15,7 +15,7 @@ Install [Foundry tools](https://book.getfoundry.sh/getting-started/installation)
 Install the `Sui` CLI. This tool is used to compile the contracts and run the tests.
 
 ```sh
-cargo install --locked --git https://github.com/MystenLabs/sui.git --rev a63f425b9999c7fdfe483598720a9effc0acdc9e sui sui-faucet
+cargo install --locked --git https://github.com/MystenLabs/sui.git --rev 09b2081498366df936abae26eea4b2d5cafb2788 sui sui-faucet
 ```
 
 ### Worm CLI

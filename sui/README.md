@@ -34,7 +34,7 @@ Deploy the Token Bridge Relayer contract (and save the output) by running the fo
 
 ```
 worm sui deploy \
-    ./FULL_PATH_TO_DEPENDENCIES_DIR/../contracts/token_bridge_relayer \
+    ./PATH_TO_REPO/sui/contracts/token_bridge_relayer \
     -n TARGET_NETWORK (mainnet or testnet) -k YOUR_BASE64_KEY \
     --rpc YOUR_RPC
 ```

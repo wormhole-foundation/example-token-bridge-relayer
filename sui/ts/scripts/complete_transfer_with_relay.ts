@@ -20,13 +20,13 @@ import {
   parseVaa,
   parseTransferPayload,
   CHAIN_ID_SUI,
+  getIsTransferCompletedSui,
 } from "@certusone/wormhole-sdk";
 import {ethers} from "ethers";
 import {
   getObjectFields,
   getTokenInfo,
   getTokenCoinType,
-  getIsTransferCompletedSui,
   tokenBridgeDenormalizeAmount,
 } from "../src";
 import {executeTransactionBlock, pollTransactionForEffectsCert} from "./poll";
@@ -271,7 +271,7 @@ async function relay(
     );
 
     if (isRedeemed) {
-      console.log("Vaa already redeemed");
+      console.log("Vaa redeemed successfully");
       return;
     }
   }
