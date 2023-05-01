@@ -30,29 +30,13 @@ make test
 
 ## Contract Deployment
 
-Before deploying the Token Bridge Relayer contract to testnet or mainnet, the Wormhole and Token Bridge package IDs must be added to their respective `Move.mainnet.toml` (or `Move.testnet.toml`) files. These files can be found in the `./dependencies/wormhole` and `./dependencies/token_bridge` directories.
-
-Add the deployed Wormhole package ID to the following lines in the Wormhole `.toml` file:
-
-```
-published-at = "0x_32_byte_package_id"
-wormhole = "0x_32_byte_package_id"
-```
-
-Add the deployed Token Bridge package id to the following lines in the Token Bridge `.toml` file:
-
-```
-published-at = "0x_32_byte_package_id"
-token_bridge = "0x_32_byte_package_id"
-```
-
-Finally, deploy the Token Bridge Relayer contract (and save the output) by running the following command:
+Deploy the Token Bridge Relayer contract (and save the output) by running the following command:
 
 ```
 worm sui deploy \
     ./FULL_PATH_TO_DEPENDENCIES_DIR/../contracts/token_bridge_relayer \
     -n TARGET_NETWORK (mainnet or testnet) -k YOUR_BASE64_KEY \
-    -rpc YOUR_RPC
+    --rpc YOUR_RPC
 ```
 
 ## Contract Setup
