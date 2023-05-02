@@ -20,7 +20,7 @@ module token_bridge_relayer::owner {
     const E_STATE_ALREADY_CREATED: u64 = 0;
 
     /// The one of a kind - created in the module initializer.
-    struct OwnerCap has key {
+    struct OwnerCap has key, store {
         id: UID
     }
 
@@ -35,7 +35,7 @@ module token_bridge_relayer::owner {
         };
 
         // Use this in `create_state` to determine if state is created already.
-        // This step is unnecessary because the `EmitterCap` passed into
+        // This step is unnecessary because the `OwnerCap` passed into
         // `create_state` deletes the object at that UID. But we will keep this
         // here for now in case something changes with Wormhole's EmitterCap.
         dynamic_field::add(&mut owner_cap.id, b"create_state", true);
