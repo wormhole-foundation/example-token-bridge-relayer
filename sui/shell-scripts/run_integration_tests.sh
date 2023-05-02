@@ -27,13 +27,13 @@ bash $DEPENDENCIES_DIR/scripts/deploy.sh devnet \
 echo "deploying example coins"
 worm sui deploy \
     $DEPENDENCIES_DIR/../contracts/example_coins \
-    -n devnet -k ACMS4emBUzUD0vcYoiSM2Z8i2qs4MMrKeFRZY3L/pXYK
+    -n devnet -k ACMS4emBUzUD0vcYoiSM2Z8i2qs4MMrKeFRZY3L/pXYK -d true
 
 ## deploy relayer contracts
 echo "deploying relayer"
 worm sui deploy \
     $DEPENDENCIES_DIR/../contracts/token_bridge_relayer \
-    -n devnet -k ACMS4emBUzUD0vcYoiSM2Z8i2qs4MMrKeFRZY3L/pXYK
+    -n devnet -k ACMS4emBUzUD0vcYoiSM2Z8i2qs4MMrKeFRZY3L/pXYK -d true
 
 ## run contract tests here
 npx ts-mocha -t 1000000 $TEST_DIR/0[0-9]*.ts
