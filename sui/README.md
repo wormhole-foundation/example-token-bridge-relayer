@@ -69,11 +69,11 @@ export KEY=
 
 ### Step 2: Create Deployment Config
 
-Start by copying the `exampleDeploymentConfig.json` file in the `./cfg` directory and setting the config up according to your deployment needs:
+Start by copying the `mainnetConfig.json` or `testnetConfig.json` file in the `./cfg` directory and setting the config up according to your deployment needs:
 
 ```
 cd cfg
-cp exampleDeploymentConfig.json deploymentConfig.json
+cp mainnetConfig.json deploymentConfig.json
 ```
 
 ### Step 3: Create State
