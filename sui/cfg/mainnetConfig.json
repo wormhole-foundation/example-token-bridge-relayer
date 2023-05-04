@@ -1,0 +1,99 @@
+{
+  "deployedContracts": {
+    "2": "000000000000000000000000461a8878060aa45fa685732bff654ca1fdef2830",
+    "4": "000000000000000000000000461a8878060aa45fa685732bff654ca1fdef2830",
+    "5": "000000000000000000000000461a8878060aa45fa685732bff654ca1fdef2830",
+    "6": "000000000000000000000000461a8878060aa45fa685732bff654ca1fdef2830",
+    "10": "000000000000000000000000461a8878060aa45fa685732bff654ca1fdef2830",
+    "14": "000000000000000000000000461a8878060aa45fa685732bff654ca1fdef2830",
+    "16": "000000000000000000000000461a8878060aa45fa685732bff654ca1fdef2830"
+  },
+  "acceptedTokensList": [
+    {
+      "symbol": "SUI",
+      "coinType": "0x2::sui::SUI",
+      "swapRate": "100000000",
+      "maxNativeSwapAmount": "0",
+      "enableSwaps": false
+    },
+    {
+      "symbol": "WMATIC",
+      "coinType": "0xdbe380b13a6d0f5cdedd58de8f04625263f113b3f9db32b3e1983f49e2841676::coin::COIN",
+      "swapRate": "97500000",
+      "maxNativeSwapAmount": "500000000",
+      "enableSwaps": true
+    },
+    {
+      "symbol": "WBNB",
+      "coinType": "0xb848cce11ef3a8f62eccea6eb5b35a12c4c2b1ee1af7755d02d7bd6218e8226f::coin::COIN",
+      "swapRate": "32450000000",
+      "maxNativeSwapAmount": "500000000",
+      "enableSwaps": true
+    },
+    {
+      "symbol": "WETH",
+      "coinType": "0xaf8cd5edc19c4512f4259f0bee101a40d41ebed738ade5874359610ef8eeced5::coin::COIN",
+      "swapRate": "187400000000",
+      "maxNativeSwapAmount": "500000000",
+      "enableSwaps": true
+    },
+    {
+      "symbol": "USDC",
+      "coinType": "0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN",
+      "swapRate": "100000000",
+      "maxNativeSwapAmount": "500000000",
+      "enableSwaps": true
+    },
+    {
+      "symbol": "USDT",
+      "coinType": "0xc060006111016b8a020ad5b33834984a437aaa7d3c74c18e09a95d48aceab08c::coin::COIN",
+      "swapRate": "100000000",
+      "maxNativeSwapAmount": "500000000",
+      "enableSwaps": true
+    },
+    {
+      "symbol": "WBTC",
+      "coinType": "0x027792d9fed7f9844eb4839566001bb6f6cb4804f66aa2da6fe1ee242d896881::coin::COIN",
+      "swapRate": "2875300000000",
+      "maxNativeSwapAmount": "500000000",
+      "enableSwaps": true
+    },
+    {
+      "symbol": "WAVAX",
+      "coinType": "0x1e8b532cca6569cab9f9b9ebc73f8c13885012ade714729aa3b450e0339ac766::coin::COIN",
+      "swapRate": "1690000000",
+      "maxNativeSwapAmount": "500000000",
+      "enableSwaps": true
+    },
+    {
+      "symbol": "WFTM",
+      "coinType": "0x6081300950a4f1e2081580e919c210436a1bed49080502834950d31ee55a2396::coin::COIN",
+      "swapRate": "41800000",
+      "maxNativeSwapAmount": "500000000",
+      "enableSwaps": true
+    },
+    {
+      "symbol": "CELO",
+      "coinType": "0xa198f3be41cda8c07b3bf3fee02263526e535d682499806979a111e88a5a8d0f::coin::COIN",
+      "swapRate": "58000000",
+      "maxNativeSwapAmount": "500000000",
+      "enableSwaps": true
+    },
+    {
+      "symbol": "WGLMR",
+      "coinType": "0x66f87084e49c38f76502d17f87d17f943f183bb94117561eb573e075fdc5ff75::coin::COIN",
+      "swapRate": "33000000",
+      "maxNativeSwapAmount": "500000000",
+      "enableSwaps": true
+    }
+  ],
+  "relayerFeesInUsd": {
+    "2": "4000000000",
+    "4": "150000000",
+    "5": "120000000",
+    "6": "100000000",
+    "10": "100000000",
+    "14": "100000000",
+    "16": "100000000"
+  }
+}
