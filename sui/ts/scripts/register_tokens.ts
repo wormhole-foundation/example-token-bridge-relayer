@@ -49,9 +49,8 @@ async function register_tokens(
   for (const tokenConfig of config) {
     // Verify state.
     const tokenInfo = await getTokenInfo(provider, state, tokenConfig.coinType);
-    const coinName = tokenConfig.coinType.split("::", 3)[2];
 
-    console.log(`${coinName} has been registered.`);
+    console.log(`${tokenConfig.symbol} has been registered.`);
     console.log(`swapRate: ${tokenInfo.swap_rate}`);
     console.log(`maxSwapAmount: ${tokenInfo.max_native_swap_amount}`);
     console.log(`swapEnabled: ${tokenInfo.swap_enabled}`);

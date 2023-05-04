@@ -14,10 +14,11 @@
     "toggle-swaps": "npx ts-node ts/scripts/toggle_swap_enabled.ts",
     "update-max-swap-amount": "npx ts-node ts/scripts/update_max_swap_amount.ts",
     "update-swap-rate": "npx ts-node ts/scripts/update_swap_rate.ts",
-    "test-transfer": "npx ts-node ts/scripts/transfer_tokens_with_relay"
+    "test-transfer": "npx ts-node ts/scripts/transfer_tokens_with_relay",
+    "register-token-bridge": "npx ts-node ts/scripts/register_token_bridge.ts"
   },
   "dependencies": {
-    "@certusone/wormhole-sdk": "^0.9.9",
+    "@certusone/wormhole-sdk": "@certusone/wormhole-sdk",
     "@mysten/sui.js": "^0.32.2",
     "ethers": "^5.7.2",
     "ts-node": "^10.9.1",
