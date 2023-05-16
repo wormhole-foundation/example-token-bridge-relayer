@@ -100,8 +100,6 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
     function setupTokenBridgeRelayer() internal {
         // deploy the relayer contract
         TokenBridgeRelayer deployedRelayer = new TokenBridgeRelayer(
-            uint16(wormhole.chainId()),
-            address(wormhole),
             vm.envAddress("TESTING_AVAX_BRIDGE_ADDRESS"),
             address(wavax),
             true // should unwrap flag
@@ -133,8 +131,6 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
 
         // deploy the relayer contract
         TokenBridgeRelayer deployedRelayer = new TokenBridgeRelayer(
-            uint16(wormhole.chainId()),
-            address(wormhole),
             vm.envAddress("TESTING_AVAX_BRIDGE_ADDRESS"),
             address(altNativeToken),
             false // should unwrap flag

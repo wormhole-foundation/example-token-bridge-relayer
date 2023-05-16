@@ -34,8 +34,6 @@ contract TestTokenBridgeRelayerMessagesTest is Helpers, ForgeHelpers, Test {
 
         // deploy the relayer contract
         TokenBridgeRelayer deployedRelayer = new TokenBridgeRelayer(
-            avaxChainId,
-            wormholeAddress,
             vm.envAddress("TESTING_AVAX_BRIDGE_ADDRESS"),
             vm.envAddress("TESTING_WRAPPED_AVAX_ADDRESS"),
             true // should unwrap flag

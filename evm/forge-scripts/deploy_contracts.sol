@@ -30,8 +30,6 @@ contract ContractScript is Script {
 
         // deploy the contract and set up the contract
         TokenBridgeRelayer deployedRelayer = new TokenBridgeRelayer(
-            wormhole.chainId(),
-            address(wormhole),
             tokenBridgeAddress,
             wethAddress,
             shouldUnwrapWeth

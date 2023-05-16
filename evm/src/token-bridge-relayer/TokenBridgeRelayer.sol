@@ -2,6 +2,7 @@
 pragma solidity ^0.8.17;
 
 import {IWormhole} from "../interfaces/IWormhole.sol";
+import {ITokenBridge} from "../interfaces/ITokenBridge.sol";
 
 import "../libraries/BytesLib.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
@@ -20,24 +21,23 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
     using BytesLib for bytes;
 
     constructor(
-        uint16 chainId,
-        address wormhole,
         address tokenBridge_,
         address wethAddress,
         bool unwrapWeth_
     ) {
-        require(chainId > 0, "invalid chainId");
-        require(wormhole != address(0), "invalid wormhole address");
         require(tokenBridge_ != address(0), "invalid token bridge address");
         require(wethAddress != address(0), "invalid weth address");
 
         // set initial state
         setOwner(msg.sender);
-        setChainId(chainId);
-        setWormhole(wormhole);
         setTokenBridge(tokenBridge_);
         setWethAddress(wethAddress);
         setUnwrapWethFlag(unwrapWeth_);
+
+        // fetch wormhole info from token bridge
+        ITokenBridge bridge = ITokenBridge(tokenBridge_);
+        setChainId(bridge.chainId());
+        setWormhole(address(bridge.wormhole()));
 
         // set the initial swapRate/relayer precisions to 1e8
         setSwapRatePrecision(1e8);
