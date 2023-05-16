@@ -20,6 +20,9 @@ import "./TokenBridgeRelayerMessages.sol";
 contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerMessages, ReentrancyGuard {
     using BytesLib for bytes;
 
+    // contract version
+    string public constant VERSION = "0.2.0";
+
     constructor(
         address tokenBridge_,
         address wethAddress,
