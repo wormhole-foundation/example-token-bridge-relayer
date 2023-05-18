@@ -50,6 +50,7 @@ export const ETH_RELAYER_FEE_PRECISION =
 export const GUARDIAN_PRIVATE_KEY = process.env.GUARDIAN_KEY!;
 export const WALLET_PRIVATE_KEY = process.env.WALLET_PRIVATE_KEY!;
 export const WALLET_PRIVATE_KEY_TWO = process.env.WALLET_PRIVATE_KEY_TWO!;
+export const WALLET_PRIVATE_KEY_THREE = process.env.WALLET_PRIVATE_KEY_THREE!;
 
 // wormhole event ABIs
 export const WORMHOLE_TOPIC =

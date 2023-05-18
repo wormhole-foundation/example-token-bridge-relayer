@@ -17,6 +17,9 @@ abstract contract TokenBridgeRelayerStorage {
         // owner of this contract
         address owner;
 
+        // recipient of relayer fees
+        address feeRecipient;
+
         // intermediate state when transfering contract ownership
         address pendingOwner;
 

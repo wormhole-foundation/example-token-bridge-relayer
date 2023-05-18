@@ -12,6 +12,10 @@ abstract contract TokenBridgeRelayerSetters is TokenBridgeRelayerState {
         _state.pendingOwner = pendingOwner_;
     }
 
+    function setFeeRecipient(address feeRecipient_) internal {
+        _state.feeRecipient = feeRecipient_;
+    }
+
     function setWormhole(address wormhole_) internal {
         _state.wormhole = payable(wormhole_);
     }

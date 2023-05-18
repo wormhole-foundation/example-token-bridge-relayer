@@ -18,6 +18,10 @@ abstract contract TokenBridgeRelayerGetters is TokenBridgeRelayerSetters {
         return _state.pendingOwner;
     }
 
+    function feeRecipient() public view returns (address) {
+        return _state.feeRecipient;
+    }
+
     function wormhole() public view returns (IWormhole) {
         return IWormhole(_state.wormhole);
     }

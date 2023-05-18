@@ -38,11 +38,13 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
         // cache avax chain ID and wormhole address
         uint16 avaxChainId = 6;
         address wormholeAddress = vm.envAddress("TESTING_AVAX_WORMHOLE_ADDRESS");
+        address avaxFeeRecipient = vm.envAddress("TESTING_AVAX_FEE_RECIPIENT");
 
         // deploy the relayer contract
         TokenBridgeRelayer deployedRelayer = new TokenBridgeRelayer(
             vm.envAddress("TESTING_AVAX_BRIDGE_ADDRESS"),
             address(wavax),
+            avaxFeeRecipient,
             true // should unwrap flag
         );
         avaxRelayer = ITokenBridgeRelayer(address(deployedRelayer));
@@ -272,6 +274,77 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
         vm.startPrank(address(this));
         vm.expectRevert("caller must be pendingOwner");
         avaxRelayer.confirmOwnershipTransferRequest();
+
+        vm.stopPrank();
+    }
+
+    /**
+     * @notice This test confirms that the owner can update the
+     * `feeRecipient` state variable.
+     */
+    function testUpdateFeeRecipient(address newRecipient) public {
+        vm.assume(newRecipient != address(0));
+
+        // call submitOwnershipTransferRequest
+        avaxRelayer.updateFeeRecipient(avaxRelayer.chainId(), newRecipient);
+
+        // confirm state changes
+        assertEq(avaxRelayer.feeRecipient(), newRecipient);
+    }
+
+    /**
+     * @notice This test confirms that the owner cannot update the
+     * `feeRecipient` on the wrong chain.
+     */
+    function testUpdateFeeRecipientWrongChain(uint16 chainId_) public {
+        vm.assume(chainId_ != avaxRelayer.chainId());
+
+        // expect the updateFeeRecipient call to revert
+        vm.expectRevert("wrong chain");
+        avaxRelayer.updateFeeRecipient(chainId_, address(this));
+    }
+
+    /**
+     * @notice This test confirms that the owner cannot update the
+     * `feeRecipient` to the zero address.
+     */
+    function testUpdateFeeRecipientZeroAddress() public {
+        address zeroAddress = address(0);
+
+        // expect the updateFeeRecipient call to revert
+        bytes memory encodedSignature = abi.encodeWithSignature(
+            "updateFeeRecipient(uint16,address)",
+            avaxRelayer.chainId(),
+            zeroAddress
+        );
+        expectRevert(
+            address(avaxRelayer),
+            encodedSignature,
+            "newFeeRecipient cannot equal address(0)"
+        );
+    }
+
+    /**
+     * @notice This test confirms that ONLY the owner can update the
+     * `feeRecipient`.
+     */
+    function testUpdateFeeRecipientOwnerOnly() public {
+        address newRecipient = address(this);
+
+        // prank the caller address to something different than the owner's
+        vm.startPrank(wallet);
+
+        // expect the updateFeeRecipient call to revert
+        bytes memory encodedSignature = abi.encodeWithSignature(
+            "updateFeeRecipient(uint16,address)",
+            avaxRelayer.chainId(),
+            newRecipient
+        );
+        expectRevert(
+            address(avaxRelayer),
+            encodedSignature,
+            "caller not the owner"
+        );
 
         vm.stopPrank();
     }

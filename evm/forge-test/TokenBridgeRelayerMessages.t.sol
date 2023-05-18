@@ -31,17 +31,20 @@ contract TestTokenBridgeRelayerMessagesTest is Helpers, ForgeHelpers, Test {
         // cache avax chain ID and wormhole address
         uint16 avaxChainId = 6;
         address wormholeAddress = vm.envAddress("TESTING_AVAX_WORMHOLE_ADDRESS");
+        address avaxFeeRecipient = vm.envAddress("TESTING_AVAX_FEE_RECIPIENT");
 
         // deploy the relayer contract
         TokenBridgeRelayer deployedRelayer = new TokenBridgeRelayer(
             vm.envAddress("TESTING_AVAX_BRIDGE_ADDRESS"),
             vm.envAddress("TESTING_WRAPPED_AVAX_ADDRESS"),
+            avaxFeeRecipient,
             true // should unwrap flag
         );
         avaxRelayer = ITokenBridgeRelayer(address(deployedRelayer));
 
         // verify initial state
         assertEq(avaxRelayer.chainId(), avaxChainId);
+        assertEq(avaxRelayer.feeRecipient(), avaxFeeRecipient);
         assertEq(address(avaxRelayer.wormhole()), wormholeAddress);
         assertEq(
             address(avaxRelayer.tokenBridge()),

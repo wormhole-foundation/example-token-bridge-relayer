@@ -44,6 +44,7 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
     address avaxRecipient = vm.envAddress("TESTING_AVAX_RECIPIENT");
     address avaxRelayerWallet = vm.envAddress("TESTING_AVAX_RELAYER");
     address avaxUsdc = vm.envAddress("TESTING_AVAX_USDC_ADDRESS");
+    address avaxFeeRecipient = vm.envAddress("TESTING_AVAX_FEE_RECIPIENT");
 
     // altRelayer native token (12 decimals to simulate deploying to acala)
     TestToken altNativeToken;
@@ -61,6 +62,8 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
         uint256 recipientAfter;
         uint256 relayerBefore;
         uint256 relayerAfter;
+        uint256 feeRecipientBefore;
+        uint256 feeRecipientAfter;
     }
 
     struct NormalizedAmounts {
@@ -102,6 +105,7 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
         TokenBridgeRelayer deployedRelayer = new TokenBridgeRelayer(
             vm.envAddress("TESTING_AVAX_BRIDGE_ADDRESS"),
             address(wavax),
+            avaxFeeRecipient,
             true // should unwrap flag
         );
         avaxRelayer = ITokenBridgeRelayer(address(deployedRelayer));
@@ -133,6 +137,7 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
         TokenBridgeRelayer deployedRelayer = new TokenBridgeRelayer(
             vm.envAddress("TESTING_AVAX_BRIDGE_ADDRESS"),
             address(altNativeToken),
+            avaxFeeRecipient,
             false // should unwrap flag
         );
         altRelayer = ITokenBridgeRelayer(address(deployedRelayer));
@@ -1396,6 +1401,10 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
             wrappedAsset,
             avaxRelayerWallet
         );
+        tokenBalances.feeRecipientBefore = getBalance(
+            wrappedAsset,
+            avaxFeeRecipient
+        );
 
         // check the native balance of the recipient
         Balances memory ethBalances;
@@ -1423,6 +1432,10 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
         tokenBalances.relayerAfter = getBalance(
             wrappedAsset,
             avaxRelayerWallet
+        );
+        tokenBalances.feeRecipientAfter = getBalance(
+            wrappedAsset,
+            avaxFeeRecipient
         );
 
         // check the native balance of the recipient and relayer
@@ -1470,6 +1483,10 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
             );
             assertEq(
                 tokenBalances.relayerAfter - tokenBalances.relayerBefore,
+                0
+            );
+            assertEq(
+                tokenBalances.feeRecipientAfter - tokenBalances.feeRecipientBefore,
                 denormRelayerFee + denormToNativeAmount
             );
 
@@ -1616,6 +1633,10 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
             wrappedAsset,
             avaxRelayerWallet
         );
+        tokenBalances.feeRecipientBefore = getBalance(
+            wrappedAsset,
+            avaxFeeRecipient
+        );
 
         // check the native balance of the recipient
         Balances memory ethBalances;
@@ -1643,6 +1664,10 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
         tokenBalances.relayerAfter = getBalance(
             wrappedAsset,
             avaxRelayerWallet
+        );
+        tokenBalances.feeRecipientAfter = getBalance(
+            wrappedAsset,
+            avaxFeeRecipient
         );
 
         // check the native balance of the recipient and relayer
@@ -1690,6 +1715,10 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
             );
             assertEq(
                 tokenBalances.relayerAfter - tokenBalances.relayerBefore,
+                0
+            );
+            assertEq(
+                tokenBalances.feeRecipientAfter - tokenBalances.feeRecipientBefore,
                 denormRelayerFee + denormToNativeAmount
             );
 
@@ -1803,6 +1832,10 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
             wrappedAsset,
             avaxRelayerWallet
         );
+        tokenBalances.feeRecipientBefore = getBalance(
+            wrappedAsset,
+            avaxFeeRecipient
+        );
 
         // check the native balance of the recipient
         Balances memory ethBalances;
@@ -1831,6 +1864,10 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
             wrappedAsset,
             avaxRelayerWallet
         );
+        tokenBalances.feeRecipientAfter = getBalance(
+            wrappedAsset,
+            avaxFeeRecipient
+        );
 
         // check the native balance of the recipient and relayer
         ethBalances.recipientAfter = avaxRecipient.balance;
@@ -1850,6 +1887,7 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
                 denormAmount
             );
             assertEq(tokenBalances.relayerAfter, tokenBalances.relayerBefore);
+            assertEq(tokenBalances.feeRecipientAfter, tokenBalances.feeRecipientBefore);
 
             // validate eth balances
             assertEq(ethBalances.recipientAfter, ethBalances.recipientBefore);
@@ -1983,6 +2021,10 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
             wrappedAsset,
             avaxRelayerWallet
         );
+        tokenBalances.feeRecipientBefore = getBalance(
+            wrappedAsset,
+            avaxFeeRecipient
+        );
 
         // check the native balance of the recipient
         Balances memory ethBalances;
@@ -2013,6 +2055,10 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
         tokenBalances.relayerAfter = getBalance(
             wrappedAsset,
             avaxRelayerWallet
+        );
+        tokenBalances.feeRecipientAfter = getBalance(
+            wrappedAsset,
+            avaxFeeRecipient
         );
 
         // check the native balance of the recipient and relayer
@@ -2051,6 +2097,10 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
             );
             assertEq(
                 tokenBalances.relayerAfter - tokenBalances.relayerBefore,
+                0
+            );
+            assertEq(
+                tokenBalances.feeRecipientAfter - tokenBalances.feeRecipientBefore,
                 denormRelayerFee + denormToNativeAmount
             );
 
@@ -2327,6 +2377,7 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
         Balances memory ethBalances;
         ethBalances.recipientBefore = avaxRecipient.balance;
         ethBalances.relayerBefore = avaxRelayerWallet.balance;
+        ethBalances.feeRecipientBefore = avaxFeeRecipient.balance;
 
         hoax(address(avaxRelayer), amount);
         wavax.deposit{value: amount}();
@@ -2338,6 +2389,7 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
         // check the native balance of the recipient and relayer
         ethBalances.recipientAfter = avaxRecipient.balance;
         ethBalances.relayerAfter = avaxRelayerWallet.balance;
+        ethBalances.feeRecipientAfter = avaxFeeRecipient.balance;
 
         // validate results
         {
@@ -2358,6 +2410,10 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
             );
             assertEq(
                 ethBalances.relayerAfter - ethBalances.relayerBefore,
+                0
+            );
+            assertEq(
+                ethBalances.feeRecipientAfter - ethBalances.feeRecipientBefore,
                 denormRelayerFee
             );
         }
@@ -2470,6 +2526,10 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
             address(wavax),
             avaxRelayerWallet
         );
+        tokenBalances.feeRecipientBefore = getBalance(
+            address(wavax),
+            avaxFeeRecipient
+        );
 
         hoax(address(avaxRelayer));
         wavax.deposit{value: amount}();
@@ -2483,6 +2543,10 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
         tokenBalances.relayerAfter = getBalance(
             address(wavax),
             avaxRelayerWallet
+        );
+        tokenBalances.feeRecipientAfter = getBalance(
+            address(wavax),
+            avaxFeeRecipient
         );
 
         // validate results
@@ -2504,6 +2568,10 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
             );
             assertEq(
                 tokenBalances.relayerAfter - tokenBalances.relayerBefore,
+                0
+            );
+            assertEq(
+                tokenBalances.feeRecipientAfter - tokenBalances.feeRecipientBefore,
                 denormRelayerFee
             );
         }
@@ -2592,6 +2660,7 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
         Balances memory ethBalances;
         ethBalances.recipientBefore = avaxRecipient.balance;
         ethBalances.relayerBefore = avaxRelayerWallet.balance;
+        ethBalances.feeRecipientBefore = avaxFeeRecipient.balance;
 
         // deposit avax into the wavax contract on behalf of the relayer
         hoax(address(avaxRelayer), amount);
@@ -2604,6 +2673,7 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
         // check the native balance of the recipient and relayer
         ethBalances.recipientAfter = avaxRecipient.balance;
         ethBalances.relayerAfter = avaxRelayerWallet.balance;
+        ethBalances.feeRecipientAfter = avaxFeeRecipient.balance;
 
         // validate results
         {
@@ -2616,6 +2686,7 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
                 )
             );
             assertEq(ethBalances.relayerAfter, ethBalances.relayerBefore);
+            assertEq(ethBalances.feeRecipientAfter, ethBalances.feeRecipientBefore);
         }
     }
 
@@ -2979,6 +3050,10 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
             wrappedAsset,
             avaxRelayerWallet
         );
+        tokenBalances.feeRecipientBefore = getBalance(
+            wrappedAsset,
+            avaxFeeRecipient
+        );
 
         // check the native balance of the recipient
         Balances memory ethBalances;
@@ -3005,6 +3080,10 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
         tokenBalances.relayerAfter = getBalance(
             wrappedAsset,
             avaxRelayerWallet
+        );
+        tokenBalances.feeRecipientAfter = getBalance(
+            wrappedAsset,
+            avaxFeeRecipient
         );
 
         // check the native balance of the recipient and relayer
@@ -3038,6 +3117,10 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
             );
             assertEq(
                 tokenBalances.relayerAfter - tokenBalances.relayerBefore,
+                0
+            );
+            assertEq(
+                tokenBalances.feeRecipientAfter - tokenBalances.feeRecipientBefore,
                 encodedRelayerFee + toNativeTokenAmount
             );
 
@@ -3170,6 +3253,10 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
             wrappedAsset,
             avaxRelayerWallet
         );
+        tokenBalances.feeRecipientBefore = getBalance(
+            wrappedAsset,
+            avaxFeeRecipient
+        );
 
         // check the native balance of the recipient
         Balances memory ethBalances;
@@ -3196,6 +3283,10 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
         tokenBalances.relayerAfter = getBalance(
             wrappedAsset,
             avaxRelayerWallet
+        );
+        tokenBalances.feeRecipientAfter = getBalance(
+            wrappedAsset,
+            avaxFeeRecipient
         );
 
         // check the native balance of the recipient and relayer
@@ -3229,6 +3320,10 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
             );
             assertEq(
                 tokenBalances.relayerAfter - tokenBalances.relayerBefore,
+                0
+            );
+            assertEq(
+                tokenBalances.feeRecipientAfter - tokenBalances.feeRecipientBefore,
                 encodedRelayerFee + toNativeTokenAmount
             );
 

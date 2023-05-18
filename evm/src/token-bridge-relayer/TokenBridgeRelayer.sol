@@ -26,13 +26,16 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
     constructor(
         address tokenBridge_,
         address wethAddress,
+        address feeRecipient_,
         bool unwrapWeth_
     ) {
         require(tokenBridge_ != address(0), "invalid token bridge address");
         require(wethAddress != address(0), "invalid weth address");
+        require(feeRecipient_ != address(0), "invalid fee recipient");
 
         // set initial state
         setOwner(msg.sender);
+        setFeeRecipient(feeRecipient_);
         setTokenBridge(tokenBridge_);
         setWethAddress(wethAddress);
         setUnwrapWethFlag(unwrapWeth_);
@@ -289,10 +292,10 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
     /**
      * @notice Calls Wormhole's Token Bridge contract to complete token transfers. Takes
      * custody of the wrapped (or released) tokens and sends the tokens to the target recipient.
-     * It pays the relayer in the minted token denomination. If requested by the user,
+     * It pays the fee recipient in the minted token denomination. If requested by the user,
      * it will perform a swap with the off-chain relayer to provide the user with native assets.
      * If the `token` being transferred is WETH, the contract will unwrap native assets and send
-     * the transferred amount to the recipient and pay the relayer in native assets.
+     * the transferred amount to the recipient and pay the fee recipient in native assets.
      * @dev reverts if:
      * - the transferred token is not accepted by this contract
      * - the transffered token is not attested on this blockchain's Token Bridge contract
@@ -367,13 +370,12 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
              *
              * Compute the amount of native assets to send the recipient.
              */
-            uint256 nativeAmountForRecipient;
             uint256 maxToNativeAllowed = calculateMaxSwapAmountIn(token);
             if (transferWithRelay.toNativeTokenAmount > maxToNativeAllowed) {
                 transferWithRelay.toNativeTokenAmount = maxToNativeAllowed;
             }
             // compute amount of native asset to pay the recipient
-            nativeAmountForRecipient = calculateNativeSwapAmountOut(
+            uint256 nativeAmountForRecipient = calculateNativeSwapAmountOut(
                 token,
                 transferWithRelay.toNativeTokenAmount
             );
@@ -424,11 +426,11 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         uint256 amountForRelayer =
             transferWithRelay.targetRelayerFee + transferWithRelay.toNativeTokenAmount;
 
-        // pay the relayer if amountForRelayer > 0
+        // pay the fee recipient if amountForRelayer > 0
         if (amountForRelayer > 0) {
             SafeERC20.safeTransfer(
                 IERC20(token),
-                msg.sender,
+                feeRecipient(),
                 amountForRelayer
             );
         }
@@ -560,7 +562,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
 
             // transfer relayer fee to the caller
             if (relayerFee > 0) {
-                payable(msg.sender).transfer(relayerFee);
+                payable(feeRecipient()).transfer(relayerFee);
             }
         } else {
             // cache WETH instance
@@ -577,7 +579,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
             if (relayerFee > 0) {
                 SafeERC20.safeTransfer(
                     IERC20(address(weth)),
-                    msg.sender,
+                    feeRecipient(),
                     relayerFee
                 );
             }

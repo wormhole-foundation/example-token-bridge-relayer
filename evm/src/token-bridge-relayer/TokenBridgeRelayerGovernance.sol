@@ -10,6 +10,7 @@ import "./TokenBridgeRelayerGetters.sol";
 
 abstract contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters {
     event OwnershipTransfered(address indexed oldOwner, address indexed newOwner);
+    event FeeRecipientUpdated(address indexed oldRecipient, address indexed newRecipient);
     event SwapRateUpdated(address indexed token, uint256 indexed swapRate);
 
     /**
@@ -57,6 +58,30 @@ abstract contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters {
         setPendingOwner(address(0));
 
         emit OwnershipTransfered(currentOwner, newOwner);
+    }
+
+    /**
+     * @notice Updates the `feeRecipient` state variable. This method can
+     * only be executed by the owner.
+     * @param chainId_ Wormhole chain ID.
+     * @param newFeeRecipient Address of the new `feeRecipient`.
+     */
+    function updateFeeRecipient(
+        uint16 chainId_,
+        address newFeeRecipient
+    ) public onlyOwner onlyCurrentChain(chainId_) {
+        require(
+            newFeeRecipient != address(0),
+            "newFeeRecipient cannot equal address(0)"
+        );
+
+        // cache current fee recipient
+        address currentFeeRecipient = feeRecipient();
+
+        // update the fee recipient
+        setFeeRecipient(newFeeRecipient);
+
+        emit FeeRecipientUpdated(currentFeeRecipient, newFeeRecipient);
     }
 
     /**
