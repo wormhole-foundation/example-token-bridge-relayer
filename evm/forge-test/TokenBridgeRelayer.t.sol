@@ -699,6 +699,11 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
             5 * avaxRelayer.relayerFeePrecision()
         );
 
+        // Pause and unpause the contract to confirm the contract allows
+        // outbound transfers after pause is disabled.
+        avaxRelayer.setPauseForTransfers(avaxRelayer.chainId(), true);
+        avaxRelayer.setPauseForTransfers(avaxRelayer.chainId(), false);
+
         // compute the relayer fee in token terms (this is encoded in the payload)
         uint256 relayerFeeToken = avaxRelayer.calculateRelayerFee(
             ethereumChainId,
@@ -890,6 +895,79 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
             toNativeTokenAmount,
             ethereumChainId,
             targetContract,
+            0 // batchId
+        );
+    }
+
+    /**
+     * @notice This test confirms that the `transferTokensWithRelay` method reverts
+     * when outbound transfers are paused.
+     */
+    function testWrapAndTransferEthWithRelayContractIsPaused() public {
+        address token = address(wavax);
+        uint256 amount = 1e18;
+        uint256 toNativeTokenAmount = 0;
+        bytes32 targetContract = addressToBytes32(address(this));
+
+        // wrap some wavax
+        wrap(token, amount);
+
+        // register the target contract
+        avaxRelayer.registerContract(
+            ethereumChainId,
+            targetContract
+        );
+
+        // pause the contact
+        avaxRelayer.setPauseForTransfers(avaxRelayer.chainId(), true);
+
+        // the wrapAndTransferEthWithRelay call should revert
+        vm.expectRevert("relayer is paused");
+        avaxRelayer.wrapAndTransferEthWithRelay{value: amount}(
+            toNativeTokenAmount,
+            ethereumChainId,
+            addressToBytes32(ethereumRecipient),
+            0 // opt out of batching
+        );
+    }
+
+    /**
+     * @notice This test confirms that the `transferTokensWithRelay` method reverts
+     * when outbound transfers are paused.
+     */
+    function testTransferTokensWithRelayContractIsPaused() public {
+        address token = address(wavax);
+        uint256 amount = 1e18;
+        uint256 toNativeTokenAmount = 0;
+        bytes32 targetContract = addressToBytes32(address(this));
+
+        // wrap some wavax
+        wrap(token, amount);
+
+        // register the target contract
+        avaxRelayer.registerContract(
+            ethereumChainId,
+            targetContract
+        );
+
+        // pause the contact
+        avaxRelayer.setPauseForTransfers(avaxRelayer.chainId(), true);
+
+        // approve the relayer to spend tokens
+        SafeERC20.safeApprove(
+            IERC20(token),
+            address(avaxRelayer),
+            amount
+        );
+
+        // the transferTokensWithRelay call should revert
+        vm.expectRevert("relayer is paused");
+        avaxRelayer.transferTokensWithRelay(
+            token,
+            amount,
+            toNativeTokenAmount,
+            ethereumChainId,
+            addressToBytes32(address(this)),
             0 // batchId
         );
     }
@@ -1132,6 +1210,11 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
             ethereumChainId,
             5 * avaxRelayer.relayerFeePrecision()
         );
+
+        // Pause and unpause the contract to confirm the contract allows
+        // outbound transfers after pause is disabled.
+        avaxRelayer.setPauseForTransfers(avaxRelayer.chainId(), true);
+        avaxRelayer.setPauseForTransfers(avaxRelayer.chainId(), false);
 
         // compute the relayer fee in token terms (this is encoded in the payload)
         uint256 relayerFeeToken = avaxRelayer.calculateRelayerFee(

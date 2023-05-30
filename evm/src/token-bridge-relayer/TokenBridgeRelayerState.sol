@@ -11,6 +11,9 @@ abstract contract TokenBridgeRelayerStorage {
         // boolean to determine if weth is unwrappable
         bool unwrapWeth;
 
+        // ff true, token transfer requests are blocked
+        bool paused;
+
         // address of WETH on this chain
         address wethAddress;
 

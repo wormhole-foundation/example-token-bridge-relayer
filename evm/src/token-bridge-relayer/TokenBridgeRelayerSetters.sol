@@ -40,6 +40,10 @@ abstract contract TokenBridgeRelayerSetters is TokenBridgeRelayerState {
         _state.chainId = chainId_;
     }
 
+    function setPaused(bool paused) internal {
+        _state.paused = paused;
+    }
+
     function _registerContract(uint16 chainId_, bytes32 contract_) internal {
         _state.registeredContracts[chainId_] = contract_;
     }

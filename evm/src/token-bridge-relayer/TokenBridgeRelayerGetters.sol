@@ -46,6 +46,10 @@ abstract contract TokenBridgeRelayerGetters is TokenBridgeRelayerSetters {
         return _state.chainId;
     }
 
+    function getPaused() public view returns (bool) {
+        return _state.paused;
+    }
+
     function getRegisteredContract(uint16 emitterChainId) public view returns (bytes32) {
         return _state.registeredContracts[emitterChainId];
     }

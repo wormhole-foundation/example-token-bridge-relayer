@@ -1379,4 +1379,60 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
             maxAmount
         );
     }
+
+    /**
+     * @notice This test confirms that the owner can update the `paused` state
+     * variable.
+     */
+    function testSetPauseForTransfers() public {
+        // confirm that the contract is not paused
+        assertEq(avaxRelayer.getPaused(), false);
+
+        // pause the contract
+        avaxRelayer.setPauseForTransfers(avaxRelayer.chainId(), true);
+
+        // confirm that the contract is paused
+        assertEq(avaxRelayer.getPaused(), true);
+
+        // resume the contract
+        avaxRelayer.setPauseForTransfers(avaxRelayer.chainId(), false);
+
+        // confirm that the contract is not paused
+        assertEq(avaxRelayer.getPaused(), false);
+    }
+
+    /**
+     * @notice This test confirms that the owner cannot update the
+     * `paused` state variable on the wrong chain.
+     */
+    function testSetPauseForTransfersWrongChain(uint16 chainId_) public {
+        vm.assume(chainId_ != avaxRelayer.chainId());
+
+        // expect the setPauseForTransfers call to revert
+        vm.expectRevert("wrong chain");
+        avaxRelayer.setPauseForTransfers(chainId_, true);
+    }
+
+    /**
+     * @notice This test confirms that ONLY the owner can update the
+     * `paused` state variable.
+     */
+    function testSetPausedForTransfersOwnerOnly() public {
+        // prank the caller address to something different than the owner's
+        vm.startPrank(wallet);
+
+        // expect the updateFeeRecipient call to revert
+        bytes memory encodedSignature = abi.encodeWithSignature(
+            "setPauseForTransfers(uint16,bool)",
+            avaxRelayer.chainId(),
+            true
+        );
+        expectRevert(
+            address(avaxRelayer),
+            encodedSignature,
+            "caller not the owner"
+        );
+
+        vm.stopPrank();
+    }
 }

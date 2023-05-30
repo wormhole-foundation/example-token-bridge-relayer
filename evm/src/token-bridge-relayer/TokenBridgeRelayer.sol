@@ -103,7 +103,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         uint16 targetChain,
         bytes32 targetRecipient,
         uint32 batchId
-    ) public payable nonReentrant returns (uint64 messageSequence) {
+    ) public payable nonReentrant notPaused returns (uint64 messageSequence) {
         // Cache wormhole fee and confirm that the user has passed enough
         // value to cover the wormhole protocol fee.
         uint256 wormholeFee = wormhole().messageFee();
@@ -154,7 +154,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         uint16 targetChain,
         bytes32 targetRecipient,
         uint32 batchId
-    ) public payable returns (uint64 messageSequence) {
+    ) public payable notPaused returns (uint64 messageSequence) {
         require(unwrapWeth(), "WETH functionality not supported");
 
         // Cache wormhole fee and confirm that the user has passed enough
