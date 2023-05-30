@@ -563,7 +563,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
             // transfer eth to recipient
             payable(recipient).transfer(amount - relayerFee);
 
-            // transfer relayer fee to the caller
+            // transfer relayer fee to the fee recipient
             if (relayerFee > 0) {
                 payable(feeRecipient()).transfer(relayerFee);
             }
@@ -578,7 +578,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
                 amount - relayerFee
             );
 
-            // transfer relayer fee to the caller
+            // transfer relayer fee to the fee recipient
             if (relayerFee > 0) {
                 SafeERC20.safeTransfer(
                     IERC20(address(weth)),
