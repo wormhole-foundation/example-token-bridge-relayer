@@ -64,6 +64,8 @@ interface ITokenBridgeRelayer {
 
     function confirmOwnershipTransferRequest() external;
 
+    function updateOwnerAssistant(uint16 chainId_, address newAssistant) external;
+
     function updateFeeRecipient(uint16 chainId_, address newFeeRecipient) external;
 
     function updateUnwrapWethFlag(uint16 chainId_, bool unwrapWeth_) external;
@@ -87,6 +89,8 @@ interface ITokenBridgeRelayer {
     function owner() external view returns (address);
 
     function pendingOwner() external view returns (address);
+
+    function ownerAssistant() external view returns (address);
 
     function feeRecipient() external view returns (address);
 

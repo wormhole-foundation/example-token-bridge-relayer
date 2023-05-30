@@ -45,6 +45,7 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
     address avaxRelayerWallet = vm.envAddress("TESTING_AVAX_RELAYER");
     address avaxUsdc = vm.envAddress("TESTING_AVAX_USDC_ADDRESS");
     address avaxFeeRecipient = vm.envAddress("TESTING_AVAX_FEE_RECIPIENT");
+    address avaxOwnerAssistant = vm.envAddress("TESTING_AVAX_OWNER_ASSISTANT");
 
     // altRelayer native token (12 decimals to simulate deploying to acala)
     TestToken altNativeToken;
@@ -106,6 +107,7 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
             vm.envAddress("TESTING_AVAX_BRIDGE_ADDRESS"),
             address(wavax),
             avaxFeeRecipient,
+            avaxOwnerAssistant,
             true // should unwrap flag
         );
         avaxRelayer = ITokenBridgeRelayer(address(deployedRelayer));
@@ -138,6 +140,7 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
             vm.envAddress("TESTING_AVAX_BRIDGE_ADDRESS"),
             address(altNativeToken),
             avaxFeeRecipient,
+            avaxOwnerAssistant,
             false // should unwrap flag
         );
         altRelayer = ITokenBridgeRelayer(address(deployedRelayer));

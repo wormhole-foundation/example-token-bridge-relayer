@@ -17,6 +17,9 @@ abstract contract TokenBridgeRelayerStorage {
         // owner of this contract
         address owner;
 
+        // address that can update swap rates and relayer fees
+        address ownerAssistant;
+
         // recipient of relayer fees
         address feeRecipient;
 

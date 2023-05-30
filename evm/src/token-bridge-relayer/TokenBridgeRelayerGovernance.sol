@@ -61,6 +61,25 @@ abstract contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters {
     }
 
     /**
+     * @notice Updates the `ownerAssistant` state variable. This method can
+     * only be executed by the owner.
+     * @param chainId_ Wormhole chain ID.
+     * @param newAssistant Address of the new `ownerAssistant`.
+     */
+    function updateOwnerAssistant(
+        uint16 chainId_,
+        address newAssistant
+    ) public onlyOwner onlyCurrentChain(chainId_) {
+        require(
+            newAssistant != address(0),
+            "newAssistant cannot equal address(0)"
+        );
+
+        // update the owner assistant
+        setOwnerAssistant(newAssistant);
+    }
+
+    /**
      * @notice Updates the `feeRecipient` state variable. This method can
      * only be executed by the owner.
      * @param chainId_ Wormhole chain ID.
@@ -166,7 +185,7 @@ abstract contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters {
     function updateRelayerFee(
         uint16 chainId_,
         uint256 amount
-    ) public onlyOwner {
+    ) public onlyOwnerOrAssistant {
         require(chainId_ != chainId(), "invalid chain");
         require(
             getRegisteredContract(chainId_) != bytes32(0),
@@ -204,7 +223,7 @@ abstract contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters {
         uint16 chainId_,
         address token,
         uint256 swapRate
-    ) public onlyOwner onlyCurrentChain(chainId_) {
+    ) public onlyOwnerOrAssistant onlyCurrentChain(chainId_) {
         require(isAcceptedToken(token), "token not accepted");
         require(swapRate > 0, "swap rate must be nonzero");
 
@@ -246,6 +265,15 @@ abstract contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters {
 
     modifier onlyOwner() {
         require(owner() == msg.sender, "caller not the owner");
+        _;
+    }
+
+    modifier onlyOwnerOrAssistant() {
+        require(
+            owner() == msg.sender ||
+            ownerAssistant() == msg.sender,
+            "caller not the owner or assistant"
+        );
         _;
     }
 

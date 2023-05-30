@@ -27,17 +27,20 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         address tokenBridge_,
         address wethAddress,
         address feeRecipient_,
+        address ownerAssistant_,
         bool unwrapWeth_
     ) {
         require(tokenBridge_ != address(0), "invalid token bridge address");
         require(wethAddress != address(0), "invalid weth address");
         require(feeRecipient_ != address(0), "invalid fee recipient");
+        require(ownerAssistant_ != address(0), "invalid owner assistant");
 
         // set initial state
         setOwner(msg.sender);
         setFeeRecipient(feeRecipient_);
         setTokenBridge(tokenBridge_);
         setWethAddress(wethAddress);
+        setOwnerAssistant(ownerAssistant_);
         setUnwrapWethFlag(unwrapWeth_);
 
         // fetch wormhole info from token bridge

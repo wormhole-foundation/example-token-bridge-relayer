@@ -18,6 +18,10 @@ abstract contract TokenBridgeRelayerGetters is TokenBridgeRelayerSetters {
         return _state.pendingOwner;
     }
 
+    function ownerAssistant() public view returns (address) {
+        return _state.ownerAssistant;
+    }
+
     function feeRecipient() public view returns (address) {
         return _state.feeRecipient;
     }

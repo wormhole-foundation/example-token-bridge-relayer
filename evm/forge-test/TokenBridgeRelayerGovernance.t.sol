@@ -34,23 +34,28 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
     address wavax = vm.envAddress("TESTING_WRAPPED_AVAX_ADDRESS");
     address ethUsdc = vm.envAddress("TESTING_ETH_USDC_ADDRESS");
 
+
     function setupTokenBridgeRelayer() internal {
         // cache avax chain ID and wormhole address
         uint16 avaxChainId = 6;
         address wormholeAddress = vm.envAddress("TESTING_AVAX_WORMHOLE_ADDRESS");
         address avaxFeeRecipient = vm.envAddress("TESTING_AVAX_FEE_RECIPIENT");
+        address ownerAssistant = vm.envAddress("TESTING_AVAX_OWNER_ASSISTANT");
 
         // deploy the relayer contract
         TokenBridgeRelayer deployedRelayer = new TokenBridgeRelayer(
             vm.envAddress("TESTING_AVAX_BRIDGE_ADDRESS"),
-            address(wavax),
+            vm.envAddress("TESTING_WRAPPED_AVAX_ADDRESS"),
             avaxFeeRecipient,
+            ownerAssistant,
             true // should unwrap flag
         );
         avaxRelayer = ITokenBridgeRelayer(address(deployedRelayer));
 
         // verify initial state
         assertEq(avaxRelayer.chainId(), avaxChainId);
+        assertEq(avaxRelayer.feeRecipient(), avaxFeeRecipient);
+        assertEq(avaxRelayer.ownerAssistant(), ownerAssistant);
         assertEq(address(avaxRelayer.wormhole()), wormholeAddress);
         assertEq(
             address(avaxRelayer.tokenBridge()),
@@ -788,14 +793,19 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
     }
 
     /**
-     * @notice This test confirms that the owner can update the relayer fee
-     * for any registered relayer contract.
+     * @notice This test confirms that the owner (and ownerAssistant) can update
+     * the relayer fee for any registered relayer contract.
      */
-    function testUpdateRelayerFee(uint16 chainId_, uint256 relayerFee) public {
+    function testUpdateRelayerFee(
+        uint16 chainId_,
+        uint256 relayerFee,
+        uint256 relayerFeeTwo
+        ) public {
         address token = address(avaxRelayer.WETH());
 
         // make some assumptions about the fuzz test values
         vm.assume(chainId_ != 0 && chainId_ != avaxRelayer.chainId());
+        vm.assume(relayerFee != relayerFeeTwo);
 
         // register random target contract
         avaxRelayer.registerContract(chainId_, addressToBytes32(address(this)));
@@ -803,14 +813,28 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
         // register the token
         avaxRelayer.registerToken(avaxRelayer.chainId(), token);
 
-        // update the relayer fee
-        avaxRelayer.updateRelayerFee(
-            chainId_,
-            relayerFee
-        );
+        // update the relayer fee as the owner
+        {
+            avaxRelayer.updateRelayerFee(
+                chainId_,
+                relayerFee
+            );
 
-        // confirm state changes
-        assertEq(avaxRelayer.relayerFee(chainId_), relayerFee);
+            // confirm state changes
+            assertEq(avaxRelayer.relayerFee(chainId_), relayerFee);
+        }
+
+        // update the relayer fee as the ownerAssistant
+        {
+            vm.prank(avaxRelayer.ownerAssistant());
+            avaxRelayer.updateRelayerFee(
+                chainId_,
+                relayerFeeTwo
+            );
+
+            // confirm state changes
+            assertEq(avaxRelayer.relayerFee(chainId_), relayerFeeTwo);
+        }
     }
 
     /**
@@ -855,10 +879,10 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
     }
 
     /**
-     * @notice This test confirms that ONLY the owner can update the relayer
-     * fee for registered relayer contracts.
+     * @notice This test confirms that ONLY the owner or ownerAssistant can
+     * update the relayer fee for registered relayer contracts.
      */
-    function testUpdateRelayerFeeOwnerOnly() public {
+    function testUpdateRelayerFeeOwnerOrAssistantOnly() public {
         uint16 chainId_ = 42069;
         uint256 relayerFee = 1e8;
 
@@ -869,7 +893,7 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
         vm.startPrank(wallet);
 
         // expect the updateRelayerFee call to revert
-        vm.expectRevert("caller not the owner");
+        vm.expectRevert("caller not the owner or assistant");
         avaxRelayer.updateRelayerFee(
             chainId_,
             relayerFee
@@ -963,25 +987,45 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
     }
 
     /**
-     * @notice This test confirms that the owner can update the swap
-     * rate for accepted tokens.
+     * @notice This test confirms that the owner (and ownerAssistant) can
+     * update the swap rate for accepted tokens.
      */
-    function testUpdateSwapRate(address token, uint256 swapRate) public {
-        vm.assume(swapRate > 0);
+    function testUpdateSwapRate(
+        address token,
+        uint256 swapRate,
+        uint256 swapRateTwo
+    ) public {
+        vm.assume(swapRate > 0 && swapRateTwo > 0);
+        vm.assume(swapRate != swapRateTwo);
         vm.assume(token != address(0));
 
         // register the token
         avaxRelayer.registerToken(avaxRelayer.chainId(), token);
 
-        // update the swap rate
-        avaxRelayer.updateSwapRate(
-            avaxRelayer.chainId(),
-            token,
-            swapRate
-        );
+        // update the swap rate as owner
+        {
+            avaxRelayer.updateSwapRate(
+                avaxRelayer.chainId(),
+                token,
+                swapRate
+            );
 
-        // confirm state changes
-        assertEq(avaxRelayer.swapRate(token), swapRate);
+            // confirm state changes
+            assertEq(avaxRelayer.swapRate(token), swapRate);
+        }
+
+        // update the swap rate as ownerAssistant
+        {
+            vm.prank(avaxRelayer.ownerAssistant());
+            avaxRelayer.updateSwapRate(
+                avaxRelayer.chainId(),
+                token,
+                swapRateTwo
+            );
+
+            // confirm state changes
+            assertEq(avaxRelayer.swapRate(token), swapRateTwo);
+        }
     }
 
     /**
@@ -1033,8 +1077,11 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
         );
     }
 
-    /// @notice This test confirms that ONLY the owner can update the swap rarte
-    function testUpdateSwapRateOwnerOnly() public {
+    /**
+     * @notice This test confirms that ONLY the owner or ownerAssistant can
+     * update the swap rate.
+     */
+    function testUpdateSwapRateOwnerOrAssistantOnly() public {
         address token = address(avaxRelayer.WETH());
         uint256 swapRate = 1e10;
 
@@ -1051,7 +1098,7 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
         expectRevert(
             address(avaxRelayer),
             encodedSignature,
-            "caller not the owner"
+            "caller not the owner or assistant"
         );
 
         vm.stopPrank();

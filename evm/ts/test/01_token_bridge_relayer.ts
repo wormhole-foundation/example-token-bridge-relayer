@@ -23,6 +23,7 @@ import {
   WALLET_PRIVATE_KEY,
   WALLET_PRIVATE_KEY_TWO,
   WALLET_PRIVATE_KEY_THREE,
+  WALLET_PRIVATE_KEY_FOUR,
   GUARDIAN_PRIVATE_KEY,
 } from "../helpers/consts";
 import {
@@ -53,6 +54,10 @@ describe("Token Bridge Relayer", () => {
     WALLET_PRIVATE_KEY_THREE,
     avaxProvider
   );
+  const avaxOwnerAssistant = new ethers.Wallet(
+    WALLET_PRIVATE_KEY_FOUR,
+    avaxProvider
+  );
 
   // eth wallet
   const ethProvider = new ethers.providers.StaticJsonRpcProvider(ETH_HOST);
@@ -62,6 +67,10 @@ describe("Token Bridge Relayer", () => {
     ethProvider
   );
   const ethFeeWallet = new ethers.Wallet(WALLET_PRIVATE_KEY_THREE, ethProvider);
+  const ethOwnerAssistant = new ethers.Wallet(
+    WALLET_PRIVATE_KEY_FOUR,
+    ethProvider
+  );
 
   // wormhole contract
   const avaxWormhole = IWormhole__factory.connect(
@@ -88,11 +97,6 @@ describe("Token Bridge Relayer", () => {
   const avaxWormUsd = makeContract(
     avaxWallet,
     readWormUSDContractAddress(FORK_AVAX_CHAIN_ID),
-    wormUsdAbi
-  );
-  const ethWormUsd = makeContract(
-    ethWallet,
-    readWormUSDContractAddress(FORK_ETH_CHAIN_ID),
     wormUsdAbi
   );
 
@@ -183,6 +187,7 @@ describe("Token Bridge Relayer", () => {
         const swapRatePrecision = await avaxRelayer.swapRatePrecision();
 
         const receipt = await avaxRelayer
+          .connect(avaxOwnerAssistant)
           .updateSwapRate(
             CHAIN_ID_AVAX,
             wavax.address,
@@ -255,6 +260,7 @@ describe("Token Bridge Relayer", () => {
         const swapRatePrecision = await avaxRelayer.swapRatePrecision();
 
         const receipt = await avaxRelayer
+          .connect(avaxOwnerAssistant)
           .updateSwapRate(
             CHAIN_ID_AVAX,
             avaxWormUsd.address,
@@ -332,6 +338,7 @@ describe("Token Bridge Relayer", () => {
         const swapRatePrecision = await avaxRelayer.swapRatePrecision();
 
         const receipt = await avaxRelayer
+          .connect(avaxOwnerAssistant)
           .updateSwapRate(
             CHAIN_ID_AVAX,
             wrappedEth,
@@ -381,6 +388,7 @@ describe("Token Bridge Relayer", () => {
     it("Set Relayer Fee on AVAX", async () => {
       // set relayer fee for transferring to ETH
       const receipt = await avaxRelayer
+        .connect(avaxOwnerAssistant)
         .updateRelayerFee(CHAIN_ID_ETH, ethRelayerFee)
         .then((tx: ethers.ContractTransaction) => tx.wait())
         .catch((msg: any) => {
@@ -454,6 +462,7 @@ describe("Token Bridge Relayer", () => {
         const swapRatePrecision = await ethRelayer.swapRatePrecision();
 
         const receipt = await ethRelayer
+          .connect(ethOwnerAssistant)
           .updateSwapRate(
             CHAIN_ID_ETH,
             weth.address,
@@ -531,6 +540,7 @@ describe("Token Bridge Relayer", () => {
         const swapRatePrecision = await ethRelayer.swapRatePrecision();
 
         const receipt = await ethRelayer
+          .connect(ethOwnerAssistant)
           .updateSwapRate(
             CHAIN_ID_ETH,
             wrappedWormUsd,
@@ -606,6 +616,7 @@ describe("Token Bridge Relayer", () => {
         const swapRatePrecision = await ethRelayer.swapRatePrecision();
 
         const receipt = await ethRelayer
+          .connect(ethOwnerAssistant)
           .updateSwapRate(
             CHAIN_ID_ETH,
             wrappedAvax,
@@ -655,6 +666,7 @@ describe("Token Bridge Relayer", () => {
     it("Set Relayer Fee on ETH", async () => {
       // set relayer fee for transferring to ETH
       const receipt = await ethRelayer
+        .connect(ethOwnerAssistant)
         .updateRelayerFee(CHAIN_ID_AVAX, avaxRelayerFee)
         .then((tx: ethers.ContractTransaction) => tx.wait())
         .catch((msg: any) => {

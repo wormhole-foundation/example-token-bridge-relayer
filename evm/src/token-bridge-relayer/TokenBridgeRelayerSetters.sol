@@ -12,6 +12,10 @@ abstract contract TokenBridgeRelayerSetters is TokenBridgeRelayerState {
         _state.pendingOwner = pendingOwner_;
     }
 
+    function setOwnerAssistant(address ownerAssistant_) internal {
+        _state.ownerAssistant = ownerAssistant_;
+    }
+
     function setFeeRecipient(address feeRecipient_) internal {
         _state.feeRecipient = feeRecipient_;
     }
