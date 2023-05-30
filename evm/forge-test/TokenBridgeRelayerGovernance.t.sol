@@ -34,7 +34,6 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
     address wavax = vm.envAddress("TESTING_WRAPPED_AVAX_ADDRESS");
     address ethUsdc = vm.envAddress("TESTING_ETH_USDC_ADDRESS");
 
-
     function setupTokenBridgeRelayer() internal {
         // cache avax chain ID and wormhole address
         uint16 avaxChainId = 6;
@@ -624,8 +623,10 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
 
             // register the token and set token state
             avaxRelayer.registerToken(avaxRelayer.chainId(), tokens[i]);
-            avaxRelayer.updateSwapRate(
-                avaxRelayer.chainId(),
+
+            // update the swap rate
+            updateSwapRate(
+                avaxRelayer,
                 tokens[i],
                 (i + 1) * 1e8
             );
@@ -676,8 +677,8 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
 
         // register the token and set initial state
         avaxRelayer.registerToken(avaxRelayer.chainId(), token);
-        avaxRelayer.updateSwapRate(
-            avaxRelayer.chainId(),
+        updateSwapRate(
+            avaxRelayer,
             token,
             swapRate
         );
@@ -988,7 +989,8 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
 
     /**
      * @notice This test confirms that the owner (and ownerAssistant) can
-     * update the swap rate for accepted tokens.
+     * update the swap rate for accepted tokens. This test only updates
+     * the swap rate for a single token per call.
      */
     function testUpdateSwapRate(
         address token,
@@ -1004,8 +1006,8 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
 
         // update the swap rate as owner
         {
-            avaxRelayer.updateSwapRate(
-                avaxRelayer.chainId(),
+            updateSwapRate(
+                avaxRelayer,
                 token,
                 swapRate
             );
@@ -1017,8 +1019,8 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
         // update the swap rate as ownerAssistant
         {
             vm.prank(avaxRelayer.ownerAssistant());
-            avaxRelayer.updateSwapRate(
-                avaxRelayer.chainId(),
+            updateSwapRate(
+                avaxRelayer,
                 token,
                 swapRateTwo
             );
@@ -1029,23 +1031,64 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
     }
 
     /**
+     * @notice This test confirms that the owner (and ownerAssistant) can
+     * update the swap rate for many accepted tokens in one call.
+     */
+    function testUpdateSwapRateBatch() public {
+        // create token and swap rate structs
+        ITokenBridgeRelayer.SwapRateUpdate[] memory update =
+            new ITokenBridgeRelayer.SwapRateUpdate[](3);
+
+        // add three updates to the array
+        update[0] = ITokenBridgeRelayer.SwapRateUpdate({
+            token: makeAddr("tokenZero"),
+            value: 1e18
+        });
+        update[1] = ITokenBridgeRelayer.SwapRateUpdate({
+            token: makeAddr("tokenOne"),
+            value: 1e12
+        });
+        update[2] = ITokenBridgeRelayer.SwapRateUpdate({
+            token: makeAddr("tokenTwo"),
+            value: 6.9e18
+        });
+
+        // register each token in the update array
+        for (uint256 i = 0; i < update.length; ++i) {
+            avaxRelayer.registerToken(avaxRelayer.chainId(), update[i].token);
+        }
+
+        // update the swap rate for the batch
+        avaxRelayer.updateSwapRate(avaxRelayer.chainId(), update);
+
+        // confirm the swap rate was set for each token
+        for (uint256 i = 0; i < update.length; ++i) {
+            assertEq(avaxRelayer.swapRate(update[i].token), update[i].value);
+        }
+    }
+
+    /**
      * @notice This test confirms that the owner cannot update the swap rate
-     * to zero.
+     * to zero for a token.
      */
     function testUpdateSwapRateZeroRate() public {
-        // cache token address
-        address token = address(avaxRelayer.WETH());
-        uint256 swapRate = 0;
+        // create token and swap rate structs
+        ITokenBridgeRelayer.SwapRateUpdate[] memory update =
+            new ITokenBridgeRelayer.SwapRateUpdate[](1);
+
+        update[0] = ITokenBridgeRelayer.SwapRateUpdate({
+            token: address(avaxRelayer.WETH()),
+            value: 0
+        });
 
         // register the token
-        avaxRelayer.registerToken(avaxRelayer.chainId(), token);
+        avaxRelayer.registerToken(avaxRelayer.chainId(), update[0].token);
 
         // expect the updateSwapRate call to revert
         bytes memory encodedSignature = abi.encodeWithSignature(
-            "updateSwapRate(uint16,address,uint256)",
+            "updateSwapRate(uint16,(address,uint256)[])",
             avaxRelayer.chainId(),
-            token,
-            swapRate
+            update
         );
         expectRevert(
             address(avaxRelayer),
@@ -1059,16 +1102,20 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
      * for an unregistered token.
      */
     function testUpdateSwapRateInvalidToken() public {
-        // cache token address
-        address token = address(avaxRelayer.WETH());
-        uint256 swapRate = 1e10;
+        // create token and swap rate structs
+        ITokenBridgeRelayer.SwapRateUpdate[] memory update =
+            new ITokenBridgeRelayer.SwapRateUpdate[](1);
+
+        update[0] = ITokenBridgeRelayer.SwapRateUpdate({
+            token: address(avaxRelayer.WETH()),
+            value: 1e10
+        });
 
         // expect the updateSwapRate call to revert
         bytes memory encodedSignature = abi.encodeWithSignature(
-            "updateSwapRate(uint16,address,uint256)",
+            "updateSwapRate(uint16,(address,uint256)[])",
             avaxRelayer.chainId(),
-            token,
-            swapRate
+            update
         );
         expectRevert(
             address(avaxRelayer),
@@ -1082,18 +1129,23 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
      * update the swap rate.
      */
     function testUpdateSwapRateOwnerOrAssistantOnly() public {
-        address token = address(avaxRelayer.WETH());
-        uint256 swapRate = 1e10;
+        // create token and swap rate structs
+        ITokenBridgeRelayer.SwapRateUpdate[] memory update =
+            new ITokenBridgeRelayer.SwapRateUpdate[](1);
+
+        update[0] = ITokenBridgeRelayer.SwapRateUpdate({
+            token: address(avaxRelayer.WETH()),
+            value: 1e10
+        });
 
         // prank the caller address to something different than the owner's
         vm.startPrank(wallet);
 
         // expect the updateSwapRate call to revert
         bytes memory encodedSignature = abi.encodeWithSignature(
-            "updateSwapRate(uint16,address,uint256)",
+            "updateSwapRate(uint16,(address,uint256)[])",
             avaxRelayer.chainId(),
-            token,
-            swapRate
+            update
         );
         expectRevert(
             address(avaxRelayer),
@@ -1111,15 +1163,42 @@ contract TokenBridgeRelayerGovernanceTest is Helpers, ForgeHelpers, Test {
     function testUpdateSwapRateWrongChain(uint16 chainId_) public {
         vm.assume(chainId_ != avaxRelayer.chainId());
 
-        address token = address(avaxRelayer.WETH());
-        uint256 swapRate = 1e10;
+        // create token and swap rate structs
+        ITokenBridgeRelayer.SwapRateUpdate[] memory update =
+            new ITokenBridgeRelayer.SwapRateUpdate[](1);
+
+        update[0] = ITokenBridgeRelayer.SwapRateUpdate({
+            token: address(avaxRelayer.WETH()),
+            value: 1e10
+        });
 
         // expect the updateSwapRate call to revert
         vm.expectRevert("wrong chain");
         avaxRelayer.updateSwapRate(
             chainId_,
-            token,
-            swapRate
+            update
+        );
+    }
+
+    /**
+     * @notice This test confirms that the owner cannot pass empty arrays when
+     * updating the swap rates.
+     */
+    function testUpdateSwapRateInvalidArraySize() public {
+        // create token and swap rate arrays
+        ITokenBridgeRelayer.SwapRateUpdate[] memory update =
+            new ITokenBridgeRelayer.SwapRateUpdate[](0);
+
+        // expect the updateSwapRate call to revert
+        bytes memory encodedSignature = abi.encodeWithSignature(
+            "updateSwapRate(uint16,(address,uint256)[])",
+            avaxRelayer.chainId(),
+            update
+        );
+        expectRevert(
+            address(avaxRelayer),
+            encodedSignature,
+            "invalid array size"
         );
     }
 

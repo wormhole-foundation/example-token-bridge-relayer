@@ -17,4 +17,9 @@ abstract contract TokenBridgeRelayerStructs {
         uint16 targetChain;
         bytes32 targetRecipient;
     }
+
+    struct SwapRateUpdate {
+        address token;
+        uint256 value;
+    }
 }

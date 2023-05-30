@@ -14,6 +14,11 @@ interface ITokenBridgeRelayer {
         bytes32 targetRecipient;
     }
 
+    struct SwapRateUpdate {
+        address token;
+        uint256 value;
+    }
+
     event TransferRedeemed(
         uint16 indexed emitterChainId,
         bytes32 indexed emitterAddress,
@@ -80,7 +85,7 @@ interface ITokenBridgeRelayer {
 
     function updateRelayerFeePrecision(uint16 chainId_, uint256 relayerFeePrecision_) external;
 
-    function updateSwapRate(uint16 chainId_, address token, uint256 swapRate) external;
+    function updateSwapRate(uint16 chainId_, SwapRateUpdate[] calldata swapRateUpdate) external;
 
     function updateSwapRatePrecision(uint16 chainId_, uint256 swapRatePrecision_) external;
 

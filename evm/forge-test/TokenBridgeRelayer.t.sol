@@ -114,8 +114,8 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
 
         // register and set the native token swap rate (wavax)
         avaxRelayer.registerToken(avaxRelayer.chainId(), address(wavax));
-        avaxRelayer.updateSwapRate(
-            avaxRelayer.chainId(),
+        updateSwapRate(
+            avaxRelayer,
             address(wavax),
             69e4 * avaxRelayer.swapRatePrecision() // swap rate
         );
@@ -147,8 +147,8 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
 
         // register and set the native token swap rate nativeToken
         altRelayer.registerToken(altRelayer.chainId(), address(altNativeToken));
-        altRelayer.updateSwapRate(
-            altRelayer.chainId(),
+        updateSwapRate(
+            altRelayer,
             address(altNativeToken),
             4.2e4 * altRelayer.swapRatePrecision() // swap rate
         );
@@ -174,7 +174,7 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
         relayer.registerContract(targetChain, targetContract);
 
         // set swap rate for registered token
-        relayer.updateSwapRate(relayer.chainId(), registeredToken, swapRate);
+        updateSwapRate(relayer, registeredToken, swapRate);
 
         // set max native swap amount
         relayer.updateMaxNativeSwapAmount(
@@ -238,7 +238,7 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
         avaxRelayer.registerToken(avaxRelayer.chainId(), token);
 
         // set the swap rate for the token
-        avaxRelayer.updateSwapRate(avaxRelayer.chainId(), token, tokenSwapRate);
+        updateSwapRate(avaxRelayer, token, tokenSwapRate);
 
         // compute the native amount
         uint256 nativeAmount = avaxRelayer.calculateNativeSwapAmountOut(
@@ -270,7 +270,7 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
         avaxRelayer.registerToken(avaxRelayer.chainId(), token);
 
         // set the swap rate for the token
-        avaxRelayer.updateSwapRate(avaxRelayer.chainId(), token, tokenSwapRate);
+        updateSwapRate(avaxRelayer, token, tokenSwapRate);
 
         // compute the native amount
         avaxRelayer.calculateNativeSwapAmountOut(
@@ -354,7 +354,7 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
         avaxRelayer.registerToken(avaxRelayer.chainId(), token);
 
         // set the swap rate for the token
-        avaxRelayer.updateSwapRate(avaxRelayer.chainId(), token, tokenSwapRate);
+        updateSwapRate(avaxRelayer, token, tokenSwapRate);
 
         // set the maxNativeSwapAmount
         avaxRelayer.updateMaxNativeSwapAmount(
@@ -387,7 +387,7 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
         avaxRelayer.registerToken(avaxRelayer.chainId(), token);
 
         // set the swap rate for the token
-        avaxRelayer.updateSwapRate(avaxRelayer.chainId(), token, tokenSwapRate);
+        updateSwapRate(avaxRelayer, token, tokenSwapRate);
 
         // set the maxNativeSwapAmount
         avaxRelayer.updateMaxNativeSwapAmount(
@@ -449,7 +449,7 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
         avaxRelayer.registerToken(avaxRelayer.chainId(), token);
 
         // set the swap rate for the token
-        avaxRelayer.updateSwapRate(avaxRelayer.chainId(), token, tokenSwapRate);
+        updateSwapRate(avaxRelayer, token, tokenSwapRate);
 
         // register the target contract
         avaxRelayer.registerContract(chainId_, addressToBytes32(address(this)));
@@ -486,7 +486,7 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
         avaxRelayer.registerToken(avaxRelayer.chainId(), token);
 
         // set the swap rate for the token
-        avaxRelayer.updateSwapRate(avaxRelayer.chainId(), token, tokenSwapRate);
+        updateSwapRate(avaxRelayer, token, tokenSwapRate);
 
         // register the target contract
         avaxRelayer.registerContract(chainId_, addressToBytes32(address(this)));
@@ -545,7 +545,7 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
             altRelayer.registerToken(altRelayer.chainId(), tokens[i]);
 
             // set the swap rate for the tokens
-            altRelayer.updateSwapRate(altRelayer.chainId(), tokens[i], tokenSwapRate);
+            updateSwapRate(altRelayer, tokens[i], tokenSwapRate);
 
             // compute the native amount
             uint256 nativeAmount = altRelayer.calculateNativeSwapAmountOut(
@@ -583,7 +583,7 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
             altRelayer.registerToken(altRelayer.chainId(), tokens[i]);
 
             // set the swap rate for the token
-            altRelayer.updateSwapRate(altRelayer.chainId(), tokens[i], tokenSwapRate);
+            updateSwapRate(altRelayer, tokens[i], tokenSwapRate);
 
             // compute the native amount
             altRelayer.calculateNativeSwapAmountOut(
@@ -619,7 +619,7 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
             altRelayer.registerToken(altRelayer.chainId(), tokens[i]);
 
             // set the swap rate for the tokens
-            altRelayer.updateSwapRate(altRelayer.chainId(), tokens[i], tokenSwapRate);
+            updateSwapRate(altRelayer, tokens[i], tokenSwapRate);
 
             // set the maxNativeSwapAmount for each token
             altRelayer.updateMaxNativeSwapAmount(
@@ -658,7 +658,7 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
             altRelayer.registerToken(altRelayer.chainId(), tokens[i]);
 
             // set the swap rate for the token
-            altRelayer.updateSwapRate(altRelayer.chainId(), tokens[i], tokenSwapRate);
+            updateSwapRate(altRelayer, tokens[i], tokenSwapRate);
 
             // set the maxNativeSwapAmount for each token
             altRelayer.updateMaxNativeSwapAmount(
@@ -3321,8 +3321,8 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
         );
 
         // set the native swap rate (so the native gas query works)
-        avaxRelayer.updateSwapRate(
-            avaxRelayer.chainId(),
+        updateSwapRate(
+            avaxRelayer,
             wrappedAsset,
             1 * avaxRelayer.swapRatePrecision() // swap rate
         );
@@ -3408,8 +3408,8 @@ contract TokenBridgeRelayerTest is Helpers, ForgeHelpers, Test {
         );
 
         // set the native swap rate (so the native gas query works)
-        avaxRelayer.updateSwapRate(
-            avaxRelayer.chainId(),
+        updateSwapRate(
+            avaxRelayer,
             wrappedAsset,
             1 * avaxRelayer.swapRatePrecision() // swap rate
         );

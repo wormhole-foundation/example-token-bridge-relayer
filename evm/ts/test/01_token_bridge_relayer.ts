@@ -26,6 +26,7 @@ import {
   WALLET_PRIVATE_KEY_FOUR,
   GUARDIAN_PRIVATE_KEY,
 } from "../helpers/consts";
+import {SwapRateUpdate} from "../helpers/interfaces";
 import {
   formatWormholeMessageFromReceipt,
   readTokenBridgeRelayerContractAddress,
@@ -186,13 +187,17 @@ describe("Token Bridge Relayer", () => {
       {
         const swapRatePrecision = await avaxRelayer.swapRatePrecision();
 
+        // array of SwapRateUpdate structs
+        const update: SwapRateUpdate[] = [
+          {
+            token: wavax.address,
+            value: avaxSwapRate.mul(swapRatePrecision),
+          },
+        ];
+
         const receipt = await avaxRelayer
           .connect(avaxOwnerAssistant)
-          .updateSwapRate(
-            CHAIN_ID_AVAX,
-            wavax.address,
-            avaxSwapRate.mul(swapRatePrecision)
-          )
+          .updateSwapRate(CHAIN_ID_AVAX, update)
           .then((tx: ethers.ContractTransaction) => tx.wait())
           .catch((msg: any) => {
             // should not happen
@@ -259,13 +264,17 @@ describe("Token Bridge Relayer", () => {
       {
         const swapRatePrecision = await avaxRelayer.swapRatePrecision();
 
+        // array of SwapRateUpdate structs
+        const update: SwapRateUpdate[] = [
+          {
+            token: avaxWormUsd.address,
+            value: wormUsdSwapRate.mul(swapRatePrecision),
+          },
+        ];
+
         const receipt = await avaxRelayer
           .connect(avaxOwnerAssistant)
-          .updateSwapRate(
-            CHAIN_ID_AVAX,
-            avaxWormUsd.address,
-            wormUsdSwapRate.mul(swapRatePrecision)
-          )
+          .updateSwapRate(CHAIN_ID_AVAX, update)
           .then((tx: ethers.ContractTransaction) => tx.wait())
           .catch((msg: any) => {
             // should not happen
@@ -337,13 +346,17 @@ describe("Token Bridge Relayer", () => {
       {
         const swapRatePrecision = await avaxRelayer.swapRatePrecision();
 
+        // array of SwapRateUpdate structs
+        const update: SwapRateUpdate[] = [
+          {
+            token: wrappedEth,
+            value: ethSwapRate.mul(swapRatePrecision),
+          },
+        ];
+
         const receipt = await avaxRelayer
           .connect(avaxOwnerAssistant)
-          .updateSwapRate(
-            CHAIN_ID_AVAX,
-            wrappedEth,
-            ethSwapRate.mul(swapRatePrecision)
-          )
+          .updateSwapRate(CHAIN_ID_AVAX, update)
           .then((tx: ethers.ContractTransaction) => tx.wait())
           .catch((msg: any) => {
             // should not happen
@@ -461,13 +474,17 @@ describe("Token Bridge Relayer", () => {
       {
         const swapRatePrecision = await ethRelayer.swapRatePrecision();
 
+        // array of SwapRateUpdate structs
+        const update: SwapRateUpdate[] = [
+          {
+            token: weth.address,
+            value: ethSwapRate.mul(swapRatePrecision),
+          },
+        ];
+
         const receipt = await ethRelayer
           .connect(ethOwnerAssistant)
-          .updateSwapRate(
-            CHAIN_ID_ETH,
-            weth.address,
-            ethSwapRate.mul(swapRatePrecision)
-          )
+          .updateSwapRate(CHAIN_ID_ETH, update)
           .then((tx: ethers.ContractTransaction) => tx.wait())
           .catch((msg: any) => {
             // should not happen
@@ -539,13 +556,17 @@ describe("Token Bridge Relayer", () => {
       {
         const swapRatePrecision = await ethRelayer.swapRatePrecision();
 
+        // array of SwapRateUpdate structs
+        const update: SwapRateUpdate[] = [
+          {
+            token: wrappedWormUsd,
+            value: wormUsdSwapRate.mul(swapRatePrecision),
+          },
+        ];
+
         const receipt = await ethRelayer
           .connect(ethOwnerAssistant)
-          .updateSwapRate(
-            CHAIN_ID_ETH,
-            wrappedWormUsd,
-            wormUsdSwapRate.mul(swapRatePrecision)
-          )
+          .updateSwapRate(CHAIN_ID_ETH, update)
           .then((tx: ethers.ContractTransaction) => tx.wait())
           .catch((msg: any) => {
             // should not happen
@@ -615,13 +636,17 @@ describe("Token Bridge Relayer", () => {
       {
         const swapRatePrecision = await ethRelayer.swapRatePrecision();
 
+        // array of SwapRateUpdate structs
+        const update: SwapRateUpdate[] = [
+          {
+            token: wrappedAvax,
+            value: avaxSwapRate.mul(swapRatePrecision),
+          },
+        ];
+
         const receipt = await ethRelayer
           .connect(ethOwnerAssistant)
-          .updateSwapRate(
-            CHAIN_ID_ETH,
-            wrappedAvax,
-            avaxSwapRate.mul(swapRatePrecision)
-          )
+          .updateSwapRate(CHAIN_ID_ETH, update)
           .then((tx: ethers.ContractTransaction) => tx.wait())
           .catch((msg: any) => {
             // should not happen
