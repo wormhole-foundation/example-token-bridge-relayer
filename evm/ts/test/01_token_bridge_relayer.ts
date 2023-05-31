@@ -22,8 +22,11 @@ import {
   FORK_ETH_CHAIN_ID,
   WALLET_PRIVATE_KEY,
   WALLET_PRIVATE_KEY_TWO,
+  WALLET_PRIVATE_KEY_THREE,
+  WALLET_PRIVATE_KEY_FOUR,
   GUARDIAN_PRIVATE_KEY,
 } from "../helpers/consts";
+import {SwapRateUpdate} from "../helpers/interfaces";
 import {
   formatWormholeMessageFromReceipt,
   readTokenBridgeRelayerContractAddress,
@@ -48,12 +51,25 @@ describe("Token Bridge Relayer", () => {
     WALLET_PRIVATE_KEY_TWO,
     avaxProvider
   );
+  const avaxFeeWallet = new ethers.Wallet(
+    WALLET_PRIVATE_KEY_THREE,
+    avaxProvider
+  );
+  const avaxOwnerAssistant = new ethers.Wallet(
+    WALLET_PRIVATE_KEY_FOUR,
+    avaxProvider
+  );
 
   // eth wallet
   const ethProvider = new ethers.providers.StaticJsonRpcProvider(ETH_HOST);
   const ethWallet = new ethers.Wallet(WALLET_PRIVATE_KEY, ethProvider);
   const ethRelayerWallet = new ethers.Wallet(
     WALLET_PRIVATE_KEY_TWO,
+    ethProvider
+  );
+  const ethFeeWallet = new ethers.Wallet(WALLET_PRIVATE_KEY_THREE, ethProvider);
+  const ethOwnerAssistant = new ethers.Wallet(
+    WALLET_PRIVATE_KEY_FOUR,
     ethProvider
   );
 
@@ -82,11 +98,6 @@ describe("Token Bridge Relayer", () => {
   const avaxWormUsd = makeContract(
     avaxWallet,
     readWormUSDContractAddress(FORK_AVAX_CHAIN_ID),
-    wormUsdAbi
-  );
-  const ethWormUsd = makeContract(
-    ethWallet,
-    readWormUSDContractAddress(FORK_ETH_CHAIN_ID),
     wormUsdAbi
   );
 
@@ -176,12 +187,17 @@ describe("Token Bridge Relayer", () => {
       {
         const swapRatePrecision = await avaxRelayer.swapRatePrecision();
 
+        // array of SwapRateUpdate structs
+        const update: SwapRateUpdate[] = [
+          {
+            token: wavax.address,
+            value: avaxSwapRate.mul(swapRatePrecision),
+          },
+        ];
+
         const receipt = await avaxRelayer
-          .updateSwapRate(
-            CHAIN_ID_AVAX,
-            wavax.address,
-            avaxSwapRate.mul(swapRatePrecision)
-          )
+          .connect(avaxOwnerAssistant)
+          .updateSwapRate(CHAIN_ID_AVAX, update)
           .then((tx: ethers.ContractTransaction) => tx.wait())
           .catch((msg: any) => {
             // should not happen
@@ -248,12 +264,17 @@ describe("Token Bridge Relayer", () => {
       {
         const swapRatePrecision = await avaxRelayer.swapRatePrecision();
 
+        // array of SwapRateUpdate structs
+        const update: SwapRateUpdate[] = [
+          {
+            token: avaxWormUsd.address,
+            value: wormUsdSwapRate.mul(swapRatePrecision),
+          },
+        ];
+
         const receipt = await avaxRelayer
-          .updateSwapRate(
-            CHAIN_ID_AVAX,
-            avaxWormUsd.address,
-            wormUsdSwapRate.mul(swapRatePrecision)
-          )
+          .connect(avaxOwnerAssistant)
+          .updateSwapRate(CHAIN_ID_AVAX, update)
           .then((tx: ethers.ContractTransaction) => tx.wait())
           .catch((msg: any) => {
             // should not happen
@@ -325,12 +346,17 @@ describe("Token Bridge Relayer", () => {
       {
         const swapRatePrecision = await avaxRelayer.swapRatePrecision();
 
+        // array of SwapRateUpdate structs
+        const update: SwapRateUpdate[] = [
+          {
+            token: wrappedEth,
+            value: ethSwapRate.mul(swapRatePrecision),
+          },
+        ];
+
         const receipt = await avaxRelayer
-          .updateSwapRate(
-            CHAIN_ID_AVAX,
-            wrappedEth,
-            ethSwapRate.mul(swapRatePrecision)
-          )
+          .connect(avaxOwnerAssistant)
+          .updateSwapRate(CHAIN_ID_AVAX, update)
           .then((tx: ethers.ContractTransaction) => tx.wait())
           .catch((msg: any) => {
             // should not happen
@@ -375,6 +401,7 @@ describe("Token Bridge Relayer", () => {
     it("Set Relayer Fee on AVAX", async () => {
       // set relayer fee for transferring to ETH
       const receipt = await avaxRelayer
+        .connect(avaxOwnerAssistant)
         .updateRelayerFee(CHAIN_ID_ETH, ethRelayerFee)
         .then((tx: ethers.ContractTransaction) => tx.wait())
         .catch((msg: any) => {
@@ -447,12 +474,17 @@ describe("Token Bridge Relayer", () => {
       {
         const swapRatePrecision = await ethRelayer.swapRatePrecision();
 
+        // array of SwapRateUpdate structs
+        const update: SwapRateUpdate[] = [
+          {
+            token: weth.address,
+            value: ethSwapRate.mul(swapRatePrecision),
+          },
+        ];
+
         const receipt = await ethRelayer
-          .updateSwapRate(
-            CHAIN_ID_ETH,
-            weth.address,
-            ethSwapRate.mul(swapRatePrecision)
-          )
+          .connect(ethOwnerAssistant)
+          .updateSwapRate(CHAIN_ID_ETH, update)
           .then((tx: ethers.ContractTransaction) => tx.wait())
           .catch((msg: any) => {
             // should not happen
@@ -524,12 +556,17 @@ describe("Token Bridge Relayer", () => {
       {
         const swapRatePrecision = await ethRelayer.swapRatePrecision();
 
+        // array of SwapRateUpdate structs
+        const update: SwapRateUpdate[] = [
+          {
+            token: wrappedWormUsd,
+            value: wormUsdSwapRate.mul(swapRatePrecision),
+          },
+        ];
+
         const receipt = await ethRelayer
-          .updateSwapRate(
-            CHAIN_ID_ETH,
-            wrappedWormUsd,
-            wormUsdSwapRate.mul(swapRatePrecision)
-          )
+          .connect(ethOwnerAssistant)
+          .updateSwapRate(CHAIN_ID_ETH, update)
           .then((tx: ethers.ContractTransaction) => tx.wait())
           .catch((msg: any) => {
             // should not happen
@@ -599,12 +636,17 @@ describe("Token Bridge Relayer", () => {
       {
         const swapRatePrecision = await ethRelayer.swapRatePrecision();
 
+        // array of SwapRateUpdate structs
+        const update: SwapRateUpdate[] = [
+          {
+            token: wrappedAvax,
+            value: avaxSwapRate.mul(swapRatePrecision),
+          },
+        ];
+
         const receipt = await ethRelayer
-          .updateSwapRate(
-            CHAIN_ID_ETH,
-            wrappedAvax,
-            avaxSwapRate.mul(swapRatePrecision)
-          )
+          .connect(ethOwnerAssistant)
+          .updateSwapRate(CHAIN_ID_ETH, update)
           .then((tx: ethers.ContractTransaction) => tx.wait())
           .catch((msg: any) => {
             // should not happen
@@ -649,6 +691,7 @@ describe("Token Bridge Relayer", () => {
     it("Set Relayer Fee on ETH", async () => {
       // set relayer fee for transferring to ETH
       const receipt = await ethRelayer
+        .connect(ethOwnerAssistant)
         .updateRelayerFee(CHAIN_ID_AVAX, avaxRelayerFee)
         .then((tx: ethers.ContractTransaction) => tx.wait())
         .catch((msg: any) => {
@@ -769,13 +812,16 @@ describe("Token Bridge Relayer", () => {
         wormUsdAbi
       );
 
-      // Check the balance of the recipient and relayer wallet before
-      // redeeming the token transfer.
+      // Check the balance of the recipient, relayer and fee recipient wallet
+      // before redeeming the token transfer.
       const relayerBalanceBefore = await wrappedTokenContract.balanceOf(
         ethRelayerWallet.address
       );
       const recipientBalanceBefore = await wrappedTokenContract.balanceOf(
         ethWallet.address
+      );
+      const feeRecipientBalanceBefore = await wrappedTokenContract.balanceOf(
+        ethFeeWallet.address
       );
       const relayerEthBalanceBefore = await ethRelayerWallet.getBalance();
       const recipientEthBalanceBefore = await ethWallet.getBalance();
@@ -828,6 +874,9 @@ describe("Token Bridge Relayer", () => {
       const recipientBalanceAfter = await wrappedTokenContract.balanceOf(
         ethWallet.address
       );
+      const feeRecipientBalanceAfter = await wrappedTokenContract.balanceOf(
+        ethFeeWallet.address
+      );
       const relayerEthBalanceAfter = await ethRelayerWallet.getBalance();
       const recipientEthBalanceAfter = await ethWallet.getBalance();
 
@@ -867,15 +916,19 @@ describe("Token Bridge Relayer", () => {
         // relayer balance changes
         expect(
           relayerBalanceAfter.sub(relayerBalanceBefore).toString()
-        ).to.equal(
-          local.toNativeTokenAmount.add(local.tokenRelayerFee).toString()
-        );
-
+        ).to.equal("0");
         expect(
           relayerEthBalanceBefore
             .sub(relayerEthBalanceAfter)
             .gte(expectedEthBalanceChange)
         ).is.true;
+
+        // fee recipient balance changes
+        expect(
+          feeRecipientBalanceAfter.sub(feeRecipientBalanceBefore).toString()
+        ).to.equal(
+          local.toNativeTokenAmount.add(local.tokenRelayerFee).toString()
+        );
 
         // confirm swap event was emitted correctly
         const event = findSwapExecutedEventInLogs(
@@ -992,6 +1045,9 @@ describe("Token Bridge Relayer", () => {
       const recipientBalanceBefore = await avaxWormUsd.balanceOf(
         avaxWallet.address
       );
+      const feeRecipientBalanceBefore = await avaxWormUsd.balanceOf(
+        avaxFeeWallet.address
+      );
       const relayerEthBalanceBefore = await avaxRelayerWallet.getBalance();
       const recipientEthBalanceBefore = await avaxWallet.getBalance();
 
@@ -1045,6 +1101,9 @@ describe("Token Bridge Relayer", () => {
       const recipientBalanceAfter = await avaxWormUsd.balanceOf(
         avaxWallet.address
       );
+      const feeRecipientBalanceAfter = await avaxWormUsd.balanceOf(
+        avaxFeeWallet.address
+      );
       const relayerEthBalanceAfter = await avaxRelayerWallet.getBalance();
       const recipientEthBalanceAfter = await avaxWallet.getBalance();
 
@@ -1084,16 +1143,20 @@ describe("Token Bridge Relayer", () => {
         // relayer balance changes
         expect(
           relayerBalanceAfter.sub(relayerBalanceBefore).toString()
-        ).to.equal(
-          local.toNativeTokenAmount.add(local.tokenRelayerFee).toString()
-        );
-
+        ).to.equal("0");
         expect(
           relayerEthBalanceBefore
             .sub(relayerEthBalanceAfter)
             .gte(expectedEthBalanceChange)
         ).is.true;
       }
+
+      // fee recipient balance changes
+      expect(
+        feeRecipientBalanceAfter.sub(feeRecipientBalanceBefore).toString()
+      ).to.equal(
+        local.toNativeTokenAmount.add(local.tokenRelayerFee).toString()
+      );
 
       // clear localVariables
       local = {};
@@ -1206,13 +1269,16 @@ describe("Token Bridge Relayer", () => {
         wormUsdAbi
       );
 
-      // Check the balance of the recipient and relayer wallet before
-      // redeeming the token transfer.
+      // Check the balance of the recipient, relayer and fee recipient wallet
+      // before redeeming the token transfer.
       const relayerBalanceBefore = await wrappedTokenContract.balanceOf(
         ethRelayerWallet.address
       );
       const recipientBalanceBefore = await wrappedTokenContract.balanceOf(
         ethWallet.address
+      );
+      const feeRecipientBalanceBefore = await wrappedTokenContract.balanceOf(
+        ethFeeWallet.address
       );
       const relayerEthBalanceBefore = await ethRelayerWallet.getBalance();
       const recipientEthBalanceBefore = await ethWallet.getBalance();
@@ -1264,6 +1330,9 @@ describe("Token Bridge Relayer", () => {
       );
       const recipientBalanceAfter = await wrappedTokenContract.balanceOf(
         ethWallet.address
+      );
+      const feeRecipientBalanceAfter = await wrappedTokenContract.balanceOf(
+        ethFeeWallet.address
       );
       const relayerEthBalanceAfter = await ethRelayerWallet.getBalance();
       const recipientEthBalanceAfter = await ethWallet.getBalance();
@@ -1318,12 +1387,17 @@ describe("Token Bridge Relayer", () => {
         // relayer balance changes
         expect(
           relayerBalanceAfter.sub(relayerBalanceBefore).toString()
-        ).to.equal(denormToNative.add(denormRelayerFee).toString());
+        ).to.equal("0");
         expect(
           relayerEthBalanceBefore
             .sub(relayerEthBalanceAfter)
             .gte(expectedEthBalanceChange)
         ).is.true;
+
+        // fee recipient balance changes
+        expect(
+          feeRecipientBalanceAfter.sub(feeRecipientBalanceBefore).toString()
+        ).to.equal(denormToNative.add(denormRelayerFee).toString());
       }
 
       // clear localVariables
@@ -1509,13 +1583,16 @@ describe("Token Bridge Relayer", () => {
         wormUsdAbi
       );
 
-      // Check the balance of the recipient and relayer wallet before
-      // redeeming the token transfer.
+      // Check the balance of the recipient, relayer and fee recipient wallet
+      // before redeeming the token transfer.
       const relayerBalanceBefore = await wrappedTokenContract.balanceOf(
         avaxRelayerWallet.address
       );
       const recipientBalanceBefore = await wrappedTokenContract.balanceOf(
         avaxWallet.address
+      );
+      const feeRecipientBalanceBefore = await wrappedTokenContract.balanceOf(
+        avaxFeeWallet.address
       );
       const relayerEthBalanceBefore = await avaxRelayerWallet.getBalance();
       const recipientEthBalanceBefore = await avaxWallet.getBalance();
@@ -1567,6 +1644,9 @@ describe("Token Bridge Relayer", () => {
       );
       const recipientBalanceAfter = await wrappedTokenContract.balanceOf(
         avaxWallet.address
+      );
+      const feeRecipientBalanceAfter = await wrappedTokenContract.balanceOf(
+        avaxFeeWallet.address
       );
       const relayerEthBalanceAfter = await avaxRelayerWallet.getBalance();
       const recipientEthBalanceAfter = await avaxWallet.getBalance();
@@ -1621,12 +1701,17 @@ describe("Token Bridge Relayer", () => {
         // relayer balance changes
         expect(
           relayerBalanceAfter.sub(relayerBalanceBefore).toString()
-        ).to.equal(denormToNative.add(denormRelayerFee).toString());
+        ).to.equal("0");
         expect(
           relayerEthBalanceBefore
             .sub(relayerEthBalanceAfter)
             .gte(expectedEthBalanceChange)
         ).is.true;
+
+        // fee recipient balance changes
+        expect(
+          feeRecipientBalanceAfter.sub(feeRecipientBalanceBefore).toString()
+        ).to.equal(denormToNative.add(denormRelayerFee).toString());
       }
 
       // clear localVariables

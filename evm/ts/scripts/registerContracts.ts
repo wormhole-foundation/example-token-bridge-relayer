@@ -24,11 +24,21 @@ async function registerContract(
     return true;
   }
 
+  const overrides: Record<string, unknown> = {};
+  if (RELEASE_CHAIN_ID === 5) {
+    // Polygon
+    overrides.type = 0;
+    overrides.gasLimit = 60_000;
+  } else if (RELEASE_CHAIN_ID === 10) {
+    // Fantom
+    overrides.type = 0;
+  }
+
   // register the emitter
   let receipt: ethers.ContractReceipt;
   try {
     receipt = await relayer
-      .registerContract(chainId as ChainId, contract)
+      .registerContract(chainId as ChainId, contract, overrides)
       .then((tx: ethers.ContractTransaction) => tx.wait())
       .catch((msg: any) => {
         // should not happen

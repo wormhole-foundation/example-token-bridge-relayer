@@ -15,6 +15,7 @@ import {
   ITokenBridgeRelayer__factory,
   ITokenBridge__factory,
 } from "../src/ethers-contracts";
+import {SwapRateUpdate} from "../helpers/interfaces";
 import * as fs from "fs";
 import yargs from "yargs";
 
@@ -56,11 +57,21 @@ async function registerToken(
 ): Promise<boolean> {
   let result: boolean = false;
 
+  const overrides: Record<string, unknown> = {};
+  if (RELEASE_CHAIN_ID === 5) {
+    // Polygon
+    overrides.type = 0;
+    overrides.gasLimit = 81_000;
+  } else if (RELEASE_CHAIN_ID === 10) {
+    // Fantom
+    overrides.type = 0;
+  }
+
   // register the token
   let receipt: ethers.ContractReceipt;
   try {
     receipt = await relayer
-      .registerToken(RELEASE_CHAIN_ID, contract)
+      .registerToken(RELEASE_CHAIN_ID, contract, overrides)
       .then((tx: ethers.ContractTransaction) => tx.wait())
       .catch((msg: any) => {
         // should not happen
@@ -87,20 +98,23 @@ async function registerToken(
 
 async function updateSwapRate(
   relayer: ethers.Contract,
-  chainId: number,
-  contract: ethers.BytesLike,
-  swapRate: string
+  batch: SwapRateUpdate[]
 ): Promise<boolean> {
-  let result: boolean = false;
-
-  // convert swap rate into BigNumber
-  const swapRateToUpdate = ethers.BigNumber.from(swapRate);
+  const overrides: Record<string, unknown> = {};
+  if (RELEASE_CHAIN_ID === 5) {
+    // Polygon
+    overrides.type = 0;
+    overrides.gasLimit = 60_000 + 21_000 * batch.length;
+  } else if (RELEASE_CHAIN_ID === 10) {
+    // Fantom
+    overrides.type = 0;
+  }
 
   // register the emitter
   let receipt: ethers.ContractReceipt;
   try {
     receipt = await relayer
-      .updateSwapRate(RELEASE_CHAIN_ID, contract, swapRateToUpdate)
+      .updateSwapRate(RELEASE_CHAIN_ID, batch, overrides)
       .then((tx: ethers.ContractTransaction) => tx.wait())
       .catch((msg: any) => {
         // should not happen
@@ -108,19 +122,19 @@ async function updateSwapRate(
         return null;
       });
     console.log(
-      `Success: swap rate updated, chainId=${chainId}, token=${contract}, swapRate=${swapRate}, txHash=${receipt.transactionHash}`
+      `Success: swap rates updated, txHash=${receipt.transactionHash}`
     );
+    for (const update of batch) {
+      console.log(
+        `token: ${update.token}, swap rate: ${update.value.toString()}`
+      );
+    }
+
+    return true;
   } catch (e: any) {
     console.log(e);
+    return false;
   }
-
-  // query the contract and see if the token swap rate was set properly
-  const swapRateInContract: ethers.BigNumber = await relayer.swapRate(contract);
-  if (swapRateInContract.eq(swapRateToUpdate)) {
-    result = true;
-  }
-
-  return result;
 }
 
 async function updateMaxNativeSwapAmount(
@@ -134,11 +148,21 @@ async function updateMaxNativeSwapAmount(
   // convert max native into BigNumber
   const maxNativeToUpdate = ethers.BigNumber.from(maxNativeSwapAmount);
 
+  const overrides: Record<string, unknown> = {};
+  if (RELEASE_CHAIN_ID === 5) {
+    // Polygon
+    overrides.type = 0;
+    overrides.gasLimit = 60_000;
+  } else if (RELEASE_CHAIN_ID === 10) {
+    // Fantom
+    overrides.type = 0;
+  }
+
   // set the max native swap amount
   let receipt: ethers.ContractReceipt;
   try {
     receipt = await relayer
-      .updateMaxNativeSwapAmount(RELEASE_CHAIN_ID, contract, maxNativeToUpdate)
+      .updateMaxNativeSwapAmount(RELEASE_CHAIN_ID, contract, maxNativeToUpdate, overrides)
       .then((tx: ethers.ContractTransaction) => tx.wait())
       .catch((msg: any) => {
         // should not happen
@@ -161,6 +185,30 @@ async function updateMaxNativeSwapAmount(
   }
 
   return result;
+}
+
+async function getLocalTokenAddress(
+  tokenBridge: ethers.Contract,
+  chainId: number,
+  address: Uint8Array
+) {
+  // fetch the wrapped of native address
+  let localTokenAddress: string;
+  if (chainId == RELEASE_CHAIN_ID) {
+    localTokenAddress = tryUint8ArrayToNative(address, chainId as ChainId);
+  } else {
+    // fetch the wrapped address
+    localTokenAddress = await tokenBridge.wrappedAsset(chainId, address);
+    if (localTokenAddress == ZERO_ADDRESS) {
+      console.log(
+        `Failed: token not attested, chainId=${chainId}, token=${Buffer.from(
+          address
+        ).toString("hex")}`
+      );
+    }
+  }
+
+  return localTokenAddress;
 }
 
 async function main() {
@@ -195,6 +243,9 @@ async function main() {
     wallet
   );
 
+  // placeholder for swap rate batch
+  const swapRateUpdates: SwapRateUpdate[] = [];
+
   // loop through configured contracts and register tokens
   for (const chainIdString of Object.keys(tokenConfig)) {
     // chainId as a number
@@ -212,26 +263,12 @@ async function main() {
       // format the token address
       const formattedAddress = ethers.utils.arrayify("0x" + tokenContract);
 
-      // fetch the wrapped of native address
-      let localTokenAddress: string;
-      if (chainIdToRegister == RELEASE_CHAIN_ID) {
-        localTokenAddress = tryUint8ArrayToNative(
-          formattedAddress,
-          chainIdToRegister as ChainId
-        );
-      } else {
-        // fetch the wrapped address
-        localTokenAddress = await tokenBridge.wrappedAsset(
-          chainIdToRegister,
-          formattedAddress
-        );
-        if (localTokenAddress == ZERO_ADDRESS) {
-          console.log(
-            `Failed: token not attested, chainId=${chainIdString}, token=${tokenContract}`
-          );
-          continue;
-        }
-      }
+      // fetch the address on the target chain
+      const localTokenAddress = await getLocalTokenAddress(
+        tokenBridge,
+        chainIdToRegister,
+        formattedAddress
+      );
 
       // Query the contract and see if the token has been registered. If it hasn't,
       // register the token.
@@ -251,22 +288,8 @@ async function main() {
             `Failed: could not register token, chainId=${chainIdToRegister}`
           );
         }
-      }
-
-      // set the token -> USD swap rate
-      if (args.setSwapRates) {
-        const result: boolean = await updateSwapRate(
-          relayer,
-          chainIdToRegister,
-          localTokenAddress,
-          tokenConfig["swapRate"]
-        );
-
-        if (result === false) {
-          console.log(
-            `Failed: could not update swap rates, chainId=${chainIdToRegister}, token=${tokenContract}`
-          );
-        }
+      } else {
+        console.log("Token already registered.");
       }
 
       // set max native swap amount for each token
@@ -284,9 +307,28 @@ async function main() {
           );
         }
       }
+
+      // create SwapRateUpdate structs for each token
+      if (args.setSwapRates) {
+        swapRateUpdates.push({
+          token: localTokenAddress,
+          value: ethers.BigNumber.from(tokenConfig.swapRate),
+        });
+      }
     }
   }
 
+  // create token config array and register all of the tokens at once
+  if (args.setSwapRates) {
+    console.log("\n");
+    const result: boolean = await updateSwapRate(relayer, swapRateUpdates);
+    if (result === false) {
+      console.log("Failed to update swap rates.");
+    }
+  }
+
+  console.log("\n");
+  console.log("Accepted tokens list:");
   console.log(await relayer.getAcceptedTokensList());
 }
 

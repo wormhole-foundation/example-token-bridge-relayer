@@ -82,8 +82,16 @@ contract ContractScript is Script {
         // confirm that the token is registered
         require(relayer.isAcceptedToken(token), "not registered");
 
+        ITokenBridgeRelayer.SwapRateUpdate[] memory update =
+            new ITokenBridgeRelayer.SwapRateUpdate[](1);
+
+        update[0] = ITokenBridgeRelayer.SwapRateUpdate({
+            token: token,
+            value: swapRate
+        });
+
         // set the swap rate
-        relayer.updateSwapRate(relayer.chainId(), token, swapRate);
+        relayer.updateSwapRate(relayer.chainId(), update);
 
         // confirm state changes
         require(relayer.swapRate(token) == swapRate, "invalid swapRate");

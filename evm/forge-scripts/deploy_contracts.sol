@@ -27,13 +27,15 @@ contract ContractScript is Script {
         address tokenBridgeAddress = vm.envAddress("RELEASE_BRIDGE_ADDRESS");
         address wethAddress = vm.envAddress("RELEASE_WETH_ADDRESS");
         bool shouldUnwrapWeth = vm.envBool("RELEASE_UNWRAP_WETH");
+        address feeRecipient = vm.envAddress("RELEASE_FEE_RECIPIENT");
+        address ownerAssistant = vm.envAddress("RELEASE_OWNER_ASSISTANT");
 
         // deploy the contract and set up the contract
         TokenBridgeRelayer deployedRelayer = new TokenBridgeRelayer(
-            wormhole.chainId(),
-            address(wormhole),
             tokenBridgeAddress,
             wethAddress,
+            feeRecipient,
+            ownerAssistant,
             shouldUnwrapWeth
         );
 
@@ -42,6 +44,8 @@ contract ContractScript is Script {
 
         // verify getters
         require(relayer.chainId() == wormhole.chainId());
+        require(relayer.feeRecipient() == feeRecipient);
+        require(relayer.ownerAssistant() == relayer.ownerAssistant());
         require(address(relayer.wormhole()) == address(wormhole));
         require(address(relayer.tokenBridge()) == tokenBridgeAddress);
         require(address(relayer.WETH()) == wethAddress);

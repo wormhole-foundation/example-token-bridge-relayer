@@ -14,11 +14,21 @@ async function updateRelayerFee(
   // convert USD fee to a BigNumber
   const relayerFeeToUpdate = ethers.BigNumber.from(relayerFee);
 
+  const overrides: Record<string, unknown> = {};
+  if (RELEASE_CHAIN_ID === 5) {
+    // Polygon
+    overrides.type = 0;
+    overrides.gasLimit = 60_000;
+  } else if (RELEASE_CHAIN_ID === 10) {
+    // Fantom
+    overrides.type = 0;
+  }
+
   // update the relayerFee
   let receipt: ethers.ContractReceipt;
   try {
     receipt = await relayer
-      .updateRelayerFee(chainId, relayerFeeToUpdate)
+      .updateRelayerFee(chainId, relayerFeeToUpdate, overrides)
       .then((tx: ethers.ContractTransaction) => tx.wait())
       .catch((msg: any) => {
         // should not happen

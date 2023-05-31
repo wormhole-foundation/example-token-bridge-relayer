@@ -2,6 +2,7 @@
 pragma solidity ^0.8.17;
 
 import {IWETH} from "../src/interfaces/IWETH.sol";
+import {ITokenBridgeRelayer} from "../src/interfaces/ITokenBridgeRelayer.sol";
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -60,5 +61,22 @@ contract Helpers {
             abi.encodeWithSignature("decimals()")
         );
         decimals = abi.decode(queriedDecimals, (uint8));
+    }
+
+    function updateSwapRate(
+        ITokenBridgeRelayer relayer,
+        address token,
+        uint256 swapRate
+    ) internal {
+        ITokenBridgeRelayer.SwapRateUpdate[] memory update =
+            new ITokenBridgeRelayer.SwapRateUpdate[](1);
+
+        // create token -> swap rate struct
+        update[0] = ITokenBridgeRelayer.SwapRateUpdate({
+            token: token,
+            value: swapRate
+        });
+
+        relayer.updateSwapRate(relayer.chainId(), update);
     }
 }

@@ -18,6 +18,14 @@ abstract contract TokenBridgeRelayerGetters is TokenBridgeRelayerSetters {
         return _state.pendingOwner;
     }
 
+    function ownerAssistant() public view returns (address) {
+        return _state.ownerAssistant;
+    }
+
+    function feeRecipient() public view returns (address) {
+        return _state.feeRecipient;
+    }
+
     function wormhole() public view returns (IWormhole) {
         return IWormhole(_state.wormhole);
     }
@@ -36,6 +44,10 @@ abstract contract TokenBridgeRelayerGetters is TokenBridgeRelayerSetters {
 
     function chainId() public view returns (uint16) {
         return _state.chainId;
+    }
+
+    function getPaused() public view returns (bool) {
+        return _state.paused;
     }
 
     function getRegisteredContract(uint16 emitterChainId) public view returns (bytes32) {

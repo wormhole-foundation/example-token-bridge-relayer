@@ -2,6 +2,7 @@
 pragma solidity ^0.8.17;
 
 import {IWormhole} from "../interfaces/IWormhole.sol";
+import {ITokenBridge} from "../interfaces/ITokenBridge.sol";
 
 import "../libraries/BytesLib.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
@@ -19,25 +20,33 @@ import "./TokenBridgeRelayerMessages.sol";
 contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerMessages, ReentrancyGuard {
     using BytesLib for bytes;
 
+    // contract version
+    string public constant VERSION = "0.2.0";
+
     constructor(
-        uint16 chainId,
-        address wormhole,
         address tokenBridge_,
         address wethAddress,
+        address feeRecipient_,
+        address ownerAssistant_,
         bool unwrapWeth_
     ) {
-        require(chainId > 0, "invalid chainId");
-        require(wormhole != address(0), "invalid wormhole address");
         require(tokenBridge_ != address(0), "invalid token bridge address");
         require(wethAddress != address(0), "invalid weth address");
+        require(feeRecipient_ != address(0), "invalid fee recipient");
+        require(ownerAssistant_ != address(0), "invalid owner assistant");
 
         // set initial state
         setOwner(msg.sender);
-        setChainId(chainId);
-        setWormhole(wormhole);
+        setFeeRecipient(feeRecipient_);
         setTokenBridge(tokenBridge_);
         setWethAddress(wethAddress);
+        setOwnerAssistant(ownerAssistant_);
         setUnwrapWethFlag(unwrapWeth_);
+
+        // fetch wormhole info from token bridge
+        ITokenBridge bridge = ITokenBridge(tokenBridge_);
+        setChainId(bridge.chainId());
+        setWormhole(address(bridge.wormhole()));
 
         // set the initial swapRate/relayer precisions to 1e8
         setSwapRatePrecision(1e8);
@@ -94,7 +103,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         uint16 targetChain,
         bytes32 targetRecipient,
         uint32 batchId
-    ) public payable nonReentrant returns (uint64 messageSequence) {
+    ) public payable nonReentrant notPaused returns (uint64 messageSequence) {
         // Cache wormhole fee and confirm that the user has passed enough
         // value to cover the wormhole protocol fee.
         uint256 wormholeFee = wormhole().messageFee();
@@ -145,7 +154,7 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         uint16 targetChain,
         bytes32 targetRecipient,
         uint32 batchId
-    ) public payable returns (uint64 messageSequence) {
+    ) public payable notPaused returns (uint64 messageSequence) {
         require(unwrapWeth(), "WETH functionality not supported");
 
         // Cache wormhole fee and confirm that the user has passed enough
@@ -286,10 +295,10 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
     /**
      * @notice Calls Wormhole's Token Bridge contract to complete token transfers. Takes
      * custody of the wrapped (or released) tokens and sends the tokens to the target recipient.
-     * It pays the relayer in the minted token denomination. If requested by the user,
+     * It pays the fee recipient in the minted token denomination. If requested by the user,
      * it will perform a swap with the off-chain relayer to provide the user with native assets.
      * If the `token` being transferred is WETH, the contract will unwrap native assets and send
-     * the transferred amount to the recipient and pay the relayer in native assets.
+     * the transferred amount to the recipient and pay the fee recipient in native assets.
      * @dev reverts if:
      * - the transferred token is not accepted by this contract
      * - the transffered token is not attested on this blockchain's Token Bridge contract
@@ -364,13 +373,12 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
              *
              * Compute the amount of native assets to send the recipient.
              */
-            uint256 nativeAmountForRecipient;
             uint256 maxToNativeAllowed = calculateMaxSwapAmountIn(token);
             if (transferWithRelay.toNativeTokenAmount > maxToNativeAllowed) {
                 transferWithRelay.toNativeTokenAmount = maxToNativeAllowed;
             }
             // compute amount of native asset to pay the recipient
-            nativeAmountForRecipient = calculateNativeSwapAmountOut(
+            uint256 nativeAmountForRecipient = calculateNativeSwapAmountOut(
                 token,
                 transferWithRelay.toNativeTokenAmount
             );
@@ -421,11 +429,11 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
         uint256 amountForRelayer =
             transferWithRelay.targetRelayerFee + transferWithRelay.toNativeTokenAmount;
 
-        // pay the relayer if amountForRelayer > 0
+        // pay the fee recipient if amountForRelayer > 0
         if (amountForRelayer > 0) {
             SafeERC20.safeTransfer(
                 IERC20(token),
-                msg.sender,
+                feeRecipient(),
                 amountForRelayer
             );
         }
@@ -555,9 +563,9 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
             // transfer eth to recipient
             payable(recipient).transfer(amount - relayerFee);
 
-            // transfer relayer fee to the caller
+            // transfer relayer fee to the fee recipient
             if (relayerFee > 0) {
-                payable(msg.sender).transfer(relayerFee);
+                payable(feeRecipient()).transfer(relayerFee);
             }
         } else {
             // cache WETH instance
@@ -570,11 +578,11 @@ contract TokenBridgeRelayer is TokenBridgeRelayerGovernance, TokenBridgeRelayerM
                 amount - relayerFee
             );
 
-            // transfer relayer fee to the caller
+            // transfer relayer fee to the fee recipient
             if (relayerFee > 0) {
                 SafeERC20.safeTransfer(
                     IERC20(address(weth)),
-                    msg.sender,
+                    feeRecipient(),
                     relayerFee
                 );
             }

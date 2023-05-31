@@ -7,10 +7,12 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "./TokenBridgeRelayerGetters.sol";
+import "./TokenBridgeRelayerStructs.sol";
 
 abstract contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters {
     event OwnershipTransfered(address indexed oldOwner, address indexed newOwner);
-    event SwapRateUpdated(address indexed token, uint256 indexed swapRate);
+    event FeeRecipientUpdated(address indexed oldRecipient, address indexed newRecipient);
+    event SwapRateUpdated(TokenBridgeRelayerStructs.SwapRateUpdate[] indexed swapRates);
 
     /**
      * @notice Starts the ownership transfer process of the contracts. It saves
@@ -57,6 +59,49 @@ abstract contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters {
         setPendingOwner(address(0));
 
         emit OwnershipTransfered(currentOwner, newOwner);
+    }
+
+    /**
+     * @notice Updates the `ownerAssistant` state variable. This method can
+     * only be executed by the owner.
+     * @param chainId_ Wormhole chain ID.
+     * @param newAssistant Address of the new `ownerAssistant`.
+     */
+    function updateOwnerAssistant(
+        uint16 chainId_,
+        address newAssistant
+    ) public onlyOwner onlyCurrentChain(chainId_) {
+        require(
+            newAssistant != address(0),
+            "newAssistant cannot equal address(0)"
+        );
+
+        // update the owner assistant
+        setOwnerAssistant(newAssistant);
+    }
+
+    /**
+     * @notice Updates the `feeRecipient` state variable. This method can
+     * only be executed by the owner.
+     * @param chainId_ Wormhole chain ID.
+     * @param newFeeRecipient Address of the new `feeRecipient`.
+     */
+    function updateFeeRecipient(
+        uint16 chainId_,
+        address newFeeRecipient
+    ) public onlyOwner onlyCurrentChain(chainId_) {
+        require(
+            newFeeRecipient != address(0),
+            "newFeeRecipient cannot equal address(0)"
+        );
+
+        // cache current fee recipient
+        address currentFeeRecipient = feeRecipient();
+
+        // update the fee recipient
+        setFeeRecipient(newFeeRecipient);
+
+        emit FeeRecipientUpdated(currentFeeRecipient, newFeeRecipient);
     }
 
     /**
@@ -141,7 +186,7 @@ abstract contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters {
     function updateRelayerFee(
         uint16 chainId_,
         uint256 amount
-    ) public onlyOwner {
+    ) public onlyOwnerOrAssistant {
         require(chainId_ != chainId(), "invalid chain");
         require(
             getRegisteredContract(chainId_) != bytes32(0),
@@ -166,26 +211,42 @@ abstract contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters {
     }
 
     /**
-     * @notice Updates the swap rate for specified token in USD.
+     * @notice Updates the swap rates for a batch of tokens.
      * @param chainId_ Wormhole chain ID.
-     * @param token Address of the token to update the conversion rate for.
-     * @param swapRate The token -> USD conversion rate.
+     * @param swapRateUpdate Array of structs with token -> swap rate pairs.
      * @dev The swapRate is the conversion rate using asset prices denominated in
      * USD multiplied by the swapRatePrecision. For example, if the conversion
      * rate is $15 and the swapRatePrecision is 1000000, the swapRate should be set
      * to 15000000.
+     *
+     * NOTE: This function does NOT check if a token is specified twice. It is up to the
+     * owner to correctly construct the `SwapRateUpdate` struct.
      */
     function updateSwapRate(
         uint16 chainId_,
-        address token,
-        uint256 swapRate
-    ) public onlyOwner onlyCurrentChain(chainId_) {
-        require(isAcceptedToken(token), "token not accepted");
-        require(swapRate > 0, "swap rate must be nonzero");
+        TokenBridgeRelayerStructs.SwapRateUpdate[] calldata swapRateUpdate
+    ) public onlyOwnerOrAssistant onlyCurrentChain(chainId_) {
+        // cache length of swapRateUpdate array
+        uint256 numTokens = swapRateUpdate.length;
+        require(numTokens > 0, "invalid array size");
 
-        setSwapRate(token, swapRate);
+        // set the swap rate for each token
+        for (uint256 i = 0; i < numTokens;) {
+            require(
+                isAcceptedToken(swapRateUpdate[i].token),
+                "token not accepted"
+            );
+            require(
+                swapRateUpdate[i].value > 0,
+                "swap rate must be nonzero"
+            );
 
-        emit SwapRateUpdated(token, swapRate);
+            setSwapRate(swapRateUpdate[i].token, swapRateUpdate[i].value);
+
+            unchecked { i += 1; }
+        }
+
+        emit SwapRateUpdated(swapRateUpdate);
     }
 
     /**
@@ -219,13 +280,42 @@ abstract contract TokenBridgeRelayerGovernance is TokenBridgeRelayerGetters {
         setMaxNativeSwapAmount(token, maxAmount);
     }
 
+    /**
+     * @notice Sets the pause state of the relayer. If paused, token transfer
+     * requests are blocked. In flight transfers, i.e. those that have a VAA
+     * emitted, can still be processed if paused.
+     * @param chainId_ Wormhole chain ID
+     * @param paused If true, requests for token transfers will be blocked
+     * and no VAAs will be generated.
+     */
+    function setPauseForTransfers(
+        uint16 chainId_,
+        bool paused
+    ) public onlyOwner onlyCurrentChain(chainId_) {
+        setPaused(paused);
+    }
+
     modifier onlyOwner() {
         require(owner() == msg.sender, "caller not the owner");
         _;
     }
 
+    modifier onlyOwnerOrAssistant() {
+        require(
+            owner() == msg.sender ||
+            ownerAssistant() == msg.sender,
+            "caller not the owner or assistant"
+        );
+        _;
+    }
+
     modifier onlyCurrentChain(uint16 chainId_) {
         require(chainId() == chainId_, "wrong chain");
+        _;
+    }
+
+    modifier notPaused() {
+        require(!getPaused(), "relayer is paused");
         _;
     }
 }

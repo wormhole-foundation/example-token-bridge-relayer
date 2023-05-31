@@ -11,11 +11,20 @@ abstract contract TokenBridgeRelayerStorage {
         // boolean to determine if weth is unwrappable
         bool unwrapWeth;
 
+        // if true, token transfer requests are blocked
+        bool paused;
+
         // address of WETH on this chain
         address wethAddress;
 
         // owner of this contract
         address owner;
+
+        // address that can update swap rates and relayer fees
+        address ownerAssistant;
+
+        // recipient of relayer fees
+        address feeRecipient;
 
         // intermediate state when transfering contract ownership
         address pendingOwner;

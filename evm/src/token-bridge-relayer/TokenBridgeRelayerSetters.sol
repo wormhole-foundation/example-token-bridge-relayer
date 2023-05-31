@@ -12,6 +12,14 @@ abstract contract TokenBridgeRelayerSetters is TokenBridgeRelayerState {
         _state.pendingOwner = pendingOwner_;
     }
 
+    function setOwnerAssistant(address ownerAssistant_) internal {
+        _state.ownerAssistant = ownerAssistant_;
+    }
+
+    function setFeeRecipient(address feeRecipient_) internal {
+        _state.feeRecipient = feeRecipient_;
+    }
+
     function setWormhole(address wormhole_) internal {
         _state.wormhole = payable(wormhole_);
     }
@@ -30,6 +38,10 @@ abstract contract TokenBridgeRelayerSetters is TokenBridgeRelayerState {
 
     function setChainId(uint16 chainId_) internal {
         _state.chainId = chainId_;
+    }
+
+    function setPaused(bool paused) internal {
+        _state.paused = paused;
     }
 
     function _registerContract(uint16 chainId_, bytes32 contract_) internal {

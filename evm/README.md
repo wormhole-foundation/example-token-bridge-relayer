@@ -37,9 +37,11 @@ Before deploying the contracts, create an environment file in the `env/` directo
 export RPC=""
 export RELEASE_WORMHOLE_ADDRESS=
 export RELEASE_BRIDGE_ADDRESS=
-export RELEASE_SWAP_RATE_PRECISION=
-export RELEASE_RELAYER_FEE_PRECISION=
 export RELEASE_WORMHOLE_CHAIN_ID=
+export RELEASE_WETH_ADDRESS=
+export RELEASE_OWNER_ASSISTANT=
+export RELEASE_FEE_RECIPIENT=
+export RELEASE_UNWRAP_WETH=
 ```
 
 Then deploy the contracts by executing the following command:
