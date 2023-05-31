@@ -57,11 +57,21 @@ async function registerToken(
 ): Promise<boolean> {
   let result: boolean = false;
 
+  const overrides: Record<string, unknown> = {};
+  if (RELEASE_CHAIN_ID === 5) {
+    // Polygon
+    overrides.type = 0;
+    overrides.gasLimit = 81_000;
+  } else if (RELEASE_CHAIN_ID === 10) {
+    // Fantom
+    overrides.type = 0;
+  }
+
   // register the token
   let receipt: ethers.ContractReceipt;
   try {
     receipt = await relayer
-      .registerToken(RELEASE_CHAIN_ID, contract)
+      .registerToken(RELEASE_CHAIN_ID, contract, overrides)
       .then((tx: ethers.ContractTransaction) => tx.wait())
       .catch((msg: any) => {
         // should not happen
@@ -90,11 +100,21 @@ async function updateSwapRate(
   relayer: ethers.Contract,
   batch: SwapRateUpdate[]
 ): Promise<boolean> {
+  const overrides: Record<string, unknown> = {};
+  if (RELEASE_CHAIN_ID === 5) {
+    // Polygon
+    overrides.type = 0;
+    overrides.gasLimit = 60_000;
+  } else if (RELEASE_CHAIN_ID === 10) {
+    // Fantom
+    overrides.type = 0;
+  }
+
   // register the emitter
   let receipt: ethers.ContractReceipt;
   try {
     receipt = await relayer
-      .updateSwapRate(RELEASE_CHAIN_ID, batch)
+      .updateSwapRate(RELEASE_CHAIN_ID, batch, overrides)
       .then((tx: ethers.ContractTransaction) => tx.wait())
       .catch((msg: any) => {
         // should not happen
@@ -128,11 +148,21 @@ async function updateMaxNativeSwapAmount(
   // convert max native into BigNumber
   const maxNativeToUpdate = ethers.BigNumber.from(maxNativeSwapAmount);
 
+  const overrides: Record<string, unknown> = {};
+  if (RELEASE_CHAIN_ID === 5) {
+    // Polygon
+    overrides.type = 0;
+    overrides.gasLimit = 60_000;
+  } else if (RELEASE_CHAIN_ID === 10) {
+    // Fantom
+    overrides.type = 0;
+  }
+
   // set the max native swap amount
   let receipt: ethers.ContractReceipt;
   try {
     receipt = await relayer
-      .updateMaxNativeSwapAmount(RELEASE_CHAIN_ID, contract, maxNativeToUpdate)
+      .updateMaxNativeSwapAmount(RELEASE_CHAIN_ID, contract, maxNativeToUpdate, overrides)
       .then((tx: ethers.ContractTransaction) => tx.wait())
       .catch((msg: any) => {
         // should not happen
