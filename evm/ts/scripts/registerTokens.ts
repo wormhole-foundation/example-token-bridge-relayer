@@ -61,7 +61,7 @@ async function registerToken(
   if (RELEASE_CHAIN_ID === 5) {
     // Polygon
     overrides.type = 0;
-    overrides.gasLimit = 81_000;
+    overrides.gasLimit = 96_000;
   } else if (RELEASE_CHAIN_ID === 10) {
     // Fantom
     overrides.type = 0;
@@ -104,7 +104,7 @@ async function updateSwapRate(
   if (RELEASE_CHAIN_ID === 5) {
     // Polygon
     overrides.type = 0;
-    overrides.gasLimit = 60_000 + 21_000 * batch.length;
+    overrides.gasLimit = 64_000 + 23_000 * batch.length;
   } else if (RELEASE_CHAIN_ID === 10) {
     // Fantom
     overrides.type = 0;
