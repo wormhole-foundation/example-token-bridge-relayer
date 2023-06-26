@@ -140,4 +140,12 @@ pub enum TokenBridgeRelayerError {
     #[msg("TokenAlreadyRegistered")]
     /// Token is already registered.
     TokenAlreadyRegistered,
+
+    #[msg("TokenFeeCalculationError")]
+    /// Token fee overflow.
+    FeeCalculationError,
+
+    #[msg("InsufficientFunds")]
+    /// Insufficient funds for outbound transfer.
+    InsufficientFunds,
 }

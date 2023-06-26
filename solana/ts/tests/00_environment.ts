@@ -323,12 +323,15 @@ describe(" 0: Wormhole", () => {
         payer.publicKey
       );
 
+      // Scale the mint amount by the wrapped decimals (max 8).
+      const mintAmount = defaultMintAmount * 10n ** BigInt(8);
+
       const signedMsg = await expect(
         signAndPost(
           ethereumTokenBridge.publishTransferTokens(
             tryNativeToHexString(WETH_ADDRESS, "ethereum"),
             CHAINS.ethereum, // tokenChain
-            defaultMintAmount,
+            mintAmount,
             CHAINS.solana, // recipientChain
             destination.toBuffer().toString("hex"),
             0n //fee
@@ -347,7 +350,7 @@ describe(" 0: Wormhole", () => {
       );
 
       const {amount} = await getAccount(connection, destination);
-      expect(amount).equals(defaultMintAmount);
+      expect(amount).equals(mintAmount);
     });
   });
 

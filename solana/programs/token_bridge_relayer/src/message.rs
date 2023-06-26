@@ -2,7 +2,8 @@ use anchor_lang::{AnchorDeserialize, AnchorSerialize};
 use std::io;
 use wormhole_anchor_sdk::token_bridge;
 
-const PAYLOAD_ID_HELLO: u8 = 1;
+const PAYLOAD_ID_TRANSFER_WITH_RELAY: u8 = 1;
+pub const PAD_U64: usize = 24;
 
 #[derive(Clone, Copy)]
 /// Expected message types for this program. Only valid payloads are:
@@ -10,14 +11,26 @@ const PAYLOAD_ID_HELLO: u8 = 1;
 ///
 /// Payload IDs are encoded as u8.
 pub enum TokenBridgeRelayerMessage {
-    Hello { recipient: [u8; 32] },
+    TransferWithRelay {
+        target_relayer_fee: u64,
+        to_native_token_amount: u64,
+        recipient: [u8; 32],
+    },
 }
 
 impl AnchorSerialize for TokenBridgeRelayerMessage {
     fn serialize<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
         match self {
-            TokenBridgeRelayerMessage::Hello { recipient } => {
-                PAYLOAD_ID_HELLO.serialize(writer)?;
+            TokenBridgeRelayerMessage::TransferWithRelay {
+                target_relayer_fee,
+                to_native_token_amount,
+                recipient
+            } => {
+                PAYLOAD_ID_TRANSFER_WITH_RELAY.serialize(writer)?;
+                [0u8; PAD_U64].serialize(writer)?;
+                target_relayer_fee.to_be_bytes().serialize(writer)?;
+                [0u8; PAD_U64].serialize(writer)?;
+                to_native_token_amount.to_be_bytes().serialize(writer)?;
                 recipient.serialize(writer)
             }
         }
@@ -26,10 +39,39 @@ impl AnchorSerialize for TokenBridgeRelayerMessage {
 
 impl AnchorDeserialize for TokenBridgeRelayerMessage {
     fn deserialize(buf: &mut &[u8]) -> io::Result<Self> {
-        match buf[0] {
-            PAYLOAD_ID_HELLO => Ok(TokenBridgeRelayerMessage::Hello {
-                recipient: <[u8; 32]>::deserialize(&mut &buf[1..33])?,
-            }),
+        match u8::deserialize(buf)? {
+            PAYLOAD_ID_TRANSFER_WITH_RELAY => {
+                const ZEROS: [u8; 24] = [0; 24];
+
+                // Target relayer fee.
+                let target_relayer_fee = {
+                    if <[u8; 24]>::deserialize(buf)? != ZEROS {
+                        return Err(io::Error::new(io::ErrorKind::InvalidInput, "u64 overflow"));
+                    }
+
+                    let out = <[u8; 8]>::deserialize(buf)?;
+                    u64::from_be_bytes(out)
+                };
+
+                // To native token amount.
+                let to_native_token_amount = {
+                    if <[u8; 24]>::deserialize(buf)? != ZEROS {
+                        return Err(io::Error::new(io::ErrorKind::InvalidInput, "u64 overflow"));
+                    }
+
+                    let out = <[u8; 8]>::deserialize(buf)?;
+                    u64::from_be_bytes(out)
+                };
+
+                // Recipient.
+                let recipient = <[u8; 32]>::deserialize(buf)?;
+
+                Ok(TokenBridgeRelayerMessage::TransferWithRelay {
+                    target_relayer_fee,
+                    to_native_token_amount,
+                    recipient,
+                })
+            }
             _ => Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "invalid payload ID",
@@ -49,26 +91,35 @@ pub mod test {
     #[test]
     fn test_message_alive() -> Result<()> {
         let recipient = Pubkey::new_unique().to_bytes();
-        let msg = TokenBridgeRelayerMessage::Hello { recipient };
+        let to_native_token_amount: u64= 100000000;
+        let target_relayer_fee: u64 = 6900000;
+
+        // Create the message.
+        let msg = TokenBridgeRelayerMessage::TransferWithRelay {
+            target_relayer_fee,
+            to_native_token_amount,
+            recipient
+        };
 
         // Serialize program ID above.
         let mut encoded = Vec::new();
         msg.serialize(&mut encoded)?;
 
-        assert_eq!(encoded.len(), size_of::<[u8; 32]>() + size_of::<u8>());
+        assert_eq!(encoded.len(), size_of::<[u8; 32]>() * 3 + size_of::<u8>());
 
         // Verify Payload ID.
-        assert_eq!(encoded[0], PAYLOAD_ID_HELLO);
-
-        // Verify Program ID.
-        let mut encoded_recipient = [0u8; 32];
-        encoded_recipient.copy_from_slice(&encoded[1..33]);
-        assert_eq!(encoded_recipient, recipient);
+        assert_eq!(encoded[0], PAYLOAD_ID_TRANSFER_WITH_RELAY);
 
         // Now deserialize the encoded message.
-        let TokenBridgeRelayerMessage::Hello {
-            recipient: decoded_recipient,
+        let TokenBridgeRelayerMessage::TransferWithRelay {
+            target_relayer_fee: decoded_target_relayer_fee,
+            to_native_token_amount: decoded_to_native_token_amount,
+            recipient: decoded_recipient
         } = TokenBridgeRelayerMessage::deserialize(&mut encoded.as_slice())?;
+
+        // Verify results.
+        assert_eq!(decoded_target_relayer_fee, target_relayer_fee);
+        assert_eq!(decoded_to_native_token_amount, to_native_token_amount);
         assert_eq!(decoded_recipient, recipient);
 
         Ok(())

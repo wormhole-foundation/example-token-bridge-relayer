@@ -1,8 +1,9 @@
-import {ChainId } from "@certusone/wormhole-sdk";
+import {ChainId} from "@certusone/wormhole-sdk";
 
 export interface SendTokensParams {
-  batchId: number;
-  amount: bigint;
+  amount: number;
+  toNativeTokenAmount: number;
   recipientAddress: Buffer;
   recipientChain: ChainId;
+  batchId: number;
 }

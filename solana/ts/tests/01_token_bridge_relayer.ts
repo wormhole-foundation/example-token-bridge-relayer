@@ -30,8 +30,13 @@ import {
   boilerPlateReduction,
   fetchTestTokens,
   getRandomInt,
+  verifyRelayerMessage,
+  tokenBridgeTransform,
+  tokenBridgeNormalizeAmount,
+  calculateRelayerFee,
 } from "./helpers";
 
+// The default pecision value used in the token bridge relayer program.
 const CONTRACT_PRECISION = 100000000;
 const TOKEN_BRIDGE_RELAYER_PID = programIdFromEnvVar(
   "TOKEN_BRIDGE_RELAYER_PROGRAM_ID"
@@ -65,8 +70,6 @@ describe(" 1: Token Bridge Relayer", function () {
     connection,
     TOKEN_BRIDGE_RELAYER_PID
   );
-
-  console.log(program.programId);
 
   describe("Initialize Program", function () {
     // Expected relayer fee and swap rate precisions.
@@ -369,6 +372,7 @@ describe(" 1: Token Bridge Relayer", function () {
     it("Finally Update Relayer Fee Precision", async function () {
       await expectIxToSucceed(createUpdateRelayerFeePrecisionIx());
 
+      // Verify state changes.
       const redeemerConfigData = await tokenBridgeRelayer.getRedeemerConfigData(
         connection,
         TOKEN_BRIDGE_RELAYER_PID
@@ -376,6 +380,12 @@ describe(" 1: Token Bridge Relayer", function () {
       expect(redeemerConfigData.relayerFeePrecision).equals(
         relayerFeePrecision
       );
+
+      const senderConfigData = await tokenBridgeRelayer.getRedeemerConfigData(
+        connection,
+        TOKEN_BRIDGE_RELAYER_PID
+      );
+      expect(senderConfigData.relayerFeePrecision).equals(relayerFeePrecision);
 
       // Set the precision back to the default.
       await expectIxToSucceed(
@@ -420,11 +430,18 @@ describe(" 1: Token Bridge Relayer", function () {
     it("Finally Update Swap Rate Precision", async function () {
       await expectIxToSucceed(createUpdateSwapRatePrecisionIx());
 
+      // Verify state changes.
       const redeemerConfigData = await tokenBridgeRelayer.getRedeemerConfigData(
         connection,
         TOKEN_BRIDGE_RELAYER_PID
       );
       expect(redeemerConfigData.swapRatePrecision).equals(swapRatePrecision);
+
+      const senderConfigData = await tokenBridgeRelayer.getSenderConfigData(
+        connection,
+        TOKEN_BRIDGE_RELAYER_PID
+      );
+      expect(senderConfigData.swapRatePrecision).equals(swapRatePrecision);
 
       // Set the precision back to the default.
       await expectIxToSucceed(
@@ -615,7 +632,7 @@ describe(" 1: Token Bridge Relayer", function () {
     });
   });
 
-  fetchTestTokens().forEach(([isNative, decimals, _, mint]) => {
+  fetchTestTokens().forEach(([isNative, decimals, _1, mint, _2]) => {
     describe(`For ${
       isNative ? "Native" : "Wrapped"
     } With ${decimals} Decimals`, function () {
@@ -1003,280 +1020,181 @@ describe(" 1: Token Bridge Relayer", function () {
     });
   });
 
-  // const batchId = 0;
-  // const sendAmount = 31337n; //we are sending once
-  // const recipientAddress = Buffer.alloc(32, "1337beef", "hex");
+  describe("Transfer Tokens With Relay Business Logic", function () {
+    const batchId = 0;
+    const sendAmount = 6900000000000; // we are sending once
+    const toNativeTokenAmount = 1000000000;
+    const recipientAddress = Buffer.alloc(32, "1337beef", "hex");
+    const initialRelayerFee = 100000000; // $1.00
 
-  // const getWormholeSequence = async () => (
-  //     await wormhole.getProgramSequenceTracker(connection, TOKEN_BRIDGE_PID, CORE_BRIDGE_PID)
-  //   ).value() + 1n;
+    const getWormholeSequence = async () =>
+      (
+        await wormhole.getProgramSequenceTracker(
+          connection,
+          TOKEN_BRIDGE_PID,
+          CORE_BRIDGE_PID
+        )
+      ).value() + 1n;
 
-  // const verifyWormholeMessage = async (sequence: bigint) => {
-  //   const payload =
-  //     parseTokenTransferPayload(
-  //       (await wormhole.getPostedMessage(
-  //         connection,
-  //         tokenBridgeRelayer.deriveTokenTransferMessageKey(TOKEN_BRIDGE_RELAYER_PID, sequence)
-  //       )).message.payload
-  //     ).tokenTransferPayload;
+    const verifyTmpTokenAccountDoesNotExist = async (mint: PublicKey) => {
+      const tmpTokenAccountKey = tokenBridgeRelayer.deriveTmpTokenAccountKey(
+        TOKEN_BRIDGE_RELAYER_PID,
+        mint
+      );
+      await expect(getAccount(connection, tmpTokenAccountKey)).to.be.rejected;
+    };
 
-  //   expect(payload.readUint8(0)).equals(1); // payload ID
-  //   expect(recipientAddress).deep.equals(payload.subarray(1, 33));
-  // }
+    const getTokenBalance = async (tokenAccount: PublicKey) =>
+      Number((await getAccount(connection, tokenAccount)).amount);
 
-  // const verifyTmpTokenAccountDoesNotExist = async (mint: PublicKey) => {
-  //   const tmpTokenAccountKey = tokenBridgeRelayer.deriveTmpTokenAccountKey(TOKEN_BRIDGE_RELAYER_PID, mint);
-  //   await expect(getAccount(connection, tmpTokenAccountKey)).to.be.rejected;
-  // }
+    fetchTestTokens().forEach(
+      ([isNative, decimals, tokenAddress, mint, swapRate]) => {
+        describe(`For ${
+          isNative ? "Native" : "Wrapped"
+        } With ${decimals} Decimals`, function () {
+          const recipientTokenAccount = getAssociatedTokenAddressSync(
+            mint,
+            payer.publicKey
+          );
 
-  // const getTokenBalance = async (tokenAccount: PublicKey) =>
-  //   (await getAccount(connection, tokenAccount)).amount;
+          describe(`Send Tokens With Payload`, function () {
+            const createSendTokensWithPayloadIx = (opts?: {
+              sender?: PublicKey;
+              amount?: number;
+              toNativeAmount: number;
+              recipientAddress?: Buffer;
+              recipientChain?: ChainId;
+            }) =>
+              (isNative
+                ? tokenBridgeRelayer.createSendNativeTokensWithPayloadInstruction
+                : tokenBridgeRelayer.createSendWrappedTokensWithPayloadInstruction)(
+                connection,
+                TOKEN_BRIDGE_RELAYER_PID,
+                opts?.sender ?? payer.publicKey,
+                TOKEN_BRIDGE_PID,
+                CORE_BRIDGE_PID,
+                mint,
+                {
+                  amount: opts?.amount ?? sendAmount,
+                  toNativeTokenAmount:
+                    opts?.toNativeAmount ?? toNativeTokenAmount,
+                  recipientAddress: opts?.recipientAddress ?? recipientAddress,
+                  recipientChain: opts?.recipientChain ?? foreignChain,
+                  batchId: batchId,
+                }
+              );
 
-  // ([
-  //   [
-  //     false,
-  //     18,
-  //     tryNativeToHexString(WETH_ADDRESS, foreignChain),
-  //     deriveWrappedMintKey(TOKEN_BRIDGE_PID, foreignChain, WETH_ADDRESS)
-  //   ],
-  //   ...(Array.from(MINTS_WITH_DECIMALS.entries())
-  //     .map(([decimals, {publicKey}]): [boolean, number, string, PublicKey] =>
-  //       [
-  //         true,
-  //         decimals,
-  //         publicKey.toBuffer().toString("hex"),
-  //         publicKey
-  //     ])
-  //   )
-  // ] as [boolean, number, string, PublicKey][])
-  // .forEach(([isNative, decimals, tokenAddress, mint]) => {
-  //   describe(`For ${isNative ? "Native" : "Wrapped"} With ${decimals} Decimals`, function() {
-  //     const recipientTokenAccount = getAssociatedTokenAddressSync(mint, payer.publicKey);
-  //     // We treat amount as if it was specified with a precision of 8 decimals
-  //     const truncation = (isNative ? 10n ** BigInt(decimals - 8) : 1n);
-  //     //we send once, but we receive twice, hence /2, and w also have to adjust for truncation
-  //     const receiveAmount = ((sendAmount / 2n) / truncation) * truncation;
+            it("Set the Swap Rate", async function () {
+              // Set the swap rate.
+              const createUpdateSwapRateIx =
+                await tokenBridgeRelayer.createUpdateSwapRateInstruction(
+                  connection,
+                  TOKEN_BRIDGE_RELAYER_PID,
+                  payer.publicKey,
+                  mint,
+                  new BN(swapRate)
+                );
+              await expectIxToSucceed(createUpdateSwapRateIx);
+            });
 
-  //     describe(`Send Tokens With Payload`, function() {
-  //       const createSendTokensWithPayloadIx = (opts?: {
-  //         sender?: PublicKey,
-  //         amount?: bigint,
-  //         recipientAddress?: Buffer,
-  //         recipientChain?: ChainId,
-  //       }) =>
-  //         ( isNative
-  //         ? tokenBridgeRelayer.createSendNativeTokensWithPayloadInstruction
-  //         : tokenBridgeRelayer.createSendWrappedTokensWithPayloadInstruction
-  //         )(
-  //         connection,
-  //         TOKEN_BRIDGE_RELAYER_PID,
-  //         opts?.sender ?? payer.publicKey,
-  //         TOKEN_BRIDGE_PID,
-  //         CORE_BRIDGE_PID,
-  //         mint,
-  //         {
-  //           batchId,
-  //           amount: opts?.amount ?? sendAmount,
-  //           recipientAddress: opts?.recipientAddress ?? recipientAddress,
-  //           recipientChain: opts?.recipientChain ?? foreignChain,
-  //         }
-  //       );
+            it("Set the Initial Relayer Fee", async function () {
+              // Set the initial relayer fee.
+              const createUpdateRelayerFeeIx =
+                await tokenBridgeRelayer.createUpdateRelayerFeeInstruction(
+                  connection,
+                  TOKEN_BRIDGE_RELAYER_PID,
+                  payer.publicKey,
+                  foreignChain,
+                  new BN(initialRelayerFee)
+                );
+              await expectIxToSucceed(createUpdateRelayerFeeIx);
+            });
 
-  //       if (isNative && decimals > 8)
-  //         it("Cannot Send Amount Less Than Bridgeable", async function() {
-  //           await expectIxToFailWithError(
-  //             await createSendTokensWithPayloadIx({amount: 9n}),
-  //             "ZeroBridgeAmount"
-  //           );
-  //         });
+            //       if (isNative && decimals > 8)
+            //         it("Cannot Send Amount Less Than Bridgeable", async function() {
+            //           await expectIxToFailWithError(
+            //             await createSendTokensWithPayloadIx({amount: 9n}),
+            //             "ZeroBridgeAmount"
+            //           );
+            //         });
 
-  //       it("Cannot Send To Unregistered Foreign Contract", async function() {
-  //         await expectIxToFailWithError(
-  //           await createSendTokensWithPayloadIx({recipientChain: invalidChain}),
-  //           "AccountNotInitialized"
-  //         );
-  //       });
+            //       it("Cannot Send To Unregistered Foreign Contract", async function() {
+            //         await expectIxToFailWithError(
+            //           await createSendTokensWithPayloadIx({recipientChain: invalidChain}),
+            //           "AccountNotInitialized"
+            //         );
+            //       });
 
-  //       [CHAINS.unset, CHAINS.solana].forEach((recipientChain) =>
-  //         it(`Cannot Send To Chain ID == ${recipientChain}`, async function() {
-  //           await expectIxToFailWithError(
-  //             await createSendTokensWithPayloadIx({recipientChain}),
-  //             "AnchorError caused by account: foreign_contract. Error Code: AccountNotInitialized"
-  //           );
-  //         })
-  //       );
+            //       [CHAINS.unset, CHAINS.solana].forEach((recipientChain) =>
+            //         it(`Cannot Send To Chain ID == ${recipientChain}`, async function() {
+            //           await expectIxToFailWithError(
+            //             await createSendTokensWithPayloadIx({recipientChain}),
+            //             "AnchorError caused by account: foreign_contract. Error Code: AccountNotInitialized"
+            //           );
+            //         })
+            //       );
 
-  //       it("Cannot Send To Zero Address", async function() {
-  //         await expectIxToFailWithError(
-  //           await createSendTokensWithPayloadIx({recipientAddress: Buffer.alloc(32)}),
-  //           "InvalidRecipient"
-  //         );
-  //       });
+            //       it("Cannot Send To Zero Address", async function() {
+            //         await expectIxToFailWithError(
+            //           await createSendTokensWithPayloadIx({recipientAddress: Buffer.alloc(32)}),
+            //           "InvalidRecipient"
+            //         );
+            //       });
 
-  //       it("Finally Send Tokens With Payload", async function() {
-  //         const sequence = await getWormholeSequence();
+            it("Finally Send Tokens With Payload", async function () {
+              const sequence = await getWormholeSequence();
 
-  //         const balanceBefore = await getTokenBalance(recipientTokenAccount);
-  //         //depending on pda derivations, we can exceed our 200k compute units budget
-  //         const computeUnits = 250_000;
-  //         await expectIxToSucceed(createSendTokensWithPayloadIx(), computeUnits);
-  //         const balanceChange = balanceBefore - await getTokenBalance(recipientTokenAccount);
-  //         expect(balanceChange).equals((sendAmount / truncation) * truncation);
+              // Fetch the token balance before the transfer.
+              const balanceBefore = await getTokenBalance(
+                recipientTokenAccount
+              );
 
-  //         await verifyWormholeMessage(sequence);
-  //         await verifyTmpTokenAccountDoesNotExist(mint);
-  //       });
-  //     });
+              // Attempt to send the transfer. Depending on pda derivations, we can
+              // exceed our 200k compute units budget.
+              await expectIxToSucceed(
+                createSendTokensWithPayloadIx(),
+                250_000 // compute units
+              );
 
-  //     const publishAndSign = (opts?: {foreignContractAddress?: Buffer}) => {
-  //       const tokenTransferPayload = (() => {
-  //         const buf = Buffer.alloc(33);
-  //         buf.writeUInt8(1, 0); // payload ID
-  //         payer.publicKey.toBuffer().copy(buf, 1); // payer is always recipient
-  //         return buf;
-  //       })();
+              // Calculate the balance change and confirm it matches the expected.
+              const balanceChange =
+                balanceBefore - (await getTokenBalance(recipientTokenAccount));
+              expect(balanceChange).equals(
+                tokenBridgeTransform(Number(sendAmount), decimals)
+              );
 
-  //       const published = foreignTokenBridge.publishTransferTokensWithPayload(
-  //         tokenAddress,
-  //         isNative ? CHAINS.solana : foreignChain, // tokenChain
-  //         receiveAmount / truncation, //adjust for decimals
-  //         CHAINS.solana, // recipientChain
-  //         TOKEN_BRIDGE_RELAYER_PID.toBuffer().toString("hex"),
-  //         opts?.foreignContractAddress ?? foreignContractAddress,
-  //         tokenTransferPayload,
-  //         batchId
-  //       );
-  //       published[51] = 3;
+              // Normalize the to native token amount.
+              const expectedToNativeAmount = tokenBridgeNormalizeAmount(
+                toNativeTokenAmount,
+                decimals
+              );
 
-  //       return guardianSign(published);
-  //     };
+              // Calculate the expected target relayer fee and normalize it.
+              const expectedFee = tokenBridgeNormalizeAmount(
+                await calculateRelayerFee(
+                  connection,
+                  program.programId,
+                  foreignChain,
+                  decimals,
+                  mint
+                ),
+                decimals
+              );
 
-  //     const createRedeemTransferWithPayloadIx = (sender: PublicKey, signedMsg: Buffer) =>
-  //       ( isNative
-  //       ? tokenBridgeRelayer.createRedeemNativeTransferWithPayloadInstruction
-  //       : tokenBridgeRelayer.createRedeemWrappedTransferWithPayloadInstruction
-  //       )(
-  //         connection,
-  //         TOKEN_BRIDGE_RELAYER_PID,
-  //         sender,
-  //         TOKEN_BRIDGE_PID,
-  //         CORE_BRIDGE_PID,
-  //         signedMsg
-  //       );
-
-  //     [
-  //       payer,
-  //       relayer
-  //     ]
-  //     .forEach(sender => {
-  //       const isSelfRelay = sender === payer;
-
-  //       describe(
-  //       `Receive Tokens With Payload (via ${isSelfRelay ? "self-relay" : "relayer"})`,
-  //       function() {
-  //         //got call it here so the nonce increases (signedMsg is different between tests)
-  //         const signedMsg = publishAndSign();
-
-  //         it("Cannot Redeem From Unregistered Foreign Contract", async function() {
-  //           const bogusMsg = publishAndSign(
-  //             {foreignContractAddress: unregisteredContractAddress}
-  //           );
-  //           await postSignedMsgAsVaaOnSolana(bogusMsg);
-  //           await expectIxToFailWithError(
-  //             await createRedeemTransferWithPayloadIx(sender.publicKey, bogusMsg),
-  //             "InvalidForeignContract",
-  //             sender
-  //           );
-  //         });
-
-  //         it("Post Wormhole Message", async function() {
-  //           await expect(postSignedMsgAsVaaOnSolana(signedMsg, sender)).to.be.fulfilled;
-  //         })
-
-  //         it("Cannot Redeem With Bogus Token Account", async function() {
-  //           const bogusTokenAccount = getAssociatedTokenAddressSync(mint, relayer.publicKey);
-
-  //           const maliciousIx = await (async () => {
-  //             const parsed = parseTokenTransferVaa(signedMsg);
-  //             const parsedMint = isNative
-  //               ? new PublicKey(parsed.tokenAddress)
-  //               : deriveWrappedMintKey(TOKEN_BRIDGE_PID,  parsed.tokenChain, parsed.tokenAddress);
-
-  //             const tmpTokenAccount =
-  //               tokenBridgeRelayer.deriveTmpTokenAccountKey(TOKEN_BRIDGE_RELAYER_PID, parsedMint);
-  //             const tokenBridgeAccounts = (isNative
-  //               ? tokenBridgeRelayer.getCompleteTransferNativeWithPayloadCpiAccounts
-  //               : tokenBridgeRelayer.getCompleteTransferWrappedWithPayloadCpiAccounts)(
-  //                 TOKEN_BRIDGE_PID,
-  //                 CORE_BRIDGE_PID,
-  //                 relayer.publicKey,
-  //                 parsed,
-  //                 tmpTokenAccount
-  //               );
-
-  //             const method = isNative
-  //               ? program.methods.redeemNativeTransferWithPayload
-  //               : program.methods.redeemWrappedTransferWithPayload;
-
-  //             return method([...parsed.hash])
-  //               .accounts({
-  //                 config: tokenBridgeRelayer.deriveRedeemerConfigKey(TOKEN_BRIDGE_RELAYER_PID),
-  //                 foreignContract:
-  //                   tokenBridgeRelayer.deriveForeignContractKey(TOKEN_BRIDGE_RELAYER_PID, parsed.emitterChain),
-  //                 tmpTokenAccount,
-  //                 recipientTokenAccount: bogusTokenAccount,
-  //                 recipient: relayer.publicKey,
-  //                 payerTokenAccount: getAssociatedTokenAddressSync(parsedMint, relayer.publicKey),
-  //                 tokenBridgeProgram: TOKEN_BRIDGE_PID,
-  //                 ...tokenBridgeAccounts,
-  //               })
-  //               .instruction();
-  //           })();
-
-  //           await expectIxToFailWithError(
-  //             maliciousIx,
-  //             "Error Code: InvalidRecipient. Error Number: 6015",
-  //             relayer
-  //           );
-  //         });
-
-  //         it("Finally Receive Tokens With Payload", async function() {
-  //           const tokenAccounts = ((isSelfRelay) ? [payer] : [payer, relayer]).map(
-  //             kp => getAssociatedTokenAddressSync(mint, kp.publicKey)
-  //           );
-
-  //           const balancesBefore = await Promise.all(tokenAccounts.map(getTokenBalance));
-  //           await expectIxToSucceed(
-  //             createRedeemTransferWithPayloadIx(sender.publicKey, signedMsg),
-  //             sender
-  //           );
-  //           const balancesChange = await Promise.all(
-  //             tokenAccounts.map(async (acc, i) => (await getTokenBalance(acc)) - balancesBefore[i])
-  //           );
-
-  //           if (isSelfRelay) {
-  //             expect(balancesChange[0]).equals(receiveAmount);
-  //           }
-  //           else {
-  //             const { relayerFee, relayerFeePrecision } =
-  //               await tokenBridgeRelayer.getRedeemerConfigData(connection, TOKEN_BRIDGE_RELAYER_PID);
-  //             const relayerAmount =
-  //               (BigInt(relayerFee) * receiveAmount) / BigInt(relayerFeePrecision);
-  //             expect(balancesChange[0]).equals(receiveAmount - relayerAmount);
-  //             expect(balancesChange[1]).equals(relayerAmount);
-  //           }
-
-  //           await verifyTmpTokenAccountDoesNotExist(mint);
-  //         });
-
-  //         it("Cannot Redeem Transfer Again", async function() {
-  //           await expectIxToFailWithError(
-  //             await createRedeemTransferWithPayloadIx(sender.publicKey, signedMsg),
-  //             "AlreadyRedeemed",
-  //             sender
-  //           );
-  //         });
-  //       });
-  //   });
-  // });
+              // Parse the token bridge relayer payload and validate the encoded
+              // values.
+              await verifyRelayerMessage(
+                connection,
+                sequence,
+                expectedFee,
+                expectedToNativeAmount,
+                recipientAddress
+              );
+              await verifyTmpTokenAccountDoesNotExist(mint);
+            });
+          });
+        });
+      }
+    );
+  });
 });

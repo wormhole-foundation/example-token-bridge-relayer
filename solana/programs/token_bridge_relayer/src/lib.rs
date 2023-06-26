@@ -36,6 +36,9 @@ pub mod token_bridge_relayer {
             TokenBridgeRelayerError::InvalidPublicKey
         );
 
+        // Initial precision value for both relayer fees and swap rates.
+        let initial_precision: u32 = 100000000;
+
         // Initialize program's sender config
         let sender_config = &mut ctx.accounts.sender_config;
 
@@ -46,6 +49,8 @@ pub mod token_bridge_relayer {
             .bumps
             .get("sender_config")
             .ok_or(TokenBridgeRelayerError::BumpNotFound)?;
+        sender_config.relayer_fee_precision = initial_precision;
+        sender_config.swap_rate_precision = initial_precision;
 
         // Set Token Bridge related addresses.
         {
@@ -69,8 +74,8 @@ pub mod token_bridge_relayer {
             .bumps
             .get("redeemer_config")
             .ok_or(TokenBridgeRelayerError::BumpNotFound)?;
-        redeemer_config.relayer_fee_precision = 100000000;
-        redeemer_config.swap_rate_precision = 100000000;
+        redeemer_config.relayer_fee_precision = initial_precision;
+        redeemer_config.swap_rate_precision = initial_precision;
         redeemer_config.fee_recipient = fee_recipient;
 
         // Set Token Bridge related addresses.
@@ -204,8 +209,13 @@ pub mod token_bridge_relayer {
             TokenBridgeRelayerError::InvalidPrecision,
         );
 
-        let config = &mut ctx.accounts.config;
-        config.relayer_fee_precision = relayer_fee_precision;
+        // Update redeemer config.
+        let redeemer_config = &mut ctx.accounts.redeemer_config;
+        redeemer_config.relayer_fee_precision = relayer_fee_precision;
+
+        // Update sender config.
+        let sender_config = &mut ctx.accounts.sender_config;
+        sender_config.relayer_fee_precision = relayer_fee_precision;
 
         // Done.
         Ok(())
@@ -248,8 +258,13 @@ pub mod token_bridge_relayer {
             TokenBridgeRelayerError::InvalidPrecision,
         );
 
-        let config = &mut ctx.accounts.config;
-        config.swap_rate_precision = swap_rate_precision;
+        // Update redeemer config.
+        let redeemer_config = &mut ctx.accounts.redeemer_config;
+        redeemer_config.swap_rate_precision = swap_rate_precision;
+
+        // Update sender config.
+        let sender_config = &mut ctx.accounts.sender_config;
+        sender_config.swap_rate_precision = swap_rate_precision;
 
         // Done.
         Ok(())
@@ -344,135 +359,180 @@ pub mod token_bridge_relayer {
         Ok(())
     }
 
-    // pub fn send_native_tokens_with_payload(
-    //     ctx: Context<SendNativeTokensWithPayload>,
-    //     batch_id: u32,
-    //     amount: u64,
-    //     recipient_address: [u8; 32],
-    //     recipient_chain: u16,
-    // ) -> Result<()> {
-    //     // Token Bridge program truncates amounts to 8 decimals, so there will
-    //     // be a residual amount if decimals of SPL is >8. We need to take into
-    //     // account how much will actually be bridged.
-    //     let truncated_amount = token_bridge::truncate_amount(amount, ctx.accounts.mint.decimals);
-    //     require!(truncated_amount > 0, TokenBridgeRelayerError::ZeroBridgeAmount);
-    //     if truncated_amount != amount {
-    //         msg!(
-    //             "SendNativeTokensWithPayload :: truncating amount {} to {}",
-    //             amount,
-    //             truncated_amount
-    //         );
-    //     }
+    pub fn send_native_tokens_with_payload(
+        ctx: Context<SendNativeTokensWithPayload>,
+        amount: u64,
+        to_native_token_amount: u64,
+        recipient_chain: u16,
+        recipient_address: [u8; 32],
+        batch_id: u32
+    ) -> Result<()> {
+        // Confirm that the mint is a registered token.
+        require!(
+            ctx.accounts.registered_token.is_registered,
+            TokenBridgeRelayerError::TokenNotRegistered
+        );
 
-    //     require!(
-    //         recipient_chain > 0
-    //             && recipient_chain != wormhole::CHAIN_ID_SOLANA
-    //             && !recipient_address.iter().all(|&x| x == 0),
-    //         TokenBridgeRelayerError::InvalidRecipient,
-    //     );
+        // Confirm that the user passed a valid target wallet on a registered
+        // chain.
+        require!(
+            recipient_chain > wormhole::CHAIN_ID_SOLANA
+            && !recipient_address.iter().all(|&x| x == 0),
+            TokenBridgeRelayerError::InvalidRecipient,
+        );
 
-    //     // These seeds are used to:
-    //     // 1.  Sign the Sender Config's token account to delegate approval
-    //     //     of truncated_amount.
-    //     // 2.  Sign Token Bridge program's transfer_native instruction.
-    //     // 3.  Close tmp_token_account.
-    //     let config_seeds = &[
-    //         SenderConfig::SEED_PREFIX.as_ref(),
-    //         &[ctx.accounts.config.bump],
-    //     ];
+        // Token Bridge program truncates amounts to 8 decimals, so there will
+        // be a residual amount if decimals of SPL is >8. We need to take into
+        // account how much will actually be bridged.
+        let truncated_amount = token_bridge::truncate_amount(
+            amount,
+            ctx.accounts.mint.decimals
+        );
+        require!(
+            truncated_amount > 0,
+            TokenBridgeRelayerError::ZeroBridgeAmount
+        );
 
-    //     // First transfer tokens from payer to tmp_token_account.
-    //     anchor_spl::token::transfer(
-    //         CpiContext::new(
-    //             ctx.accounts.token_program.to_account_info(),
-    //             anchor_spl::token::Transfer {
-    //                 from: ctx.accounts.from_token_account.to_account_info(),
-    //                 to: ctx.accounts.tmp_token_account.to_account_info(),
-    //                 authority: ctx.accounts.payer.to_account_info(),
-    //             },
-    //         ),
-    //         truncated_amount,
-    //     )?;
+        // Normalize the to_native_token_amount to 8 decimals.
+        let normalized_to_native_amount = token_bridge::normalize_amount(
+            to_native_token_amount,
+            ctx.accounts.mint.decimals
+        );
+        require!(
+            to_native_token_amount == 0 ||
+            normalized_to_native_amount > 0,
+            TokenBridgeRelayerError::ZeroBridgeAmount
+        );
 
-    //     // Delegate spending to Token Bridge program's authority signer.
-    //     anchor_spl::token::approve(
-    //         CpiContext::new_with_signer(
-    //             ctx.accounts.token_program.to_account_info(),
-    //             anchor_spl::token::Approve {
-    //                 to: ctx.accounts.tmp_token_account.to_account_info(),
-    //                 delegate: ctx.accounts.token_bridge_authority_signer.to_account_info(),
-    //                 authority: ctx.accounts.config.to_account_info(),
-    //             },
-    //             &[&config_seeds[..]],
-    //         ),
-    //         truncated_amount,
-    //     )?;
+        // Compute the relayer fee in terms of the native token being
+        // transfered.
+        let token_fee = ctx.accounts.relayer_fee.checked_token_fee(
+            ctx.accounts.mint.decimals,
+            ctx.accounts.registered_token.swap_rate,
+            ctx.accounts.config.swap_rate_precision,
+            ctx.accounts.config.relayer_fee_precision
+        ).ok_or(TokenBridgeRelayerError::FeeCalculationError)?;
 
-    //     // Serialize TokenBridgeRelayerMessage as encoded payload for Token Bridge
-    //     // transfer.
-    //     let payload = TokenBridgeRelayerMessage::Hello {
-    //         recipient: recipient_address,
-    //     }
-    //     .try_to_vec()?;
+        // Normalize the transfer amount and relayer fee and confirm that the
+        // user has sent enough tokens to cover the native swap on the target
+        // chain and to pay the relayer fee.
+        let normalized_relayer_fee = token_bridge::normalize_amount(
+            token_fee,
+            ctx.accounts.mint.decimals
+        );
+        let normalized_amount = token_bridge::normalize_amount(
+            amount,
+            ctx.accounts.mint.decimals
+        );
+        require!(
+            normalized_amount > normalized_to_native_amount + normalized_relayer_fee,
+            TokenBridgeRelayerError::InsufficientFunds
+        );
 
-    //     // Bridge native token with encoded payload.
-    //     token_bridge::transfer_native_with_payload(
-    //         CpiContext::new_with_signer(
-    //             ctx.accounts.token_bridge_program.to_account_info(),
-    //             token_bridge::TransferNativeWithPayload {
-    //                 payer: ctx.accounts.payer.to_account_info(),
-    //                 config: ctx.accounts.token_bridge_config.to_account_info(),
-    //                 from: ctx.accounts.tmp_token_account.to_account_info(),
-    //                 mint: ctx.accounts.mint.to_account_info(),
-    //                 custody: ctx.accounts.token_bridge_custody.to_account_info(),
-    //                 authority_signer: ctx.accounts.token_bridge_authority_signer.to_account_info(),
-    //                 custody_signer: ctx.accounts.token_bridge_custody_signer.to_account_info(),
-    //                 wormhole_bridge: ctx.accounts.wormhole_bridge.to_account_info(),
-    //                 wormhole_message: ctx.accounts.wormhole_message.to_account_info(),
-    //                 wormhole_emitter: ctx.accounts.token_bridge_emitter.to_account_info(),
-    //                 wormhole_sequence: ctx.accounts.token_bridge_sequence.to_account_info(),
-    //                 wormhole_fee_collector: ctx.accounts.wormhole_fee_collector.to_account_info(),
-    //                 clock: ctx.accounts.clock.to_account_info(),
-    //                 sender: ctx.accounts.config.to_account_info(),
-    //                 rent: ctx.accounts.rent.to_account_info(),
-    //                 system_program: ctx.accounts.system_program.to_account_info(),
-    //                 token_program: ctx.accounts.token_program.to_account_info(),
-    //                 wormhole_program: ctx.accounts.wormhole_program.to_account_info(),
-    //             },
-    //             &[
-    //                 &config_seeds[..],
-    //                 &[
-    //                     SEED_PREFIX_BRIDGED,
-    //                     &ctx.accounts
-    //                         .token_bridge_sequence
-    //                         .next_value()
-    //                         .to_le_bytes()[..],
-    //                     &[*ctx
-    //                         .bumps
-    //                         .get("wormhole_message")
-    //                         .ok_or(TokenBridgeRelayerError::BumpNotFound)?],
-    //                 ],
-    //             ],
-    //         ),
-    //         batch_id,
-    //         truncated_amount,
-    //         ctx.accounts.foreign_contract.address,
-    //         recipient_chain,
-    //         payload,
-    //         &ctx.program_id.key(),
-    //     )?;
+        // These seeds are used to:
+        // 1.  Sign the Sender Config's token account to delegate approval
+        //     of normalized_amount.
+        // 2.  Sign Token Bridge program's transfer_native instruction.
+        // 3.  Close tmp_token_account.
+        let config_seeds = &[
+            SenderConfig::SEED_PREFIX.as_ref(),
+            &[ctx.accounts.config.bump],
+        ];
 
-    //     // Finish instruction by closing tmp_token_account.
-    //     anchor_spl::token::close_account(CpiContext::new_with_signer(
-    //         ctx.accounts.token_program.to_account_info(),
-    //         anchor_spl::token::CloseAccount {
-    //             account: ctx.accounts.tmp_token_account.to_account_info(),
-    //             destination: ctx.accounts.payer.to_account_info(),
-    //             authority: ctx.accounts.config.to_account_info(),
-    //         },
-    //         &[&config_seeds[..]],
-    //     ))
-    // }
+        // First transfer tokens from payer to tmp_token_account.
+        anchor_spl::token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                anchor_spl::token::Transfer {
+                    from: ctx.accounts.from_token_account.to_account_info(),
+                    to: ctx.accounts.tmp_token_account.to_account_info(),
+                    authority: ctx.accounts.payer.to_account_info(),
+                },
+            ),
+            truncated_amount,
+        )?;
+
+        // Delegate spending to Token Bridge program's authority signer.
+        anchor_spl::token::approve(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                anchor_spl::token::Approve {
+                    to: ctx.accounts.tmp_token_account.to_account_info(),
+                    delegate: ctx.accounts.token_bridge_authority_signer.to_account_info(),
+                    authority: ctx.accounts.config.to_account_info(),
+                },
+                &[&config_seeds[..]],
+            ),
+            truncated_amount,
+        )?;
+
+        // Serialize TokenBridgeRelayerMessage as encoded payload for Token Bridge
+        // transfer.
+        let payload = TokenBridgeRelayerMessage::TransferWithRelay {
+            target_relayer_fee: normalized_relayer_fee,
+            to_native_token_amount: normalized_to_native_amount,
+            recipient: recipient_address
+        }
+        .try_to_vec()?;
+
+        // Bridge native token with encoded payload.
+        token_bridge::transfer_native_with_payload(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_bridge_program.to_account_info(),
+                token_bridge::TransferNativeWithPayload {
+                    payer: ctx.accounts.payer.to_account_info(),
+                    config: ctx.accounts.token_bridge_config.to_account_info(),
+                    from: ctx.accounts.tmp_token_account.to_account_info(),
+                    mint: ctx.accounts.mint.to_account_info(),
+                    custody: ctx.accounts.token_bridge_custody.to_account_info(),
+                    authority_signer: ctx.accounts.token_bridge_authority_signer.to_account_info(),
+                    custody_signer: ctx.accounts.token_bridge_custody_signer.to_account_info(),
+                    wormhole_bridge: ctx.accounts.wormhole_bridge.to_account_info(),
+                    wormhole_message: ctx.accounts.wormhole_message.to_account_info(),
+                    wormhole_emitter: ctx.accounts.token_bridge_emitter.to_account_info(),
+                    wormhole_sequence: ctx.accounts.token_bridge_sequence.to_account_info(),
+                    wormhole_fee_collector: ctx.accounts.wormhole_fee_collector.to_account_info(),
+                    clock: ctx.accounts.clock.to_account_info(),
+                    sender: ctx.accounts.config.to_account_info(),
+                    rent: ctx.accounts.rent.to_account_info(),
+                    system_program: ctx.accounts.system_program.to_account_info(),
+                    token_program: ctx.accounts.token_program.to_account_info(),
+                    wormhole_program: ctx.accounts.wormhole_program.to_account_info(),
+                },
+                &[
+                    &config_seeds[..],
+                    &[
+                        SEED_PREFIX_BRIDGED,
+                        &ctx.accounts
+                            .token_bridge_sequence
+                            .next_value()
+                            .to_le_bytes()[..],
+                        &[*ctx
+                            .bumps
+                            .get("wormhole_message")
+                            .ok_or(TokenBridgeRelayerError::BumpNotFound)?],
+                    ],
+                ],
+            ),
+            batch_id,
+            truncated_amount,
+            ctx.accounts.foreign_contract.address,
+            recipient_chain,
+            payload,
+            &ctx.program_id.key(),
+        )?;
+
+        // Finish instruction by closing tmp_token_account.
+        anchor_spl::token::close_account(CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            anchor_spl::token::CloseAccount {
+                account: ctx.accounts.tmp_token_account.to_account_info(),
+                destination: ctx.accounts.payer.to_account_info(),
+                authority: ctx.accounts.config.to_account_info(),
+            },
+            &[&config_seeds[..]],
+        ))
+    }
 
     // pub fn redeem_native_transfer_with_payload(
     //     ctx: Context<RedeemNativeTransferWithPayload>,
@@ -610,123 +670,150 @@ pub mod token_bridge_relayer {
     //     ))
     // }
 
-    // pub fn send_wrapped_tokens_with_payload(
-    //     ctx: Context<SendWrappedTokensWithPayload>,
-    //     batch_id: u32,
-    //     amount: u64,
-    //     recipient_address: [u8; 32],
-    //     recipient_chain: u16,
-    // ) -> Result<()> {
-    //     require!(amount > 0, TokenBridgeRelayerError::ZeroBridgeAmount);
-    //     require!(
-    //         recipient_chain > 0
-    //             && recipient_chain != wormhole::CHAIN_ID_SOLANA
-    //             && !recipient_address.iter().all(|&x| x == 0),
-    //         TokenBridgeRelayerError::InvalidRecipient,
-    //     );
+    pub fn send_wrapped_tokens_with_payload(
+        ctx: Context<SendWrappedTokensWithPayload>,
+        amount: u64,
+        to_native_token_amount: u64,
+        recipient_chain: u16,
+        recipient_address: [u8; 32],
+        batch_id: u32
+    ) -> Result<()> {
+        require!(amount > 0, TokenBridgeRelayerError::ZeroBridgeAmount);
 
-    //     // These seeds are used to:
-    //     // 1.  Sign the Sender Config's token account to delegate approval
-    //     //     of amount.
-    //     // 2.  Sign Token Bridge program's transfer_wrapped instruction.
-    //     // 3.  Close tmp_token_account.
-    //     let config_seeds = &[
-    //         SenderConfig::SEED_PREFIX.as_ref(),
-    //         &[ctx.accounts.config.bump],
-    //     ];
+        // Confirm that the mint is a registered token.
+        require!(
+            ctx.accounts.registered_token.is_registered,
+            TokenBridgeRelayerError::TokenNotRegistered
+        );
 
-    //     // First transfer tokens from payer to tmp_token_account.
-    //     anchor_spl::token::transfer(
-    //         CpiContext::new(
-    //             ctx.accounts.token_program.to_account_info(),
-    //             anchor_spl::token::Transfer {
-    //                 from: ctx.accounts.from_token_account.to_account_info(),
-    //                 to: ctx.accounts.tmp_token_account.to_account_info(),
-    //                 authority: ctx.accounts.payer.to_account_info(),
-    //             },
-    //         ),
-    //         amount,
-    //     )?;
+        // Confirm that the user passed a valid target wallet on a registered
+        // chain.
+        require!(
+            recipient_chain > wormhole::CHAIN_ID_SOLANA
+            && !recipient_address.iter().all(|&x| x == 0),
+            TokenBridgeRelayerError::InvalidRecipient,
+        );
 
-    //     // Delegate spending to Token Bridge program's authority signer.
-    //     anchor_spl::token::approve(
-    //         CpiContext::new_with_signer(
-    //             ctx.accounts.token_program.to_account_info(),
-    //             anchor_spl::token::Approve {
-    //                 to: ctx.accounts.tmp_token_account.to_account_info(),
-    //                 delegate: ctx.accounts.token_bridge_authority_signer.to_account_info(),
-    //                 authority: ctx.accounts.config.to_account_info(),
-    //             },
-    //             &[&config_seeds[..]],
-    //         ),
-    //         amount,
-    //     )?;
+        // Compute the relayer fee in terms of the native token being
+        // transfered.
+        let relayer_fee = ctx.accounts.relayer_fee.checked_token_fee(
+            ctx.accounts.token_bridge_wrapped_mint.decimals,
+            ctx.accounts.registered_token.swap_rate,
+            ctx.accounts.config.swap_rate_precision,
+            ctx.accounts.config.relayer_fee_precision
+        ).ok_or(TokenBridgeRelayerError::FeeCalculationError)?;
 
-    //     // Serialize TokenBridgeRelayerMessage as encoded payload for Token Bridge
-    //     // transfer.
-    //     let payload = TokenBridgeRelayerMessage::Hello {
-    //         recipient: recipient_address,
-    //     }
-    //     .try_to_vec()?;
+        // Confirm that the user has sent enough tokens to cover the native
+        // swap on the target chain and to the pay relayer fee.
+        require!(
+            amount > to_native_token_amount + relayer_fee,
+            TokenBridgeRelayerError::InsufficientFunds
+        );
 
-    //     // Bridge wrapped token with encoded payload.
-    //     token_bridge::transfer_wrapped_with_payload(
-    //         CpiContext::new_with_signer(
-    //             ctx.accounts.token_bridge_program.to_account_info(),
-    //             token_bridge::TransferWrappedWithPayload {
-    //                 payer: ctx.accounts.payer.to_account_info(),
-    //                 config: ctx.accounts.token_bridge_config.to_account_info(),
-    //                 from: ctx.accounts.tmp_token_account.to_account_info(),
-    //                 from_owner: ctx.accounts.config.to_account_info(),
-    //                 wrapped_mint: ctx.accounts.token_bridge_wrapped_mint.to_account_info(),
-    //                 wrapped_metadata: ctx.accounts.token_bridge_wrapped_meta.to_account_info(),
-    //                 authority_signer: ctx.accounts.token_bridge_authority_signer.to_account_info(),
-    //                 wormhole_bridge: ctx.accounts.wormhole_bridge.to_account_info(),
-    //                 wormhole_message: ctx.accounts.wormhole_message.to_account_info(),
-    //                 wormhole_emitter: ctx.accounts.token_bridge_emitter.to_account_info(),
-    //                 wormhole_sequence: ctx.accounts.token_bridge_sequence.to_account_info(),
-    //                 wormhole_fee_collector: ctx.accounts.wormhole_fee_collector.to_account_info(),
-    //                 clock: ctx.accounts.clock.to_account_info(),
-    //                 sender: ctx.accounts.config.to_account_info(),
-    //                 rent: ctx.accounts.rent.to_account_info(),
-    //                 system_program: ctx.accounts.system_program.to_account_info(),
-    //                 token_program: ctx.accounts.token_program.to_account_info(),
-    //                 wormhole_program: ctx.accounts.wormhole_program.to_account_info(),
-    //             },
-    //             &[
-    //                 &config_seeds[..],
-    //                 &[
-    //                     SEED_PREFIX_BRIDGED,
-    //                     &ctx.accounts
-    //                         .token_bridge_sequence
-    //                         .next_value()
-    //                         .to_le_bytes()[..],
-    //                     &[*ctx
-    //                         .bumps
-    //                         .get("wormhole_message")
-    //                         .ok_or(TokenBridgeRelayerError::BumpNotFound)?],
-    //                 ],
-    //             ],
-    //         ),
-    //         batch_id,
-    //         amount,
-    //         ctx.accounts.foreign_contract.address,
-    //         recipient_chain,
-    //         payload,
-    //         &ctx.program_id.key(),
-    //     )?;
+        // These seeds are used to:
+        // 1.  Sign the Sender Config's token account to delegate approval
+        //     of amount.
+        // 2.  Sign Token Bridge program's transfer_wrapped instruction.
+        // 3.  Close tmp_token_account.
+        let config_seeds = &[
+            SenderConfig::SEED_PREFIX.as_ref(),
+            &[ctx.accounts.config.bump],
+        ];
 
-    //     // Finish instruction by closing tmp_token_account.
-    //     anchor_spl::token::close_account(CpiContext::new_with_signer(
-    //         ctx.accounts.token_program.to_account_info(),
-    //         anchor_spl::token::CloseAccount {
-    //             account: ctx.accounts.tmp_token_account.to_account_info(),
-    //             destination: ctx.accounts.payer.to_account_info(),
-    //             authority: ctx.accounts.config.to_account_info(),
-    //         },
-    //         &[&config_seeds[..]],
-    //     ))
-    // }
+        // First transfer tokens from payer to tmp_token_account.
+        anchor_spl::token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                anchor_spl::token::Transfer {
+                    from: ctx.accounts.from_token_account.to_account_info(),
+                    to: ctx.accounts.tmp_token_account.to_account_info(),
+                    authority: ctx.accounts.payer.to_account_info(),
+                },
+            ),
+            amount,
+        )?;
+
+        // Delegate spending to Token Bridge program's authority signer.
+        anchor_spl::token::approve(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                anchor_spl::token::Approve {
+                    to: ctx.accounts.tmp_token_account.to_account_info(),
+                    delegate: ctx.accounts.token_bridge_authority_signer.to_account_info(),
+                    authority: ctx.accounts.config.to_account_info(),
+                },
+                &[&config_seeds[..]],
+            ),
+            amount,
+        )?;
+
+        // Serialize TokenBridgeRelayerMessage as encoded payload for Token Bridge
+        // transfer.
+        let payload = TokenBridgeRelayerMessage::TransferWithRelay {
+            target_relayer_fee: relayer_fee,
+            to_native_token_amount,
+            recipient: recipient_address
+        }
+        .try_to_vec()?;
+
+        // Bridge wrapped token with encoded payload.
+        token_bridge::transfer_wrapped_with_payload(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_bridge_program.to_account_info(),
+                token_bridge::TransferWrappedWithPayload {
+                    payer: ctx.accounts.payer.to_account_info(),
+                    config: ctx.accounts.token_bridge_config.to_account_info(),
+                    from: ctx.accounts.tmp_token_account.to_account_info(),
+                    from_owner: ctx.accounts.config.to_account_info(),
+                    wrapped_mint: ctx.accounts.token_bridge_wrapped_mint.to_account_info(),
+                    wrapped_metadata: ctx.accounts.token_bridge_wrapped_meta.to_account_info(),
+                    authority_signer: ctx.accounts.token_bridge_authority_signer.to_account_info(),
+                    wormhole_bridge: ctx.accounts.wormhole_bridge.to_account_info(),
+                    wormhole_message: ctx.accounts.wormhole_message.to_account_info(),
+                    wormhole_emitter: ctx.accounts.token_bridge_emitter.to_account_info(),
+                    wormhole_sequence: ctx.accounts.token_bridge_sequence.to_account_info(),
+                    wormhole_fee_collector: ctx.accounts.wormhole_fee_collector.to_account_info(),
+                    clock: ctx.accounts.clock.to_account_info(),
+                    sender: ctx.accounts.config.to_account_info(),
+                    rent: ctx.accounts.rent.to_account_info(),
+                    system_program: ctx.accounts.system_program.to_account_info(),
+                    token_program: ctx.accounts.token_program.to_account_info(),
+                    wormhole_program: ctx.accounts.wormhole_program.to_account_info(),
+                },
+                &[
+                    &config_seeds[..],
+                    &[
+                        SEED_PREFIX_BRIDGED,
+                        &ctx.accounts
+                            .token_bridge_sequence
+                            .next_value()
+                            .to_le_bytes()[..],
+                        &[*ctx
+                            .bumps
+                            .get("wormhole_message")
+                            .ok_or(TokenBridgeRelayerError::BumpNotFound)?],
+                    ],
+                ],
+            ),
+            batch_id,
+            amount,
+            ctx.accounts.foreign_contract.address,
+            recipient_chain,
+            payload,
+            &ctx.program_id.key(),
+        )?;
+
+        // Finish instruction by closing tmp_token_account.
+        anchor_spl::token::close_account(CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            anchor_spl::token::CloseAccount {
+                account: ctx.accounts.tmp_token_account.to_account_info(),
+                destination: ctx.accounts.payer.to_account_info(),
+                authority: ctx.accounts.config.to_account_info(),
+            },
+            &[&config_seeds[..]],
+        ))
+    }
 
     // pub fn redeem_wrapped_transfer_with_payload(
     //     ctx: Context<RedeemWrappedTransferWithPayload>,

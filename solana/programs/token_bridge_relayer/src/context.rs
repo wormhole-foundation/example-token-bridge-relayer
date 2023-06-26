@@ -28,7 +28,7 @@ pub struct Initialize<'info> {
         payer = owner,
         seeds = [SenderConfig::SEED_PREFIX],
         bump,
-        space = SenderConfig::MAXIMUM_SIZE,
+        space = 8 + SenderConfig::INIT_SPACE
     )]
     /// Sender Config account, which saves program data useful for other
     /// instructions, specifically for outbound transfers. Also saves the payer
@@ -41,7 +41,7 @@ pub struct Initialize<'info> {
         payer = owner,
         seeds = [RedeemerConfig::SEED_PREFIX],
         bump,
-        space = RedeemerConfig::MAXIMUM_SIZE,
+        space = 8 + RedeemerConfig::INIT_SPACE
     )]
     /// Redeemer Config account, which saves program data useful for other
     /// instructions, specifically for inbound transfers. Also saves the payer
@@ -229,9 +229,6 @@ pub struct UpdateRelayerFee<'info> {
         bump,
         space = 8 + RelayerFee::INIT_SPACE
     )]
-    /// Foreign Contract account. Create this account if an emitter has not been
-    /// registered yet for this Wormhole chain ID. If there already is a
-    /// contract address saved in this account, overwrite it.
     pub relayer_fee: Box<Account<'info, RelayerFee>>,
 
     #[account(
@@ -254,7 +251,7 @@ pub struct UpdateRelayerFee<'info> {
 // relayer_fee_precision.
 pub struct UpdatePrecision<'info> {
     #[account(mut)]
-    /// CHECK: Owner of the program set in the [`RedeemerConfig`] account.
+    /// CHECK: Owner of the program set in the [`RedeemerConfig`] and [`SenderConfig`] account.
     pub owner: Signer<'info>,
 
     #[account(
@@ -266,7 +263,19 @@ pub struct UpdatePrecision<'info> {
     /// Redeemer Config account. This program requires that the `owner`
     /// specified in the context equals the pubkey specified in this account.
     /// Mutable.
-    pub config: Box<Account<'info, RedeemerConfig>>,
+    pub redeemer_config: Box<Account<'info, RedeemerConfig>>,
+
+    #[account(
+        mut,
+        has_one = owner @ TokenBridgeRelayerError::OwnerOnly,
+        seeds = [SenderConfig::SEED_PREFIX],
+        bump
+    )]
+    /// Sender Config account. This program requires that the `owner`
+    /// specified in the context equals the pubkey specified in this account.
+    /// Mutable. The `owner` check is redundant here, but we keep it as an
+    /// extra protection for future changes to the context.
+    pub sender_config: Box<Account<'info, SenderConfig>>,
 
     /// System program.
     pub system_program: Program<'info, System>,
@@ -443,10 +452,11 @@ pub struct ConfirmOwnershipTransfer<'info> {
 
 #[derive(Accounts)]
 #[instruction(
-    batch_id: u32,
     amount: u64,
-    recipient_address: [u8; 32],
+    to_native_token_amount: u64,
     recipient_chain: u16,
+    recipient_address: [u8; 32],
+    batch_id: u32
 )]
 pub struct SendNativeTokensWithPayload<'info> {
     /// Payer will pay Wormhole fee to transfer tokens and create temporary
@@ -489,6 +499,24 @@ pub struct SendNativeTokensWithPayload<'info> {
     /// Payer's associated token account. We may want to make this a generic
     /// token account in the future.
     pub from_token_account: Account<'info, TokenAccount>,
+
+    #[account(
+        seeds = [b"mint", mint.key().as_ref()],
+        bump
+    )]
+    // Registered token account for the specified mint. This account stores
+    // information about the token. Read-only.
+    pub registered_token: Account<'info, RegisteredToken>,
+
+    #[account(
+        seeds = [
+            RelayerFee::SEED_PREFIX,
+            &recipient_chain.to_le_bytes()[..]
+        ],
+        bump
+    )]
+    // Relayer fee account for the specified recipient chain. Read-only.
+    pub relayer_fee: Box<Account<'info, RelayerFee>>,
 
     #[account(
         init,
@@ -747,10 +775,11 @@ pub struct RedeemNativeTransferWithPayload<'info> {
 
 #[derive(Accounts)]
 #[instruction(
-    batch_id: u32,
     amount: u64,
-    recipient_address: [u8; 32],
+    to_native_token_amount: u64,
     recipient_chain: u16,
+    recipient_address: [u8; 32],
+    batch_id: u32
 )]
 pub struct SendWrappedTokensWithPayload<'info> {
     #[account(mut)]
@@ -800,6 +829,24 @@ pub struct SendWrappedTokensWithPayload<'info> {
         associated_token::authority = payer,
     )]
     pub from_token_account: Account<'info, TokenAccount>,
+
+    #[account(
+        seeds = [b"mint", token_bridge_wrapped_mint.key().as_ref()],
+        bump
+    )]
+    // Registered token account for the specified mint. This account stores
+    // information about the token. Read-only.
+    pub registered_token: Account<'info, RegisteredToken>,
+
+    #[account(
+        seeds = [
+            RelayerFee::SEED_PREFIX,
+            &recipient_chain.to_le_bytes()[..]
+        ],
+        bump
+    )]
+    // Relayer fee account for the specified recipient chain. Read-only.
+    pub relayer_fee: Box<Account<'info, RelayerFee>>,
 
     #[account(
         init,

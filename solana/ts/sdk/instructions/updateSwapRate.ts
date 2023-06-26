@@ -9,6 +9,7 @@ import {createTokenBridgeRelayerProgramInterface} from "../program";
 import {
   deriveOwnerConfigKey,
   deriveRedeemerConfigKey,
+  deriveSenderConfigKey,
   deriveRegisteredTokenKey,
 } from "../accounts";
 
@@ -53,7 +54,8 @@ export async function createUpdateSwapRatePrecisionInstruction(
     .updateSwapRatePrecision(relayerFeePrecision)
     .accounts({
       owner: new PublicKey(payer),
-      config: deriveRedeemerConfigKey(programId),
+      redeemerConfig: deriveRedeemerConfigKey(programId),
+      senderConfig: deriveSenderConfigKey(programId),
     })
     .instruction();
 }

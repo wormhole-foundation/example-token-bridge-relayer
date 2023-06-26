@@ -21,7 +21,8 @@ export interface SenderConfigData {
   bump: number;
   tokenBridge: OutboundTokenBridgeAddresses;
   finality: number;
-  relayerFee: number;
+  relayerFeePrecision: number;
+  swapRatePrecision: number;
 }
 
 export async function getSenderConfigData(

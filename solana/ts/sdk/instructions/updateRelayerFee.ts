@@ -11,6 +11,7 @@ import {
   deriveOwnerConfigKey,
   deriveForeignContractKey,
   deriveRelayerFeeKey,
+  deriveSenderConfigKey,
   deriveRedeemerConfigKey,
 } from "../accounts";
 
@@ -52,7 +53,8 @@ export async function createUpdateRelayerFeePrecisionInstruction(
     .updateRelayerFeePrecision(relayerFeePrecision)
     .accounts({
       owner: new PublicKey(payer),
-      config: deriveRedeemerConfigKey(programId),
+      redeemerConfig: deriveRedeemerConfigKey(programId),
+      senderConfig: deriveSenderConfigKey(programId),
     })
     .instruction();
 }
