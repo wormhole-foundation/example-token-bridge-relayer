@@ -23,7 +23,8 @@ pub struct WrapAndTransfer<'info> {
 
     #[account(
         mut,
-        token::mint = spl_token::native_mint::ID
+        seeds = [b"token", spl_token::native_mint::ID.as_ref()],
+        bump
     )]
     custody_token: Account<'info, TokenAccount>,
 

@@ -506,7 +506,7 @@ pub struct SendNativeTokensWithPayload<'info> {
     )]
     // Registered token account for the specified mint. This account stores
     // information about the token. Read-only.
-    pub registered_token: Account<'info, RegisteredToken>,
+    pub registered_token: Box<Account<'info, RegisteredToken>>,
 
     #[account(
         seeds = [
@@ -545,7 +545,7 @@ pub struct SendNativeTokensWithPayload<'info> {
         address = config.token_bridge.config @ TokenBridgeRelayerError::InvalidTokenBridgeConfig
     )]
     /// Token Bridge config. Read-only.
-    pub token_bridge_config: Account<'info, token_bridge::Config>,
+    pub token_bridge_config: Box<Account<'info, token_bridge::Config>>,
 
     #[account(
         mut,
@@ -602,14 +602,14 @@ pub struct SendNativeTokensWithPayload<'info> {
         address = config.token_bridge.sequence @ TokenBridgeRelayerError::InvalidTokenBridgeSequence
     )]
     /// CHECK: Token Bridge sequence. Mutable.
-    pub token_bridge_sequence: Account<'info, wormhole::SequenceTracker>,
+    pub token_bridge_sequence: Box<Account<'info, wormhole::SequenceTracker>>,
 
     #[account(
         mut,
         address = config.token_bridge.wormhole_fee_collector @ TokenBridgeRelayerError::InvalidWormholeFeeCollector
     )]
     /// Wormhole fee collector. Mutable.
-    pub wormhole_fee_collector: Account<'info, wormhole::FeeCollector>,
+    pub wormhole_fee_collector: Box<Account<'info, wormhole::FeeCollector>>,
 
     /// System program.
     pub system_program: Program<'info, System>,

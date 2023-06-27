@@ -2,18 +2,15 @@ import {expect, use as chaiUse} from "chai";
 import chaiAsPromised from "chai-as-promised";
 chaiUse(chaiAsPromised);
 import {Connection, PublicKey} from "@solana/web3.js";
-import {getAccount, getAssociatedTokenAddressSync} from "@solana/spl-token";
 import {
-  CHAINS,
-  ChainId,
-  parseTokenTransferPayload,
-  parseTokenTransferVaa,
-  tryNativeToHexString,
-} from "@certusone/wormhole-sdk";
+  getAccount,
+  getAssociatedTokenAddressSync,
+  NATIVE_MINT,
+} from "@solana/spl-token";
+import {CHAINS, ChainId} from "@certusone/wormhole-sdk";
 import * as mock from "@certusone/wormhole-sdk/lib/cjs/mock";
 import {getTokenBridgeDerivedAccounts} from "@certusone/wormhole-sdk/lib/cjs/solana";
 import * as wormhole from "@certusone/wormhole-sdk/lib/cjs/solana/wormhole";
-import {deriveWrappedMintKey} from "@certusone/wormhole-sdk/lib/cjs/solana/tokenBridge";
 import * as tokenBridgeRelayer from "../sdk/";
 import {BN} from "@coral-xyz/anchor";
 import {
@@ -631,6 +628,50 @@ describe(" 1: Token Bridge Relayer", function () {
       expect(relayerFeeData.fee.toNumber()).equals(newRelayerFee);
     });
   });
+
+  // describe("Register Wrapped SOL", async function () {
+  //   // Token registration instruction.
+  //   const createRegisterTokenIx = (opts?: {
+  //     sender?: PublicKey;
+  //     contractAddress?: Buffer;
+  //     swapRate?: BN;
+  //     maxNativeSwapAmount?: BN;
+  //     swapsEnabled?: boolean;
+  //   }) =>
+  //     tokenBridgeRelayer.createRegisterTokenInstruction(
+  //       connection,
+  //       TOKEN_BRIDGE_RELAYER_PID,
+  //       opts?.sender ?? payer.publicKey,
+  //       NATIVE_MINT,
+  //       opts?.swapRate ?? new BN(10000000000),
+  //       opts?.maxNativeSwapAmount ?? new BN(1000000000),
+  //       opts?.swapsEnabled ?? true
+  //     );
+
+  //   it("Register Wrapped Sol as Owner", async function () {
+  //     await expectIxToSucceed(createRegisterTokenIx());
+  //   });
+  // });
+
+  // describe("Wrap and Transfer Experimental", async function () {
+  //   const createWrapAndTransferIx =
+  //     tokenBridgeRelayer.createWrapAndTransferWithRelayInstruction(
+  //       connection,
+  //       program.programId,
+  //       payer.publicKey,
+  //       new BN(1000000000)
+  //     );
+
+  //   it("Do It", async function () {
+  //     await expectIxToSucceed(createWrapAndTransferIx);
+  //     const balance = await getAccount(
+  //       connection,
+  //       tokenBridgeRelayer.deriveTokenAccountKey(program.programId, NATIVE_MINT)
+  //     );
+
+  //     console.log(balance.amount);
+  //   });
+  // });
 
   fetchTestTokens().forEach(([isNative, decimals, _1, mint, _2]) => {
     describe(`For ${

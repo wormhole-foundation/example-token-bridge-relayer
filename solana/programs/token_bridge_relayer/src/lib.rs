@@ -7,11 +7,8 @@ pub use state::*;
 
 pub mod context;
 pub mod error;
-pub mod experimental;
 pub mod message;
 pub mod state;
-
-pub use experimental::*;
 
 declare_id!("AaXVMPDRnUqRAyrBQ9TaZ7pckzSieECigabNwSi3HHih");
 
@@ -20,20 +17,13 @@ pub mod token_bridge_relayer {
     use super::*;
     use wormhole_anchor_sdk::{token_bridge, wormhole};
 
-    pub fn wrap_and_transfer(
-        ctx: Context<WrapAndTransfer>,
-        args: WrapAndTransferArgs,
-    ) -> Result<()> {
-        experimental::wrap_and_transfer(ctx, args)
-    }
-
     /// This instruction can be used to generate your program's config.
     /// And for convenience, we will store Wormhole-related PDAs in the
     /// config so we can verify these accounts with a simple == constraint.
     pub fn initialize(
         ctx: Context<Initialize>,
         fee_recipient: Pubkey,
-        assistant: Pubkey,
+        assistant: Pubkey
     ) -> Result<()> {
         require_keys_neq!(
             fee_recipient,
@@ -145,26 +135,31 @@ pub mod token_bridge_relayer {
         ctx: Context<RegisterToken>,
         swap_rate: u64,
         max_native_swap_amount: u64,
-        swaps_enabled: bool,
+        swaps_enabled: bool
     ) -> Result<()> {
         require!(
             !ctx.accounts.registered_token.is_registered,
             TokenBridgeRelayerError::TokenAlreadyRegistered
         );
-        require!(swap_rate > 0, TokenBridgeRelayerError::ZeroSwapRate);
+        require!(
+            swap_rate > 0,
+            TokenBridgeRelayerError::ZeroSwapRate
+        );
 
         // Register the token by setting the swap_rate and max_native_swap_amount.
         ctx.accounts.registered_token.set_inner(RegisteredToken {
             swap_rate,
             max_native_swap_amount,
             swaps_enabled,
-            is_registered: true,
+            is_registered: true
         });
 
         Ok(())
     }
 
-    pub fn deregister_token(ctx: Context<DeregisterToken>) -> Result<()> {
+    pub fn deregister_token(
+        ctx: Context<DeregisterToken>
+    ) -> Result<()> {
         require!(
             ctx.accounts.registered_token.is_registered,
             TokenBridgeRelayerError::TokenAlreadyRegistered
@@ -175,18 +170,20 @@ pub mod token_bridge_relayer {
             swap_rate: 0,
             max_native_swap_amount: 0,
             swaps_enabled: false,
-            is_registered: false,
+            is_registered: false
         });
 
         Ok(())
     }
 
-    pub fn update_relayer_fee(ctx: Context<UpdateRelayerFee>, chain: u16, fee: u64) -> Result<()> {
+    pub fn update_relayer_fee(
+        ctx: Context<UpdateRelayerFee>,
+        chain: u16,
+        fee: u64
+    ) -> Result<()> {
         // Check that the signer is the owner or assistant.
         require!(
-            ctx.accounts
-                .owner_config
-                .is_authorized(&ctx.accounts.payer.key()),
+            ctx.accounts.owner_config.is_authorized(&ctx.accounts.payer.key()),
             TokenBridgeRelayerError::OwnerOnly
         );
 
@@ -224,12 +221,13 @@ pub mod token_bridge_relayer {
         Ok(())
     }
 
-    pub fn update_swap_rate(ctx: Context<UpdateSwapRate>, swap_rate: u64) -> Result<()> {
+    pub fn update_swap_rate(
+        ctx: Context<UpdateSwapRate>,
+        swap_rate: u64
+    ) -> Result<()> {
         // Check that the signer is the owner or assistant.
         require!(
-            ctx.accounts
-                .owner_config
-                .is_authorized(&ctx.accounts.payer.key()),
+            ctx.accounts.owner_config.is_authorized(&ctx.accounts.payer.key()),
             TokenBridgeRelayerError::OwnerOnly
         );
 
@@ -239,7 +237,10 @@ pub mod token_bridge_relayer {
             ctx.accounts.registered_token.is_registered,
             TokenBridgeRelayerError::TokenNotRegistered
         );
-        require!(swap_rate > 0, TokenBridgeRelayerError::ZeroSwapRate);
+        require!(
+            swap_rate > 0,
+            TokenBridgeRelayerError::ZeroSwapRate
+        );
 
         // Set the new swap rate.
         let registered_token = &mut ctx.accounts.registered_token;
@@ -271,7 +272,7 @@ pub mod token_bridge_relayer {
 
     pub fn update_max_native_swap_amount(
         ctx: Context<ManageToken>,
-        max_native_swap_amount: u64,
+        max_native_swap_amount: u64
     ) -> Result<()> {
         require!(
             ctx.accounts.registered_token.is_registered,
@@ -285,7 +286,10 @@ pub mod token_bridge_relayer {
         Ok(())
     }
 
-    pub fn toggle_swaps(ctx: Context<ManageToken>, swaps_enabled: bool) -> Result<()> {
+    pub fn toggle_swaps(
+        ctx: Context<ManageToken>,
+        swaps_enabled: bool
+    ) -> Result<()> {
         require!(
             ctx.accounts.registered_token.is_registered,
             TokenBridgeRelayerError::TokenNotRegistered
@@ -300,7 +304,7 @@ pub mod token_bridge_relayer {
 
     pub fn submit_ownership_transfer_request(
         ctx: Context<ManageOwnershipTransfer>,
-        new_owner: Pubkey,
+        new_owner: Pubkey
     ) -> Result<()> {
         require_keys_neq!(
             new_owner,
@@ -313,13 +317,15 @@ pub mod token_bridge_relayer {
             TokenBridgeRelayerError::AlreadyTheOwner
         );
 
-        let owner_config = &mut ctx.accounts.owner_config;
+        let owner_config= &mut ctx.accounts.owner_config;
         owner_config.pending_owner = Some(new_owner);
 
         Ok(())
     }
 
-    pub fn cancel_ownership_transfer_request(ctx: Context<ManageOwnershipTransfer>) -> Result<()> {
+    pub fn cancel_ownership_transfer_request(
+        ctx: Context<ManageOwnershipTransfer>
+    ) -> Result<()> {
         let owner_config = &mut ctx.accounts.owner_config;
         owner_config.pending_owner = None;
 
@@ -327,13 +333,11 @@ pub mod token_bridge_relayer {
     }
 
     pub fn confirm_ownership_transfer_request(
-        ctx: Context<ConfirmOwnershipTransfer>,
+        ctx: Context<ConfirmOwnershipTransfer>
     ) -> Result<()> {
         // Check that the signer is the pending owner.
         require!(
-            ctx.accounts
-                .owner_config
-                .is_pending_owner(&ctx.accounts.payer.key()),
+            ctx.accounts.owner_config.is_pending_owner(&ctx.accounts.payer.key()),
             TokenBridgeRelayerError::NotPendingOwner
         );
 
@@ -361,7 +365,7 @@ pub mod token_bridge_relayer {
         to_native_token_amount: u64,
         recipient_chain: u16,
         recipient_address: [u8; 32],
-        batch_id: u32,
+        batch_id: u32
     ) -> Result<()> {
         // Confirm that the mint is a registered token.
         require!(
@@ -373,46 +377,53 @@ pub mod token_bridge_relayer {
         // chain.
         require!(
             recipient_chain > wormhole::CHAIN_ID_SOLANA
-                && !recipient_address.iter().all(|&x| x == 0),
+            && !recipient_address.iter().all(|&x| x == 0),
             TokenBridgeRelayerError::InvalidRecipient,
         );
 
         // Token Bridge program truncates amounts to 8 decimals, so there will
         // be a residual amount if decimals of SPL is >8. We need to take into
         // account how much will actually be bridged.
-        let truncated_amount = token_bridge::truncate_amount(amount, ctx.accounts.mint.decimals);
+        let truncated_amount = token_bridge::truncate_amount(
+            amount,
+            ctx.accounts.mint.decimals
+        );
         require!(
             truncated_amount > 0,
             TokenBridgeRelayerError::ZeroBridgeAmount
         );
 
         // Normalize the to_native_token_amount to 8 decimals.
-        let normalized_to_native_amount =
-            token_bridge::normalize_amount(to_native_token_amount, ctx.accounts.mint.decimals);
+        let normalized_to_native_amount = token_bridge::normalize_amount(
+            to_native_token_amount,
+            ctx.accounts.mint.decimals
+        );
         require!(
-            to_native_token_amount == 0 || normalized_to_native_amount > 0,
+            to_native_token_amount == 0 ||
+            normalized_to_native_amount > 0,
             TokenBridgeRelayerError::ZeroBridgeAmount
         );
 
         // Compute the relayer fee in terms of the native token being
         // transfered.
-        let token_fee = ctx
-            .accounts
-            .relayer_fee
-            .checked_token_fee(
-                ctx.accounts.mint.decimals,
-                ctx.accounts.registered_token.swap_rate,
-                ctx.accounts.config.swap_rate_precision,
-                ctx.accounts.config.relayer_fee_precision,
-            )
-            .ok_or(TokenBridgeRelayerError::FeeCalculationError)?;
+        let token_fee = ctx.accounts.relayer_fee.checked_token_fee(
+            ctx.accounts.mint.decimals,
+            ctx.accounts.registered_token.swap_rate,
+            ctx.accounts.config.swap_rate_precision,
+            ctx.accounts.config.relayer_fee_precision
+        ).ok_or(TokenBridgeRelayerError::FeeCalculationError)?;
 
         // Normalize the transfer amount and relayer fee and confirm that the
         // user has sent enough tokens to cover the native swap on the target
         // chain and to pay the relayer fee.
-        let normalized_relayer_fee =
-            token_bridge::normalize_amount(token_fee, ctx.accounts.mint.decimals);
-        let normalized_amount = token_bridge::normalize_amount(amount, ctx.accounts.mint.decimals);
+        let normalized_relayer_fee = token_bridge::normalize_amount(
+            token_fee,
+            ctx.accounts.mint.decimals
+        );
+        let normalized_amount = token_bridge::normalize_amount(
+            amount,
+            ctx.accounts.mint.decimals
+        );
         require!(
             normalized_amount > normalized_to_native_amount + normalized_relayer_fee,
             TokenBridgeRelayerError::InsufficientFunds
@@ -460,7 +471,7 @@ pub mod token_bridge_relayer {
         let payload = TokenBridgeRelayerMessage::TransferWithRelay {
             target_relayer_fee: normalized_relayer_fee,
             to_native_token_amount: normalized_to_native_amount,
-            recipient: recipient_address,
+            recipient: recipient_address
         }
         .try_to_vec()?;
 
@@ -665,7 +676,7 @@ pub mod token_bridge_relayer {
         to_native_token_amount: u64,
         recipient_chain: u16,
         recipient_address: [u8; 32],
-        batch_id: u32,
+        batch_id: u32
     ) -> Result<()> {
         require!(amount > 0, TokenBridgeRelayerError::ZeroBridgeAmount);
 
@@ -679,22 +690,18 @@ pub mod token_bridge_relayer {
         // chain.
         require!(
             recipient_chain > wormhole::CHAIN_ID_SOLANA
-                && !recipient_address.iter().all(|&x| x == 0),
+            && !recipient_address.iter().all(|&x| x == 0),
             TokenBridgeRelayerError::InvalidRecipient,
         );
 
         // Compute the relayer fee in terms of the native token being
         // transfered.
-        let relayer_fee = ctx
-            .accounts
-            .relayer_fee
-            .checked_token_fee(
-                ctx.accounts.token_bridge_wrapped_mint.decimals,
-                ctx.accounts.registered_token.swap_rate,
-                ctx.accounts.config.swap_rate_precision,
-                ctx.accounts.config.relayer_fee_precision,
-            )
-            .ok_or(TokenBridgeRelayerError::FeeCalculationError)?;
+        let relayer_fee = ctx.accounts.relayer_fee.checked_token_fee(
+            ctx.accounts.token_bridge_wrapped_mint.decimals,
+            ctx.accounts.registered_token.swap_rate,
+            ctx.accounts.config.swap_rate_precision,
+            ctx.accounts.config.relayer_fee_precision
+        ).ok_or(TokenBridgeRelayerError::FeeCalculationError)?;
 
         // Confirm that the user has sent enough tokens to cover the native
         // swap on the target chain and to the pay relayer fee.
@@ -745,7 +752,7 @@ pub mod token_bridge_relayer {
         let payload = TokenBridgeRelayerMessage::TransferWithRelay {
             target_relayer_fee: relayer_fee,
             to_native_token_amount,
-            recipient: recipient_address,
+            recipient: recipient_address
         }
         .try_to_vec()?;
 

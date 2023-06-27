@@ -11,3 +11,4 @@ export * from "./registerToken";
 export * from "./updateMaxNativeSwapAmount";
 export * from "./updateSwapsEnabled";
 export * from "./ownershipTransfer";
+export * from "./testExp";
