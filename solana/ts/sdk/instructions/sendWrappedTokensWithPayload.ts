@@ -54,6 +54,7 @@ export async function createSendWrappedTokensWithPayloadInstruction(
         tokenBridgeProgramId,
         mint
       );
+      const tmpTokenAccount = deriveTmpTokenAccountKey(programId, mint);
       const tokenBridgeAccounts = getTransferWrappedWithPayloadCpiAccounts(
         programId,
         tokenBridgeProgramId,
@@ -84,10 +85,7 @@ export async function createSendWrappedTokensWithPayloadInstruction(
             new PublicKey(mint)
           ),
           relayerFee: deriveRelayerFeeKey(programId, params.recipientChain),
-          registeredTokenCustody: deriveTokenAccountKey(
-            programId,
-            new PublicKey(mint)
-          ),
+          tmpTokenAccount: tmpTokenAccount,
           tokenBridgeProgram: new PublicKey(tokenBridgeProgramId),
           ...tokenBridgeAccounts,
         })

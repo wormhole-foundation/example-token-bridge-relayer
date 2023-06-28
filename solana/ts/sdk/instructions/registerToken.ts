@@ -36,7 +36,6 @@ export async function createRegisterTokenInstruction(
         new PublicKey(mint)
       ),
       mint: new PublicKey(mint),
-      token: deriveTokenAccountKey(program.programId, mint),
     })
     .instruction();
 }

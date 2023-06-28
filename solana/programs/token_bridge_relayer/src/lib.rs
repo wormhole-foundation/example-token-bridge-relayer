@@ -438,14 +438,15 @@ pub mod token_bridge_relayer {
 
         // These seeds are used to:
         // 1.  Sign the Sender Config's token account to delegate approval
-        //     of normalized_amount.
+        //     of truncated_amount.
         // 2.  Sign Token Bridge program's transfer_native instruction.
+        // 3.  Close tmp_token_account.
         let config_seeds = &[
             SenderConfig::SEED_PREFIX.as_ref(),
             &[ctx.accounts.config.bump],
         ];
 
-        // First transfer tokens from payer to registered_token_custody.
+        // First transfer tokens from payer to tmp_token_account.
         if wrap_native {
             require!(
                 ctx.accounts.mint.key() == spl_token::native_mint::ID,
@@ -458,7 +459,7 @@ pub mod token_bridge_relayer {
                     ctx.accounts.system_program.to_account_info(),
                     Transfer {
                         from: ctx.accounts.payer.to_account_info(),
-                        to: ctx.accounts.registered_token_custody.to_account_info(),
+                        to: ctx.accounts.tmp_token_account.to_account_info(),
                     },
                 ),
                 truncated_amount,
@@ -468,7 +469,7 @@ pub mod token_bridge_relayer {
             token::sync_native(CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
                 token::SyncNative {
-                    account: ctx.accounts.registered_token_custody.to_account_info(),
+                    account: ctx.accounts.tmp_token_account.to_account_info(),
                 },
             ))?;
         } else {
@@ -477,7 +478,7 @@ pub mod token_bridge_relayer {
                     ctx.accounts.token_program.to_account_info(),
                     anchor_spl::token::Transfer {
                         from: ctx.accounts.from_token_account.to_account_info(),
-                        to: ctx.accounts.registered_token_custody.to_account_info(),
+                        to: ctx.accounts.tmp_token_account.to_account_info(),
                         authority: ctx.accounts.payer.to_account_info(),
                     },
                 ),
@@ -490,7 +491,7 @@ pub mod token_bridge_relayer {
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
                 anchor_spl::token::Approve {
-                    to: ctx.accounts.registered_token_custody.to_account_info(),
+                    to: ctx.accounts.tmp_token_account.to_account_info(),
                     delegate: ctx.accounts.token_bridge_authority_signer.to_account_info(),
                     authority: ctx.accounts.config.to_account_info(),
                 },
@@ -515,7 +516,7 @@ pub mod token_bridge_relayer {
                 token_bridge::TransferNativeWithPayload {
                     payer: ctx.accounts.payer.to_account_info(),
                     config: ctx.accounts.token_bridge_config.to_account_info(),
-                    from: ctx.accounts.registered_token_custody.to_account_info(),
+                    from: ctx.accounts.tmp_token_account.to_account_info(),
                     mint: ctx.accounts.mint.to_account_info(),
                     custody: ctx.accounts.token_bridge_custody.to_account_info(),
                     authority_signer: ctx.accounts.token_bridge_authority_signer.to_account_info(),
@@ -555,7 +556,16 @@ pub mod token_bridge_relayer {
             &ctx.program_id.key(),
         )?;
 
-        Ok(())
+        // Finish instruction by closing tmp_token_account.
+        anchor_spl::token::close_account(CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            anchor_spl::token::CloseAccount {
+                account: ctx.accounts.tmp_token_account.to_account_info(),
+                destination: ctx.accounts.payer.to_account_info(),
+                authority: ctx.accounts.config.to_account_info(),
+            },
+            &[&config_seeds[..]],
+        ))
     }
 
     // pub fn redeem_native_transfer_with_payload(
@@ -738,18 +748,19 @@ pub mod token_bridge_relayer {
         // 1.  Sign the Sender Config's token account to delegate approval
         //     of amount.
         // 2.  Sign Token Bridge program's transfer_wrapped instruction.
+        // 3.  Close tmp_token_account.
         let config_seeds = &[
             SenderConfig::SEED_PREFIX.as_ref(),
             &[ctx.accounts.config.bump],
         ];
 
-        // First transfer tokens from payer to registered_token_custody.
+        // First transfer tokens from payer to tmp_token_account.
         anchor_spl::token::transfer(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
                 anchor_spl::token::Transfer {
                     from: ctx.accounts.from_token_account.to_account_info(),
-                    to: ctx.accounts.registered_token_custody.to_account_info(),
+                    to: ctx.accounts.tmp_token_account.to_account_info(),
                     authority: ctx.accounts.payer.to_account_info(),
                 },
             ),
@@ -761,7 +772,7 @@ pub mod token_bridge_relayer {
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
                 anchor_spl::token::Approve {
-                    to: ctx.accounts.registered_token_custody.to_account_info(),
+                    to: ctx.accounts.tmp_token_account.to_account_info(),
                     delegate: ctx.accounts.token_bridge_authority_signer.to_account_info(),
                     authority: ctx.accounts.config.to_account_info(),
                 },
@@ -786,7 +797,7 @@ pub mod token_bridge_relayer {
                 token_bridge::TransferWrappedWithPayload {
                     payer: ctx.accounts.payer.to_account_info(),
                     config: ctx.accounts.token_bridge_config.to_account_info(),
-                    from: ctx.accounts.registered_token_custody.to_account_info(),
+                    from: ctx.accounts.tmp_token_account.to_account_info(),
                     from_owner: ctx.accounts.config.to_account_info(),
                     wrapped_mint: ctx.accounts.token_bridge_wrapped_mint.to_account_info(),
                     wrapped_metadata: ctx.accounts.token_bridge_wrapped_meta.to_account_info(),
@@ -826,7 +837,16 @@ pub mod token_bridge_relayer {
             &ctx.program_id.key(),
         )?;
 
-        Ok(())
+        // Finish instruction by closing tmp_token_account.
+        anchor_spl::token::close_account(CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            anchor_spl::token::CloseAccount {
+                account: ctx.accounts.tmp_token_account.to_account_info(),
+                destination: ctx.accounts.payer.to_account_info(),
+                authority: ctx.accounts.config.to_account_info(),
+            },
+            &[&config_seeds[..]],
+        ))
     }
 
     // pub fn redeem_wrapped_transfer_with_payload(

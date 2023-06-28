@@ -308,16 +308,6 @@ pub struct RegisterToken<'info> {
 
     pub mint: Account<'info, Mint>,
 
-    #[account(
-        init_if_needed,
-        payer = owner,
-        seeds = [b"token", mint.key().as_ref()],
-        bump,
-        token::authority = config,
-        token::mint = mint
-    )]
-    pub token: Account<'info, TokenAccount>,
-
     pub token_program: Program<'info, Token>,
 
     pub system_program: Program<'info, System>,
@@ -510,13 +500,6 @@ pub struct SendNativeTokensWithPayload<'info> {
     pub registered_token: Box<Account<'info, RegisteredToken>>,
 
     #[account(
-        mut,
-        seeds = [b"token", mint.key().as_ref()],
-        bump
-    )]
-    pub registered_token_custody: Box<Account<'info, TokenAccount>>,
-
-    #[account(
         seeds = [
             RelayerFee::SEED_PREFIX,
             &recipient_chain.to_le_bytes()[..]
@@ -525,6 +508,23 @@ pub struct SendNativeTokensWithPayload<'info> {
     )]
     // Relayer fee account for the specified recipient chain. Read-only.
     pub relayer_fee: Box<Account<'info, RelayerFee>>,
+
+    #[account(
+        init,
+        payer = payer,
+        seeds = [
+            SEED_PREFIX_TMP,
+            mint.key().as_ref(),
+        ],
+        bump,
+        token::mint = mint,
+        token::authority = config,
+    )]
+    /// Program's temporary token account. This account is created before the
+    /// instruction is invoked to temporarily take custody of the payer's
+    /// tokens. When the tokens are finally bridged out, the token account
+    /// will have zero balance and can be closed.
+    pub tmp_token_account: Box<Account<'info, TokenAccount>>,
 
     /// Wormhole program.
     pub wormhole_program: Program<'info, wormhole::program::Wormhole>,
@@ -829,13 +829,6 @@ pub struct SendWrappedTokensWithPayload<'info> {
     pub registered_token: Box<Account<'info, RegisteredToken>>,
 
     #[account(
-        mut,
-        seeds = [b"token", token_bridge_wrapped_mint.key().as_ref()],
-        bump
-    )]
-    pub registered_token_custody: Box<Account<'info, TokenAccount>>,
-
-    #[account(
         seeds = [
             RelayerFee::SEED_PREFIX,
             &recipient_chain.to_le_bytes()[..]
@@ -844,6 +837,23 @@ pub struct SendWrappedTokensWithPayload<'info> {
     )]
     // Relayer fee account for the specified recipient chain. Read-only.
     pub relayer_fee: Box<Account<'info, RelayerFee>>,
+
+    #[account(
+        init,
+        payer = payer,
+        seeds = [
+            SEED_PREFIX_TMP,
+            token_bridge_wrapped_mint.key().as_ref(),
+        ],
+        bump,
+        token::mint = token_bridge_wrapped_mint,
+        token::authority = config,
+    )]
+    /// Program's temporary token account. This account is created before the
+    /// instruction is invoked to temporarily take custody of the payer's
+    /// tokens. When the tokens are finally bridged out, the token account
+    /// will have zero balance and can be closed.
+    pub tmp_token_account: Box<Account<'info, TokenAccount>>,
 
     /// Wormhole program.
     pub wormhole_program: Program<'info, wormhole::program::Wormhole>,
