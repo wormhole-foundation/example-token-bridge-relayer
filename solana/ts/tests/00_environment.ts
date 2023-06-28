@@ -8,6 +8,7 @@ import {
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 import {
+  NATIVE_MINT,
   createMint,
   getAccount,
   getAssociatedTokenAddressSync,
@@ -110,6 +111,21 @@ describe(" 0: Wormhole", () => {
                 )
               ).to.be.fulfilled
           )
+        )
+      );
+
+      // Create an additional account for the native mint.
+      await Promise.all(
+        [payer, relayer].map(
+          (wallet) =>
+            expect(
+              getOrCreateAssociatedTokenAccount(
+                connection,
+                wallet,
+                NATIVE_MINT,
+                wallet.publicKey
+              )
+            ).to.be.fulfilled
         )
       );
     });

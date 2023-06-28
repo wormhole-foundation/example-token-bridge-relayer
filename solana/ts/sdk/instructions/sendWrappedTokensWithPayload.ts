@@ -13,6 +13,7 @@ import {
   deriveTmpTokenAccountKey,
   deriveRegisteredTokenKey,
   deriveRelayerFeeKey,
+  deriveTokenAccountKey,
 } from "../accounts";
 import {getProgramSequenceTracker} from "@certusone/wormhole-sdk/lib/cjs/solana/wormhole";
 import {getAssociatedTokenAddressSync} from "@solana/spl-token";
@@ -47,7 +48,6 @@ export async function createSendWrappedTokensWithPayloadInstruction(
         new PublicKey(mint),
         new PublicKey(payer)
       );
-      const tmpTokenAccount = deriveTmpTokenAccountKey(programId, mint);
 
       const wrappedMeta = await getWrappedMeta(
         connection,
@@ -84,7 +84,10 @@ export async function createSendWrappedTokensWithPayloadInstruction(
             new PublicKey(mint)
           ),
           relayerFee: deriveRelayerFeeKey(programId, params.recipientChain),
-          tmpTokenAccount,
+          registeredTokenCustody: deriveTokenAccountKey(
+            programId,
+            new PublicKey(mint)
+          ),
           tokenBridgeProgram: new PublicKey(tokenBridgeProgramId),
           ...tokenBridgeAccounts,
         })

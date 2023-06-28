@@ -10,9 +10,9 @@ import {
   deriveForeignContractKey,
   deriveSenderConfigKey,
   deriveTokenTransferMessageKey,
-  deriveTmpTokenAccountKey,
   deriveRegisteredTokenKey,
   deriveRelayerFeeKey,
+  deriveTokenAccountKey,
 } from "../accounts";
 import {getProgramSequenceTracker} from "@certusone/wormhole-sdk/lib/cjs/solana/wormhole";
 import {getAssociatedTokenAddressSync} from "@solana/spl-token";
@@ -46,7 +46,6 @@ export async function createSendNativeTokensWithPayloadInstruction(
         new PublicKey(mint),
         new PublicKey(payer)
       );
-      const tmpTokenAccount = deriveTmpTokenAccountKey(programId, mint);
       const tokenBridgeAccounts = getTransferNativeWithPayloadCpiAccounts(
         programId,
         tokenBridgeProgramId,
@@ -63,7 +62,8 @@ export async function createSendNativeTokensWithPayloadInstruction(
           new BN(params.toNativeTokenAmount.toString()),
           params.recipientChain,
           [...params.recipientAddress],
-          params.batchId
+          params.batchId,
+          params.wrap_native
         )
         .accounts({
           config: deriveSenderConfigKey(programId),
@@ -76,7 +76,10 @@ export async function createSendNativeTokensWithPayloadInstruction(
             new PublicKey(mint)
           ),
           relayerFee: deriveRelayerFeeKey(programId, params.recipientChain),
-          tmpTokenAccount,
+          registeredTokenCustody: deriveTokenAccountKey(
+            programId,
+            new PublicKey(mint)
+          ),
           tokenBridgeProgram: new PublicKey(tokenBridgeProgramId),
           ...tokenBridgeAccounts,
         })

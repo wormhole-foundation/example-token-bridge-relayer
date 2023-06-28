@@ -33,13 +33,55 @@ import {
 import * as tokenBridgeRelayer from "../../sdk";
 import {deriveWrappedMintKey} from "@certusone/wormhole-sdk/lib/cjs/solana/tokenBridge";
 import * as wormhole from "@certusone/wormhole-sdk/lib/cjs/solana/wormhole";
+import {NATIVE_MINT, getAccount} from "@solana/spl-token";
 
 const TOKEN_BRIDGE_RELAYER_PID = programIdFromEnvVar(
   "TOKEN_BRIDGE_RELAYER_PROGRAM_ID"
 );
 
+export async function getBalance(
+  connection: Connection,
+  wallet: PublicKey,
+  native: boolean,
+  tokenAccount?: PublicKey
+) {
+  if (native) {
+    return connection.getBalance(wallet);
+  } else {
+    if (tokenAccount === undefined) {
+      throw new Error("tokenAccount must be provided");
+    } else {
+      return Number((await getAccount(connection, tokenAccount)).amount);
+    }
+  }
+}
+
+export function getDescription(
+  decimals: number,
+  isNative: boolean,
+  mint: PublicKey
+) {
+  // Create test description.
+  let description = `For ${
+    isNative ? "Native" : "Wrapped"
+  } With ${decimals} Decimals`;
+
+  if (mint == NATIVE_MINT) {
+    description = "For Native SOL";
+  }
+
+  return description;
+}
+
 export function fetchTestTokens() {
   return [
+    [
+      true, // native = true
+      9, // wrapped sol decimals
+      NATIVE_MINT.toBuffer().toString("hex"),
+      NATIVE_MINT,
+      2000000000, // $20 swap rate
+    ],
     [
       false,
       8, // wrapped token decimals
@@ -68,11 +110,12 @@ export function fetchTestTokens() {
 export async function verifyRelayerMessage(
   connection: Connection,
   sequence: bigint,
+  normalizedAmount: number,
   normalizedRelayerFee: number,
   normalizedSwapAmount: number,
   recipient: Buffer
 ) {
-  const payload = parseTokenTransferPayload(
+  const tokenBridgeTransfer = parseTokenTransferPayload(
     (
       await wormhole.getPostedMessage(
         connection,
@@ -82,7 +125,11 @@ export async function verifyRelayerMessage(
         )
       )
     ).message.payload
-  ).tokenTransferPayload;
+  );
+  const payload = tokenBridgeTransfer.tokenTransferPayload;
+
+  // Verify transfer amount.
+  expect(Number(tokenBridgeTransfer.amount)).equals(normalizedAmount);
 
   // Parse the swap amount and relayer fees.
   const relayerFeeInPayload = Number(

@@ -1,7 +1,11 @@
 import {expect, use as chaiUse} from "chai";
 import chaiAsPromised from "chai-as-promised";
 chaiUse(chaiAsPromised);
-import {Connection, PublicKey} from "@solana/web3.js";
+import {
+  Connection,
+  PublicKey,
+  GetVersionedTransactionConfig,
+} from "@solana/web3.js";
 import {
   getAccount,
   getAssociatedTokenAddressSync,
@@ -31,6 +35,8 @@ import {
   tokenBridgeTransform,
   tokenBridgeNormalizeAmount,
   calculateRelayerFee,
+  getDescription,
+  getBalance,
 } from "./helpers";
 
 // The default pecision value used in the token bridge relayer program.
@@ -41,7 +47,7 @@ const TOKEN_BRIDGE_RELAYER_PID = programIdFromEnvVar(
 const ETHEREUM_TOKEN_BRIDGE_ADDRESS = WORMHOLE_CONTRACTS.ethereum.token_bridge;
 
 describe(" 1: Token Bridge Relayer", function () {
-  const connection = new Connection(LOCALHOST, "processed");
+  const connection = new Connection(LOCALHOST, "confirmed");
   // payer is also the recipient in all tests
   const payer = PAYER_KEYPAIR;
   const relayer = RELAYER_KEYPAIR;
@@ -629,54 +635,8 @@ describe(" 1: Token Bridge Relayer", function () {
     });
   });
 
-  // describe("Register Wrapped SOL", async function () {
-  //   // Token registration instruction.
-  //   const createRegisterTokenIx = (opts?: {
-  //     sender?: PublicKey;
-  //     contractAddress?: Buffer;
-  //     swapRate?: BN;
-  //     maxNativeSwapAmount?: BN;
-  //     swapsEnabled?: boolean;
-  //   }) =>
-  //     tokenBridgeRelayer.createRegisterTokenInstruction(
-  //       connection,
-  //       TOKEN_BRIDGE_RELAYER_PID,
-  //       opts?.sender ?? payer.publicKey,
-  //       NATIVE_MINT,
-  //       opts?.swapRate ?? new BN(10000000000),
-  //       opts?.maxNativeSwapAmount ?? new BN(1000000000),
-  //       opts?.swapsEnabled ?? true
-  //     );
-
-  //   it("Register Wrapped Sol as Owner", async function () {
-  //     await expectIxToSucceed(createRegisterTokenIx());
-  //   });
-  // });
-
-  // describe("Wrap and Transfer Experimental", async function () {
-  //   const createWrapAndTransferIx =
-  //     tokenBridgeRelayer.createWrapAndTransferWithRelayInstruction(
-  //       connection,
-  //       program.programId,
-  //       payer.publicKey,
-  //       new BN(1000000000)
-  //     );
-
-  //   it("Do It", async function () {
-  //     await expectIxToSucceed(createWrapAndTransferIx);
-  //     const balance = await getAccount(
-  //       connection,
-  //       tokenBridgeRelayer.deriveTokenAccountKey(program.programId, NATIVE_MINT)
-  //     );
-
-  //     console.log(balance.amount);
-  //   });
-  // });
-
   fetchTestTokens().forEach(([isNative, decimals, _1, mint, _2]) => {
-    describe(`For ${
-      isNative ? "Native" : "Wrapped"
-    } With ${decimals} Decimals`, function () {
+    describe(getDescription(decimals, isNative, mint), function () {
       // Create random swapRate and maxNativeTokenAmount.
       const swapRate = getRandomInt(
         CONTRACT_PRECISION,
@@ -1063,8 +1023,8 @@ describe(" 1: Token Bridge Relayer", function () {
 
   describe("Transfer Tokens With Relay Business Logic", function () {
     const batchId = 0;
-    const sendAmount = 6900000000000; // we are sending once
-    const toNativeTokenAmount = 1000000000;
+    const sendAmount = 69000000000; // we are sending once
+    const toNativeTokenAmount = 10000000000;
     const recipientAddress = Buffer.alloc(32, "1337beef", "hex");
     const initialRelayerFee = 100000000; // $1.00
 
@@ -1077,22 +1037,9 @@ describe(" 1: Token Bridge Relayer", function () {
         )
       ).value() + 1n;
 
-    const verifyTmpTokenAccountDoesNotExist = async (mint: PublicKey) => {
-      const tmpTokenAccountKey = tokenBridgeRelayer.deriveTmpTokenAccountKey(
-        TOKEN_BRIDGE_RELAYER_PID,
-        mint
-      );
-      await expect(getAccount(connection, tmpTokenAccountKey)).to.be.rejected;
-    };
-
-    const getTokenBalance = async (tokenAccount: PublicKey) =>
-      Number((await getAccount(connection, tokenAccount)).amount);
-
     fetchTestTokens().forEach(
       ([isNative, decimals, tokenAddress, mint, swapRate]) => {
-        describe(`For ${
-          isNative ? "Native" : "Wrapped"
-        } With ${decimals} Decimals`, function () {
+        describe(getDescription(decimals, isNative, mint), function () {
           const recipientTokenAccount = getAssociatedTokenAddressSync(
             mint,
             payer.publicKey
@@ -1122,6 +1069,7 @@ describe(" 1: Token Bridge Relayer", function () {
                   recipientAddress: opts?.recipientAddress ?? recipientAddress,
                   recipientChain: opts?.recipientChain ?? foreignChain,
                   batchId: batchId,
+                  wrap_native: mint === NATIVE_MINT ? true : false,
                 }
               );
 
@@ -1185,24 +1133,37 @@ describe(" 1: Token Bridge Relayer", function () {
             it("Finally Send Tokens With Payload", async function () {
               const sequence = await getWormholeSequence();
 
-              // Fetch the token balance before the transfer.
-              const balanceBefore = await getTokenBalance(
+              // Fetch the balance before the transfer.
+              const balanceBefore = await getBalance(
+                connection,
+                payer.publicKey,
+                mint === NATIVE_MINT,
                 recipientTokenAccount
               );
 
-              // Attempt to send the transfer. Depending on pda derivations, we can
-              // exceed our 200k compute units budget.
-              await expectIxToSucceed(
-                createSendTokensWithPayloadIx(),
-                250_000 // compute units
+              // Attempt to send the transfer.
+              await expectIxToSucceed(createSendTokensWithPayloadIx(), 250_000);
+
+              // Fetch the balance after the transfer.
+              const balanceAfter = await getBalance(
+                connection,
+                payer.publicKey,
+                mint === NATIVE_MINT,
+                recipientTokenAccount
               );
 
-              // Calculate the balance change and confirm it matches the expected.
-              const balanceChange =
-                balanceBefore - (await getTokenBalance(recipientTokenAccount));
-              expect(balanceChange).equals(
-                tokenBridgeTransform(Number(sendAmount), decimals)
-              );
+              // Calculate the balance change and confirm it matches the expected. If
+              // wrap is true, then the balance should decrease by the amount sent
+              // plus the amount of lamports used to pay for the transaction.
+              if (mint === NATIVE_MINT) {
+                expect(balanceBefore - balanceAfter).gte(
+                  tokenBridgeTransform(Number(sendAmount), decimals)
+                );
+              } else {
+                expect(balanceBefore - balanceAfter).equals(
+                  tokenBridgeTransform(Number(sendAmount), decimals)
+                );
+              }
 
               // Normalize the to native token amount.
               const expectedToNativeAmount = tokenBridgeNormalizeAmount(
@@ -1222,16 +1183,22 @@ describe(" 1: Token Bridge Relayer", function () {
                 decimals
               );
 
+              // Normalize the transfer amount and verify that it's correct.
+              const expectedAmount = tokenBridgeNormalizeAmount(
+                sendAmount,
+                decimals
+              );
+
               // Parse the token bridge relayer payload and validate the encoded
               // values.
               await verifyRelayerMessage(
                 connection,
                 sequence,
+                expectedAmount,
                 expectedFee,
                 expectedToNativeAmount,
                 recipientAddress
               );
-              await verifyTmpTokenAccountDoesNotExist(mint);
             });
           });
         });

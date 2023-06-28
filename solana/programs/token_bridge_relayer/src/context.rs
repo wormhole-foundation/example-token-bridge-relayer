@@ -313,7 +313,7 @@ pub struct RegisterToken<'info> {
         payer = owner,
         seeds = [b"token", mint.key().as_ref()],
         bump,
-        token::authority = registered_token,
+        token::authority = config,
         token::mint = mint
     )]
     pub token: Account<'info, TokenAccount>,
@@ -456,7 +456,8 @@ pub struct ConfirmOwnershipTransfer<'info> {
     to_native_token_amount: u64,
     recipient_chain: u16,
     recipient_address: [u8; 32],
-    batch_id: u32
+    batch_id: u32,
+    wrap: bool
 )]
 pub struct SendNativeTokensWithPayload<'info> {
     /// Payer will pay Wormhole fee to transfer tokens and create temporary
@@ -509,6 +510,13 @@ pub struct SendNativeTokensWithPayload<'info> {
     pub registered_token: Box<Account<'info, RegisteredToken>>,
 
     #[account(
+        mut,
+        seeds = [b"token", mint.key().as_ref()],
+        bump
+    )]
+    pub registered_token_custody: Box<Account<'info, TokenAccount>>,
+
+    #[account(
         seeds = [
             RelayerFee::SEED_PREFIX,
             &recipient_chain.to_le_bytes()[..]
@@ -517,23 +525,6 @@ pub struct SendNativeTokensWithPayload<'info> {
     )]
     // Relayer fee account for the specified recipient chain. Read-only.
     pub relayer_fee: Box<Account<'info, RelayerFee>>,
-
-    #[account(
-        init,
-        payer = payer,
-        seeds = [
-            SEED_PREFIX_TMP,
-            mint.key().as_ref(),
-        ],
-        bump,
-        token::mint = mint,
-        token::authority = config,
-    )]
-    /// Program's temporary token account. This account is created before the
-    /// instruction is invoked to temporarily take custody of the payer's
-    /// tokens. When the tokens are finally bridged out, the token account
-    /// will have zero balance and can be closed.
-    pub tmp_token_account: Box<Account<'info, TokenAccount>>,
 
     /// Wormhole program.
     pub wormhole_program: Program<'info, wormhole::program::Wormhole>,
@@ -783,8 +774,7 @@ pub struct RedeemNativeTransferWithPayload<'info> {
 )]
 pub struct SendWrappedTokensWithPayload<'info> {
     #[account(mut)]
-    /// Payer will pay Wormhole fee to transfer tokens and create temporary
-    /// token account.
+    /// Payer will pay Wormhole fee to transfer tokens.
     pub payer: Signer<'info>,
 
     #[account(
@@ -836,7 +826,14 @@ pub struct SendWrappedTokensWithPayload<'info> {
     )]
     // Registered token account for the specified mint. This account stores
     // information about the token. Read-only.
-    pub registered_token: Account<'info, RegisteredToken>,
+    pub registered_token: Box<Account<'info, RegisteredToken>>,
+
+    #[account(
+        mut,
+        seeds = [b"token", token_bridge_wrapped_mint.key().as_ref()],
+        bump
+    )]
+    pub registered_token_custody: Box<Account<'info, TokenAccount>>,
 
     #[account(
         seeds = [
@@ -847,19 +844,6 @@ pub struct SendWrappedTokensWithPayload<'info> {
     )]
     // Relayer fee account for the specified recipient chain. Read-only.
     pub relayer_fee: Box<Account<'info, RelayerFee>>,
-
-    #[account(
-        init,
-        payer = payer,
-        seeds = [
-            SEED_PREFIX_TMP,
-            token_bridge_wrapped_mint.key().as_ref(),
-        ],
-        bump,
-        token::mint = token_bridge_wrapped_mint,
-        token::authority = config,
-    )]
-    pub tmp_token_account: Box<Account<'info, TokenAccount>>,
 
     /// Wormhole program.
     pub wormhole_program: Program<'info, wormhole::program::Wormhole>,

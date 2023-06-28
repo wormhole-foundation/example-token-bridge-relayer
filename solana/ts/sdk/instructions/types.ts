@@ -6,4 +6,5 @@ export interface SendTokensParams {
   recipientAddress: Buffer;
   recipientChain: ChainId;
   batchId: number;
+  wrap_native: boolean;
 }
