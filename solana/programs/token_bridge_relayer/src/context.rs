@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token::{Mint, TokenAccount, Token},
+    token::{Mint, TokenAccount, Token, spl_token},
 };
 use wormhole_anchor_sdk::{token_bridge, wormhole};
 
@@ -636,7 +636,7 @@ pub struct RedeemNativeTransferWithPayload<'info> {
 
     #[account(
         seeds = [RedeemerConfig::SEED_PREFIX],
-        bump
+        bump = config.bump
     )]
     /// Redeemer Config account. Acts as the Token Bridge redeemer, which signs
     /// for the complete transfer instruction. Read-only.
@@ -677,6 +677,22 @@ pub struct RedeemNativeTransferWithPayload<'info> {
     pub recipient: UncheckedAccount<'info>,
 
     #[account(
+        seeds = [b"mint", mint.key().as_ref()],
+        bump
+    )]
+    // Registered token account for the specified mint. This account stores
+    // information about the token. Read-only.
+    pub registered_token: Box<Account<'info, RegisteredToken>>,
+
+    #[account(
+        seeds = [b"mint", spl_token::native_mint::ID.as_ref()],
+        bump
+    )]
+    // Registered token account for the native mint. This account stores
+    // information about the token and is used for the swap rate. Read-only.
+    pub native_registered_token: Box<Account<'info, RegisteredToken>>,
+
+    #[account(
         init,
         payer = payer,
         seeds = [
@@ -703,8 +719,8 @@ pub struct RedeemNativeTransferWithPayload<'info> {
     #[account(
         address = config.token_bridge.config @ TokenBridgeRelayerError::InvalidTokenBridgeConfig
     )]
-    /// Token Bridge config. Read-only.
-    pub token_bridge_config: Account<'info, token_bridge::Config>,
+    /// CHECK: Token Bridge config. Read-only.
+    pub token_bridge_config: UncheckedAccount<'info>,
 
     #[account(
         seeds = [
@@ -727,13 +743,10 @@ pub struct RedeemNativeTransferWithPayload<'info> {
     /// not been redeemed, this account will not exist yet.
     pub token_bridge_claim: UncheckedAccount<'info>,
 
-    #[account(
-        address = foreign_contract.token_bridge_foreign_endpoint @ TokenBridgeRelayerError::InvalidTokenBridgeForeignEndpoint
-    )]
-    /// Token Bridge foreign endpoint. This account should really be one
+    /// CHECK: Token Bridge foreign endpoint. This account should really be one
     /// endpoint per chain, but the PDA allows for multiple endpoints for each
     /// chain! We store the proper endpoint for the emitter chain.
-    pub token_bridge_foreign_endpoint: Account<'info, token_bridge::EndpointRegistration>,
+    pub token_bridge_foreign_endpoint: UncheckedAccount<'info>,
 
     #[account(
         mut,

@@ -1,5 +1,6 @@
 import {expect, use as chaiUse, config} from "chai";
 import chaiAsPromised from "chai-as-promised";
+import {ethers} from "ethers";
 chaiUse(chaiAsPromised);
 import {
   LAMPORTS_PER_SOL,
@@ -145,6 +146,22 @@ export async function verifyRelayerMessage(
   expect(relayerFeeInPayload).equals(normalizedRelayerFee);
   expect(swapAmountInPayload).equals(normalizedSwapAmount);
   expect(recipient).deep.equals(recipientInPayload);
+}
+
+export function createTransferWithRelayPayload(
+  targetRelayerFee: number,
+  toNativeTokenAmount: number,
+  recipient: string
+): string {
+  const payloadType = "0x01";
+  const encodedRelayerFee = ethers.utils
+    .hexZeroPad(ethers.utils.hexlify(targetRelayerFee), 32)
+    .substring(2);
+  const encodedToNative = ethers.utils
+    .hexZeroPad(ethers.utils.hexlify(toNativeTokenAmount), 32)
+    .substring(2);
+
+  return payloadType + encodedRelayerFee + encodedToNative + recipient;
 }
 
 export async function calculateRelayerFee(

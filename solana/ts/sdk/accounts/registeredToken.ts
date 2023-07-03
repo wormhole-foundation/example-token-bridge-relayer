@@ -13,7 +13,6 @@ export function deriveRegisteredTokenKey(
 export interface RegisteredTokenData {
   swapRate: BN;
   maxNativeSwapAmount: BN;
-  swapsEnabled: boolean;
   isRegistered: boolean;
 }
 

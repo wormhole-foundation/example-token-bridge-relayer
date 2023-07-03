@@ -18,8 +18,7 @@ export async function createRegisterTokenInstruction(
   payer: PublicKeyInitData,
   mint: PublicKeyInitData,
   swap_rate: BN,
-  max_native_swap_amount: BN,
-  swaps_enabled: boolean
+  max_native_swap_amount: BN
 ): Promise<TransactionInstruction> {
   const program = createTokenBridgeRelayerProgramInterface(
     connection,
@@ -27,7 +26,7 @@ export async function createRegisterTokenInstruction(
   );
 
   return program.methods
-    .registerToken(swap_rate, max_native_swap_amount, swaps_enabled)
+    .registerToken(swap_rate, max_native_swap_amount)
     .accounts({
       owner: new PublicKey(payer),
       config: deriveSenderConfigKey(program.programId),

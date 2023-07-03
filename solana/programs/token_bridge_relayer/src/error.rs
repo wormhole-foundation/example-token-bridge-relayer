@@ -145,6 +145,10 @@ pub enum TokenBridgeRelayerError {
     /// Token fee overflow.
     FeeCalculationError,
 
+    #[msg("InvalidSwapCalculation")]
+    /// Swap calculation overflow.
+    InvalidSwapCalculation,
+
     #[msg("InsufficientFunds")]
     /// Insufficient funds for outbound transfer.
     InsufficientFunds,

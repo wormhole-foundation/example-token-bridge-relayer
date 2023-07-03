@@ -12,6 +12,7 @@ import {
   deriveForeignContractKey,
   deriveTmpTokenAccountKey,
   deriveRedeemerConfigKey,
+  deriveRegisteredTokenKey,
 } from "../accounts";
 import {
   deriveClaimKey,
@@ -19,6 +20,7 @@ import {
 } from "@certusone/wormhole-sdk/lib/cjs/solana/wormhole";
 import {
   getAssociatedTokenAddressSync,
+  NATIVE_MINT,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import {
@@ -26,6 +28,7 @@ import {
   ParsedTokenTransferVaa,
   parseTokenTransferVaa,
   SignedVaa,
+  ChainId,
 } from "@certusone/wormhole-sdk";
 import {
   deriveCustodyKey,
@@ -41,7 +44,8 @@ export async function createRedeemNativeTransferWithPayloadInstruction(
   payer: PublicKeyInitData,
   tokenBridgeProgramId: PublicKeyInitData,
   wormholeProgramId: PublicKeyInitData,
-  wormholeMessage: SignedVaa | ParsedTokenTransferVaa
+  wormholeMessage: SignedVaa | ParsedTokenTransferVaa,
+  recipient: PublicKey
 ): Promise<TransactionInstruction> {
   const program = createTokenBridgeRelayerProgramInterface(
     connection,
@@ -62,16 +66,22 @@ export async function createRedeemNativeTransferWithPayloadInstruction(
     parsed,
     tmpTokenAccount
   );
-
-  const recipient = new PublicKey(parsed.tokenTransferPayload.subarray(1, 33));
   const recipientTokenAccount = getAssociatedTokenAddressSync(mint, recipient);
 
   return program.methods
     .redeemNativeTransferWithPayload([...parsed.hash])
     .accounts({
       config: deriveRedeemerConfigKey(programId),
-      foreignContract: deriveForeignContractKey(programId, parsed.emitterChain),
+      foreignContract: deriveForeignContractKey(
+        programId,
+        parsed.emitterChain as ChainId
+      ),
       tmpTokenAccount,
+      registeredToken: deriveRegisteredTokenKey(programId, new PublicKey(mint)),
+      nativeRegisteredToken: deriveRegisteredTokenKey(
+        programId,
+        new PublicKey(NATIVE_MINT)
+      ),
       recipientTokenAccount,
       recipient,
       payerTokenAccount: getAssociatedTokenAddressSync(

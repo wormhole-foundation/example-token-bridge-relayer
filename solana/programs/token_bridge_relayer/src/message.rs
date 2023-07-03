@@ -91,7 +91,7 @@ pub mod test {
     #[test]
     fn test_message_alive() -> Result<()> {
         let recipient = Pubkey::new_unique().to_bytes();
-        let to_native_token_amount: u64= 100000000;
+        let to_native_token_amount: u64 = 100000000;
         let target_relayer_fee: u64 = 6900000;
 
         // Create the message.
