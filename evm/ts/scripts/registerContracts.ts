@@ -1,27 +1,24 @@
 import { ethers } from "ethers";
 import { RELEASE_CHAIN_ID, RELEASE_RPC, ZERO_BYTES32 } from "./consts";
 import { tryHexToNativeString } from "@certusone/wormhole-sdk";
-import {
-  ITokenBridgeRelayer__factory,
-  ITokenBridgeRelayer,
-} from "../src/ethers-contracts";
+import { ITokenBridgeRelayer__factory, ITokenBridgeRelayer } from "../src/ethers-contracts";
 import * as fs from "fs";
 import { Config, SupportedChainId, isChain, parseArgs } from "./config";
 import { getSigner } from "./signer";
-import { buildOverrides } from "./tx";
+import { Check, TxResult, buildOverrides, handleFailure } from "./tx";
 
 async function registerContract(
   relayer: ITokenBridgeRelayer,
   chainId: SupportedChainId,
-  contract: ethers.BytesLike
-): Promise<boolean> {
+  contract: string
+): Promise<TxResult> {
   // query the contract and see if the contract is already registered
-  const beforeRegistrationEmitter = await relayer.getRegisteredContract(
-    chainId
-  );
-  if (beforeRegistrationEmitter !== ZERO_BYTES32) {
+  const beforeRegistrationEmitter = await relayer.getRegisteredContract(chainId);
+  if (beforeRegistrationEmitter === contract) {
     console.log(`Contract already registered for chainId=${chainId}`);
-    return true;
+    return TxResult.Success("");
+  } else if (beforeRegistrationEmitter !== ZERO_BYTES32) {
+    throw new Error(`A different contract is already registered for chainId=${chainId}`);
   }
 
   const overrides = await buildOverrides(
@@ -31,15 +28,17 @@ async function registerContract(
 
   // register the emitter
   const tx = await relayer.registerContract(chainId, contract, overrides);
+  console.log(`Register tx sent chainId=${chainId}, txHash=${tx.hash}`);
   const receipt = await tx.wait();
-  console.log(
-    `Registered chainId=${chainId}, txHash=${receipt.transactionHash}`
-  );
 
-  // query the contract and confirm that the emitter is set in storage
-  const emitterInContractState = await relayer.getRegisteredContract(chainId);
+  const successMessage = `Registered chainId=${chainId}, txHash=${receipt.transactionHash}`;
+  const failureMessage = `Failed to register chain=${chainId}`;
+  return TxResult.create(receipt, successMessage, failureMessage, async () => {
+    // query the contract and confirm that the emitter is set in storage
+    const emitterInContractState = await relayer.getRegisteredContract(chainId);
 
-  return emitterInContractState === ethers.utils.hexlify(contract);
+    return emitterInContractState === contract;
+  });
 }
 
 async function main() {
@@ -57,15 +56,12 @@ async function main() {
   const wallet = await getSigner(args, provider);
 
   // fetch relayer address from config
-  const relayerAddress = tryHexToNativeString(
-    contracts[RELEASE_CHAIN_ID],
-    RELEASE_CHAIN_ID
-  );
+  const relayerAddress = tryHexToNativeString(contracts[RELEASE_CHAIN_ID], RELEASE_CHAIN_ID);
 
   // setup relayer contract
   const relayer = ITokenBridgeRelayer__factory.connect(relayerAddress, wallet);
 
-  // loop through configured contracts and register them one at a time
+  const checks: Check[] = [];
   for (const [chainId_, contract] of Object.entries(contracts)) {
     // skip this chain
     const chainIdToRegister = Number(chainId_);
@@ -77,17 +73,14 @@ async function main() {
     }
 
     // format the address and register the chain
-    const formattedAddress = ethers.utils.arrayify(`0x${contract}`);
-    const result = await registerContract(
-      relayer,
-      chainIdToRegister,
-      formattedAddress
-    );
+    const formattedAddress = `0x${contract}`;
+    const result = await registerContract(relayer, chainIdToRegister, formattedAddress);
 
-    if (result === false) {
-      console.log(`Failed to register chain=${chainId_}`);
-    }
+    handleFailure(checks, result);
   }
+
+  const messages = (await Promise.all(checks.map((check) => check()))).join("\n");
+  console.log(messages);
 }
 
 main();

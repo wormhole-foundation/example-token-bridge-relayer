@@ -1,25 +1,17 @@
 import { ethers } from "ethers";
 import { RELEASE_CHAIN_ID, RELEASE_RPC } from "./consts";
 import { tryHexToNativeString } from "@certusone/wormhole-sdk";
-import {
-  ITokenBridgeRelayer__factory,
-  ITokenBridgeRelayer,
-} from "../src/ethers-contracts";
+import { ITokenBridgeRelayer__factory, ITokenBridgeRelayer } from "../src/ethers-contracts";
 import * as fs from "fs";
-import {
-  Config,
-  SupportedChainId,
-  isChain,
-  parseArgs,
-} from "./config";
+import { Config, SupportedChainId, isChain, parseArgs } from "./config";
 import { getSigner } from "./signer";
-import { buildOverrides } from "./tx";
+import { Check, TxResult, buildOverrides, handleFailure } from "./tx";
 
 async function updateRelayerFee(
   relayer: ITokenBridgeRelayer,
   chainId: SupportedChainId,
   relayerFee: string
-): Promise<boolean> {
+): Promise<TxResult> {
   const relayerFeeToUpdate = ethers.BigNumber.from(relayerFee);
 
   const overrides = await buildOverrides(
@@ -27,25 +19,26 @@ async function updateRelayerFee(
     RELEASE_CHAIN_ID
   );
 
-  const tx = await relayer.updateRelayerFee(
-    chainId,
-    relayerFeeToUpdate,
-    overrides
+  const tx = await relayer.updateRelayerFee(chainId, relayerFeeToUpdate, overrides);
+  console.log(
+    `Relayer fee update tx sent for chainId=${chainId}, fee=${relayerFee}, txHash=${tx.hash}`
   );
   const receipt = await tx.wait();
-  console.log(
-    `Relayer fee updated for chainId=${chainId}, fee=${relayerFee}, txHash=${receipt.transactionHash}`
-  );
 
-  // query the contract and see if the relayer fee was set properly
-  const relayerFeeInContract = await relayer.relayerFee(chainId);
-  return relayerFeeInContract.eq(relayerFeeToUpdate);
+  const successMessage = `Relayer fee updated for chainId=${chainId}, fee=${relayerFee}, txHash=${receipt.transactionHash}`;
+  const failureMessage = `Failed to update relayer fee for chainId=${chainId}`;
+  return TxResult.create(receipt, successMessage, failureMessage, async () => {
+    // query the contract and see if the relayer fee was set properly
+    const relayerFeeInContract = await relayer.relayerFee(chainId);
+    return relayerFeeInContract.eq(relayerFeeToUpdate);
+  });
 }
 
 async function main() {
   const args = await parseArgs();
-  const { deployedContracts: contracts, relayerFeesInUsd: relayerFees } =
-    JSON.parse(fs.readFileSync(args.config, "utf8")) as Config;
+  const { deployedContracts: contracts, relayerFeesInUsd: relayerFees } = JSON.parse(
+    fs.readFileSync(args.config, "utf8")
+  ) as Config;
 
   if (!isChain(RELEASE_CHAIN_ID)) {
     throw new Error(`Unknown wormhole chain id ${RELEASE_CHAIN_ID}`);
@@ -55,15 +48,12 @@ async function main() {
   const wallet = await getSigner(args, provider);
 
   // fetch relayer address from config
-  const relayerAddress = tryHexToNativeString(
-    contracts[RELEASE_CHAIN_ID],
-    RELEASE_CHAIN_ID
-  );
+  const relayerAddress = tryHexToNativeString(contracts[RELEASE_CHAIN_ID], RELEASE_CHAIN_ID);
 
   // set up relayer contract
   const relayer = ITokenBridgeRelayer__factory.connect(relayerAddress, wallet);
 
-  // loop through relayer fees and update the contract
+  const checks: Check[] = [];
   for (const [chainId_, fee] of Object.entries(relayerFees)) {
     // skip this chain
     const chainIdToRegister = Number(chainId_);
@@ -74,16 +64,12 @@ async function main() {
       continue;
     }
 
-    const result = await updateRelayerFee(
-      relayer,
-      chainIdToRegister,
-      fee
-    );
-
-    if (result === false) {
-      console.log(`Failed to update relayer fee for chainId=${chainId_}`);
-    }
+    const result = await updateRelayerFee(relayer, chainIdToRegister, fee);
+    handleFailure(checks, result);
   }
+
+  const messages = (await Promise.all(checks.map((check) => check()))).join("\n");
+  console.log(messages);
 }
 
 main();

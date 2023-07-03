@@ -7,41 +7,47 @@ export class TxResult {
   private constructor(
     public readonly txSuccess: boolean,
     public readonly successMessage: string,
+    public readonly failureMessage: string,
     public readonly check: () => Promise<boolean>
   ) {}
 
   static create(
     txReceipt: ethers.ContractReceipt,
     successMessage: string,
+    failureMessage: string,
     check: () => Promise<boolean>
   ) {
-    return new TxResult(txReceipt.status === 1, successMessage, check);
+    return new TxResult(
+      txReceipt.status === 1,
+      successMessage,
+      failureMessage,
+      check
+    );
   }
 
   static Success(successMessage: string) {
-    return new TxResult(true, successMessage, async () => true);
+    return new TxResult(true, successMessage, "", async () => true);
   }
 }
 
-export function handleFailure(checks: Check[], result: TxResult, failureMessage: string) {
+export function handleFailure(checks: Check[], result: TxResult) {
   if (result.txSuccess === false) {
-    console.log(failureMessage);
+    console.log(result.failureMessage);
   } else {
-    checks.push(() => doCheck(result, result.successMessage, failureMessage));
+    checks.push(() =>
+      doCheck(result)
+    );
   }
 }
 
-async function doCheck(
-  result: TxResult,
-  successMessage: string,
-  failureMessage: string
-): Promise<string> {
+async function doCheck(result: TxResult): Promise<string> {
+  let failureMessage = result.failureMessage;
   const success = await result.check().catch((error) => {
     failureMessage += `\n ${error?.stack || error}`;
     return false;
   });
   if (!success) return failureMessage;
-  return successMessage;
+  return result.successMessage;
 }
 
 async function estimateGasDeploy(
@@ -50,7 +56,7 @@ async function estimateGasDeploy(
 ): Promise<ethers.BigNumber> {
   const deployTxArgs = factory.getDeployTransaction(...args);
   return factory.signer.estimateGas(deployTxArgs);
-};
+}
 
 export async function buildOverridesDeploy(
   factory: ethers.ContractFactory,
@@ -58,7 +64,7 @@ export async function buildOverridesDeploy(
   args: unknown[]
 ): Promise<ethers.Overrides> {
   return buildOverrides(() => estimateGasDeploy(factory, args), chainId);
-};
+}
 
 async function overshootEstimationGas(
   estimate: () => Promise<ethers.BigNumber>
