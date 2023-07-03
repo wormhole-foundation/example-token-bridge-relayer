@@ -1,10 +1,5 @@
 import { ethers } from "ethers";
-import {
-  RELEASE_CHAIN_ID,
-  RELEASE_RPC,
-  RELEASE_BRIDGE_ADDRESS,
-  ZERO_ADDRESS,
-} from "./consts";
+import { RELEASE_CHAIN_ID, RELEASE_RPC, RELEASE_BRIDGE_ADDRESS, ZERO_ADDRESS } from "./consts";
 import { tryHexToNativeString, tryUint8ArrayToNative } from "@certusone/wormhole-sdk";
 import {
   ITokenBridge,
@@ -173,10 +168,7 @@ async function main() {
   const wallet = await getSigner(args, provider);
 
   // fetch relayer address from config
-  const relayerAddress = tryHexToNativeString(
-    contracts[RELEASE_CHAIN_ID],
-    RELEASE_CHAIN_ID
-  );
+  const relayerAddress = tryHexToNativeString(contracts[RELEASE_CHAIN_ID], RELEASE_CHAIN_ID);
 
   // set up relayer contract
   const relayer = ITokenBridgeRelayer__factory.connect(relayerAddress, wallet);
