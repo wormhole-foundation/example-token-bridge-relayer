@@ -16,7 +16,7 @@
     "@types/mocha": "^9.1.1",
     "@types/yargs": "^17.0.19",
     "elliptic": "^6.5.4",
-    "@xlabs-xyz/ledger-signer": "^0.0.1",
+    "@xlabs-xyz/ledger-signer": "0.0.3",
     "mocha": "^10.0.0",
     "ts-mocha": "^10.0.0",
     "typechain": "^8.1.1",

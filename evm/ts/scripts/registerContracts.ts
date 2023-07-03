@@ -1,101 +1,84 @@
-import {ethers} from "ethers";
+import { ethers } from "ethers";
+import { RELEASE_CHAIN_ID, RELEASE_RPC, ZERO_BYTES32 } from "./consts";
+import { tryHexToNativeString } from "@certusone/wormhole-sdk";
 import {
-  RELEASE_CHAIN_ID,
-  RELEASE_RPC,
-  WALLET_PRIVATE_KEY,
-  ZERO_BYTES32,
-} from "./consts";
-import {tryHexToNativeString, ChainId} from "@certusone/wormhole-sdk";
-import {ITokenBridgeRelayer__factory} from "../src/ethers-contracts";
+  ITokenBridgeRelayer__factory,
+  ITokenBridgeRelayer,
+} from "../src/ethers-contracts";
 import * as fs from "fs";
+import { Config, SupportedChainId, isChain, parseArgs } from "./config";
+import { getSigner } from "./signer";
+import { buildOverrides } from "./tx";
 
 async function registerContract(
-  relayer: ethers.Contract,
-  chainId: Number,
+  relayer: ITokenBridgeRelayer,
+  chainId: SupportedChainId,
   contract: ethers.BytesLike
 ): Promise<boolean> {
-  let result: boolean = false;
-
   // query the contract and see if the contract is already registered
-  const beforeRegistrationEmitter: ethers.BytesLike =
-    await relayer.getRegisteredContract(chainId as ChainId);
-  if (beforeRegistrationEmitter != ZERO_BYTES32) {
+  const beforeRegistrationEmitter = await relayer.getRegisteredContract(
+    chainId
+  );
+  if (beforeRegistrationEmitter !== ZERO_BYTES32) {
     console.log(`Contract already registered for chainId=${chainId}`);
     return true;
   }
 
-  const overrides: Record<string, unknown> = {};
-  if (RELEASE_CHAIN_ID === 5) {
-    // Polygon
-    overrides.type = 0;
-    overrides.gasLimit = 60_000;
-  } else if (RELEASE_CHAIN_ID === 10) {
-    // Fantom
-    overrides.type = 0;
-  }
+  const overrides = await buildOverrides(
+    () => relayer.estimateGas.registerContract(chainId, contract),
+    RELEASE_CHAIN_ID
+  );
 
   // register the emitter
-  let receipt: ethers.ContractReceipt;
-  try {
-    receipt = await relayer
-      .registerContract(chainId as ChainId, contract, overrides)
-      .then((tx: ethers.ContractTransaction) => tx.wait())
-      .catch((msg: any) => {
-        // should not happen
-        console.log(msg);
-        return null;
-      });
-    console.log(
-      `Registered chainId=${chainId}, txHash=${receipt.transactionHash}`
-    );
-  } catch (e: any) {
-    console.log(e);
-  }
+  const tx = await relayer.registerContract(chainId, contract, overrides);
+  const receipt = await tx.wait();
+  console.log(
+    `Registered chainId=${chainId}, txHash=${receipt.transactionHash}`
+  );
 
   // query the contract and confirm that the emitter is set in storage
-  const emitterInContractState: ethers.BytesLike =
-    await relayer.getRegisteredContract(chainId as ChainId);
+  const emitterInContractState = await relayer.getRegisteredContract(chainId);
 
-  if (emitterInContractState == ethers.utils.hexlify(contract)) {
-    result = true;
-  }
-
-  return result;
+  return emitterInContractState === ethers.utils.hexlify(contract);
 }
 
 async function main() {
-  // read config
-  const configPath = `${__dirname}/../../../cfg/deploymentConfig.json`;
-  const relayerConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
-  const contracts = relayerConfig["deployedContracts"];
+  const args = await parseArgs();
+  const { deployedContracts: contracts } = JSON.parse(
+    fs.readFileSync(args.config, "utf8")
+  ) as Config;
+
+  if (!isChain(RELEASE_CHAIN_ID)) {
+    throw new Error(`Unknown wormhole chain id ${RELEASE_CHAIN_ID}`);
+  }
 
   // setup ethers wallet
   const provider = new ethers.providers.StaticJsonRpcProvider(RELEASE_RPC);
-  const wallet = new ethers.Wallet(WALLET_PRIVATE_KEY, provider);
+  const wallet = await getSigner(args, provider);
 
   // fetch relayer address from config
   const relayerAddress = tryHexToNativeString(
     contracts[RELEASE_CHAIN_ID],
-    RELEASE_CHAIN_ID as ChainId
+    RELEASE_CHAIN_ID
   );
 
   // setup relayer contract
-  const relayer: ethers.Contract = ITokenBridgeRelayer__factory.connect(
-    relayerAddress,
-    wallet
-  );
+  const relayer = ITokenBridgeRelayer__factory.connect(relayerAddress, wallet);
 
   // loop through configured contracts and register them one at a time
-  for (const chainId_ of Object.keys(contracts)) {
+  for (const [chainId_, contract] of Object.entries(contracts)) {
     // skip this chain
     const chainIdToRegister = Number(chainId_);
+    if (!isChain(chainIdToRegister)) {
+      throw new Error(`Unknown wormhole chain id ${chainIdToRegister}`);
+    }
     if (chainIdToRegister == RELEASE_CHAIN_ID) {
       continue;
     }
 
     // format the address and register the chain
-    const formattedAddress = ethers.utils.arrayify("0x" + contracts[chainId_]);
-    const result: boolean = await registerContract(
+    const formattedAddress = ethers.utils.arrayify(`0x${contract}`);
+    const result = await registerContract(
       relayer,
       chainIdToRegister,
       formattedAddress
