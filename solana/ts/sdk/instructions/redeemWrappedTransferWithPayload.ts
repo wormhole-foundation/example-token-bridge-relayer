@@ -12,6 +12,7 @@ import {
   deriveForeignContractKey,
   deriveTmpTokenAccountKey,
   deriveRedeemerConfigKey,
+  deriveRegisteredTokenKey,
 } from "../accounts";
 import {
   deriveClaimKey,
@@ -20,12 +21,14 @@ import {
 import {
   getAssociatedTokenAddressSync,
   TOKEN_PROGRAM_ID,
+  NATIVE_MINT,
 } from "@solana/spl-token";
 import {
   isBytes,
   ParsedTokenTransferVaa,
   parseTokenTransferVaa,
   SignedVaa,
+  ChainId,
 } from "@certusone/wormhole-sdk";
 import {
   deriveEndpointKey,
@@ -40,9 +43,11 @@ export async function createRedeemWrappedTransferWithPayloadInstruction(
   connection: Connection,
   programId: PublicKeyInitData,
   payer: PublicKeyInitData,
+  feeRecipient: PublicKey,
   tokenBridgeProgramId: PublicKeyInitData,
   wormholeProgramId: PublicKeyInitData,
-  wormholeMessage: SignedVaa | ParsedTokenTransferVaa
+  wormholeMessage: SignedVaa | ParsedTokenTransferVaa,
+  recipient: PublicKey
 ): Promise<TransactionInstruction> {
   const program = createTokenBridgeRelayerProgramInterface(
     connection,
@@ -68,24 +73,35 @@ export async function createRedeemWrappedTransferWithPayloadInstruction(
     tmpTokenAccount
   );
 
-  const recipient = new PublicKey(parsed.tokenTransferPayload.subarray(1, 33));
   const recipientTokenAccount = getAssociatedTokenAddressSync(
     wrappedMint,
     recipient
+  );
+  const feeRecipientTokenAccount = getAssociatedTokenAddressSync(
+    wrappedMint,
+    feeRecipient
   );
 
   return program.methods
     .redeemWrappedTransferWithPayload([...parsed.hash])
     .accounts({
       config: deriveRedeemerConfigKey(programId),
-      foreignContract: deriveForeignContractKey(programId, parsed.emitterChain),
+      foreignContract: deriveForeignContractKey(
+        programId,
+        parsed.emitterChain as ChainId
+      ),
       tmpTokenAccount,
+      registeredToken: deriveRegisteredTokenKey(
+        programId,
+        new PublicKey(wrappedMint)
+      ),
+      nativeRegisteredToken: deriveRegisteredTokenKey(
+        programId,
+        new PublicKey(NATIVE_MINT)
+      ),
       recipientTokenAccount,
       recipient,
-      payerTokenAccount: getAssociatedTokenAddressSync(
-        wrappedMint,
-        new PublicKey(payer)
-      ),
+      feeRecipientTokenAccount,
       tokenBridgeProgram: new PublicKey(tokenBridgeProgramId),
       ...tokenBridgeAccounts,
     })

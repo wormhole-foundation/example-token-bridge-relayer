@@ -40,6 +40,7 @@ import {
   boilerPlateReduction,
   createMaliciousRegisterChainInstruction,
   ASSISTANT_KEYPAIR,
+  FEE_RECIPIENT_KEYPAIR,
 } from "./helpers";
 
 describe(" 0: Wormhole", () => {
@@ -47,6 +48,7 @@ describe(" 0: Wormhole", () => {
   const payer = PAYER_KEYPAIR;
   const relayer = RELAYER_KEYPAIR;
   const assistant = ASSISTANT_KEYPAIR;
+  const feeRecipient = FEE_RECIPIENT_KEYPAIR;
 
   const defaultMintAmount = 10n ** 6n;
 
@@ -71,7 +73,9 @@ describe(" 0: Wormhole", () => {
 
   before("Airdrop", async function () {
     await Promise.all(
-      [payer, relayer, assistant].map((kp) => kp.publicKey).map(requestAirdrop)
+      [payer, relayer, assistant, feeRecipient]
+        .map((kp) => kp.publicKey)
+        .map(requestAirdrop)
     );
   });
 
@@ -100,7 +104,7 @@ describe(" 0: Wormhole", () => {
     it("Create ATAs", async function () {
       await Promise.all(
         Array.from(MINTS_WITH_DECIMALS.values()).flatMap(({publicKey: mint}) =>
-          [payer, relayer].map(
+          [payer, relayer, feeRecipient].map(
             (wallet) =>
               expect(
                 getOrCreateAssociatedTokenAccount(
@@ -116,7 +120,7 @@ describe(" 0: Wormhole", () => {
 
       // Create an additional account for the native mint.
       await Promise.all(
-        [payer, relayer].map(
+        [payer, relayer, feeRecipient].map(
           (wallet) =>
             expect(
               getOrCreateAssociatedTokenAccount(
@@ -319,7 +323,7 @@ describe(" 0: Wormhole", () => {
 
     it("Create WETH ATAs", async function () {
       await Promise.all(
-        [payer, relayer].map(
+        [payer, relayer, feeRecipient].map(
           (wallet) =>
             expect(
               getOrCreateAssociatedTokenAccount(

@@ -40,6 +40,21 @@ const TOKEN_BRIDGE_RELAYER_PID = programIdFromEnvVar(
   "TOKEN_BRIDGE_RELAYER_PROGRAM_ID"
 );
 
+export interface Balances {
+  recipient: {
+    native: number;
+    token: number;
+  };
+  relayer: {
+    native: number;
+    token: number;
+  };
+  feeRecipient: {
+    native: number;
+    token: number;
+  };
+}
+
 export async function getBalance(
   connection: Connection,
   wallet: PublicKey,
@@ -191,6 +206,94 @@ export async function calculateRelayerFee(
     (relayerFee * 10 ** decimals * swapRatePrecision) /
       (relayerFeePrecision * swapRate)
   );
+}
+
+async function getSwapInputs(
+  connection: Connection,
+  programId: PublicKey,
+  decimals: number,
+  mint: PublicKey
+) {
+  // Fetch the swap rate.
+  const [swapRate, maxNativeSwapAmount] = await tokenBridgeRelayer
+    .getRegisteredTokenData(connection, programId, mint)
+    .then((data) => [
+      data.swapRate.toNumber(),
+      data.maxNativeSwapAmount.toNumber(),
+    ]);
+
+  // Fetch the SOL swap rate.
+  const solSwapRate = await tokenBridgeRelayer
+    .getRegisteredTokenData(connection, programId, NATIVE_MINT)
+    .then((data) => data.swapRate.toNumber());
+
+  // Fetch the precision values.
+  const swapRatePrecision = await tokenBridgeRelayer
+    .getRedeemerConfigData(connection, TOKEN_BRIDGE_RELAYER_PID)
+    .then((data) => data.swapRatePrecision);
+
+  // Calculate the native swap rate.
+  const nativeSwapRate = Math.floor(
+    (swapRatePrecision * solSwapRate) / swapRate
+  );
+
+  // Calculate the max swap amount.
+  let maxNativeSwapAmountInTokens;
+  if (decimals > 9) {
+    maxNativeSwapAmountInTokens = Math.floor(
+      (maxNativeSwapAmount * nativeSwapRate * 10 ** (decimals - 9)) /
+        swapRatePrecision
+    );
+  } else {
+    maxNativeSwapAmountInTokens = Math.floor(
+      (maxNativeSwapAmount * nativeSwapRate) /
+        (10 ** (9 - decimals) * swapRatePrecision)
+    );
+  }
+
+  return [maxNativeSwapAmountInTokens, nativeSwapRate, swapRatePrecision];
+}
+
+export async function calculateSwapAmounts(
+  connection: Connection,
+  programId: PublicKey,
+  decimals: number,
+  mint: PublicKey,
+  toNativeTokenAmount: number
+) {
+  // Fetch the swap inputs.
+  const [maxNativeSwapAmount, nativeSwapRate, swapRatePrecision] =
+    await getSwapInputs(connection, programId, decimals, mint);
+
+  // Return if a swap is not possible.
+  if (toNativeTokenAmount == 0 || maxNativeSwapAmount == 0) {
+    return [0, 0];
+  }
+
+  // Override the toNativeTokenAmount if it exceeds the maxNativeSwapAmount.
+  toNativeTokenAmount =
+    toNativeTokenAmount > maxNativeSwapAmount
+      ? maxNativeSwapAmount
+      : toNativeTokenAmount;
+
+  // Calculate the swap amount out.
+  if (decimals > 9) {
+    return [
+      toNativeTokenAmount,
+      Math.floor(
+        (swapRatePrecision * toNativeTokenAmount) /
+          (nativeSwapRate * 10 ** (decimals - 9))
+      ),
+    ];
+  } else {
+    return [
+      toNativeTokenAmount,
+      Math.floor(
+        (swapRatePrecision * toNativeTokenAmount * 10 ** (9 - decimals)) /
+          nativeSwapRate
+      ),
+    ];
+  }
 }
 
 export function tokenBridgeNormalizeAmount(

@@ -100,6 +100,11 @@ pub enum TokenBridgeRelayerError {
     /// account.
     InvalidPayerAta,
 
+    #[msg("InvalidFeeRecipientAta")]
+    /// To redeem transfers, the fee recipient must pass an associated token
+    /// account.
+    InvalidFeeRecipientAta,
+
     #[msg("InvalidTransferToAddress")]
     /// Deserialized recipient must be this program or the redeemer PDA.
     InvalidTransferToAddress,
@@ -112,10 +117,10 @@ pub enum TokenBridgeRelayerError {
     /// Token Bridge program's foreign endpoint disagrees with registered one.
     InvalidTokenBridgeForeignEndpoint,
 
-    #[msg("NonExistentRelayerAta")]
-    /// Relayer needs to create an associated token account before he can be
+    #[msg("NonExistentFeeRecipientAta")]
+    /// Fee recipient needs to create an associated token account before he can be
     /// paid.
-    NonExistentRelayerAta,
+    NonExistentFeeRecipientAta,
 
     #[msg("InvalidTokenBridgeMintAuthority")]
     /// Specified Token Bridge mint authority PDA is wrong.

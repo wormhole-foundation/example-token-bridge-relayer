@@ -1,11 +1,7 @@
 import {expect, use as chaiUse} from "chai";
 import chaiAsPromised from "chai-as-promised";
 chaiUse(chaiAsPromised);
-import {
-  Connection,
-  PublicKey,
-  GetVersionedTransactionConfig,
-} from "@solana/web3.js";
+import {Connection, PublicKey} from "@solana/web3.js";
 import {
   getAccount,
   getAssociatedTokenAddressSync,
@@ -38,6 +34,7 @@ import {
   getDescription,
   getBalance,
   createTransferWithRelayPayload,
+  calculateSwapAmounts,
 } from "./helpers";
 
 // The default pecision value used in the token bridge relayer program.
@@ -929,6 +926,7 @@ describe(" 1: Token Bridge Relayer", function () {
     const sendAmount = 69000000000; // we are sending once
     const recipientAddress = Buffer.alloc(32, "1337beef", "hex");
     const initialRelayerFee = 100000000; // $1.00
+    const maxNativeSwapAmount = 1000000000; // 1 SOL
 
     const getWormholeSequence = async () =>
       (
@@ -939,16 +937,32 @@ describe(" 1: Token Bridge Relayer", function () {
         )
       ).value() + 1n;
 
+    const verifyTmpTokenAccountDoesNotExist = async (mint: PublicKey) => {
+      const tmpTokenAccountKey = tokenBridgeRelayer.deriveTmpTokenAccountKey(
+        TOKEN_BRIDGE_RELAYER_PID,
+        mint
+      );
+      await expect(getAccount(connection, tmpTokenAccountKey)).to.be.rejected;
+    };
+
     fetchTestTokens().forEach(
       ([isNative, decimals, tokenAddress, mint, swapRate]) => {
         describe(getDescription(decimals, isNative, mint), function () {
           // Target contract swap amount.
           const toNativeTokenAmount = 10000000000;
 
-          // Recipient ATA.
+          // ATAs.
           const recipientTokenAccount = getAssociatedTokenAddressSync(
             mint,
             payer.publicKey
+          );
+          const feeRecipientTokenAccount = getAssociatedTokenAddressSync(
+            mint,
+            feeRecipient.publicKey
+          );
+          const relayerTokenAccount = getAssociatedTokenAddressSync(
+            mint,
+            relayer.publicKey
           );
 
           describe(`Send Tokens With Payload`, function () {
@@ -990,6 +1004,19 @@ describe(" 1: Token Bridge Relayer", function () {
                   new BN(swapRate)
                 );
               await expectIxToSucceed(createUpdateSwapRateIx);
+            });
+
+            it("Set the Max Native Swap Amount", async function () {
+              // Set the max native swap amount.
+              const createUpdateMaxNativeSwapAmountIx =
+                await tokenBridgeRelayer.createUpdateMaxNativeSwapAmountInstruction(
+                  connection,
+                  TOKEN_BRIDGE_RELAYER_PID,
+                  payer.publicKey,
+                  mint,
+                  isNative ? new BN(maxNativeSwapAmount) : new BN(0)
+                );
+              await expectIxToSucceed(createUpdateMaxNativeSwapAmountIx);
             });
 
             it("Set the Initial Relayer Fee", async function () {
@@ -1105,10 +1132,15 @@ describe(" 1: Token Bridge Relayer", function () {
                 expectedToNativeAmount,
                 recipientAddress
               );
+
+              await verifyTmpTokenAccountDoesNotExist(mint);
             });
           });
 
           describe("Complete Transfer with Relay", function () {
+            // Fee epsilon.
+            const feeEpsilon = 10000000;
+
             // Test parameters.
             const receiveAmount = sendAmount / 3;
             const toNativeTokenAmount = 10000000000;
@@ -1125,6 +1157,7 @@ describe(" 1: Token Bridge Relayer", function () {
                 connection,
                 TOKEN_BRIDGE_RELAYER_PID,
                 sender,
+                feeRecipient.publicKey,
                 TOKEN_BRIDGE_PID,
                 CORE_BRIDGE_PID,
                 signedMsg,
@@ -1170,6 +1203,14 @@ describe(" 1: Token Bridge Relayer", function () {
                 postSignedMsgAsVaaOnSolana(signedMsg, payer)
               ).to.be.fulfilled;
 
+              // Fetch the balance before the transfer.
+              const balanceBefore = await getBalance(
+                connection,
+                payer.publicKey,
+                mint === NATIVE_MINT,
+                recipientTokenAccount
+              );
+
               // Complete the transfer.
               await expectIxToSucceed(
                 createRedeemTransferWithPayloadIx(
@@ -1179,6 +1220,29 @@ describe(" 1: Token Bridge Relayer", function () {
                 ),
                 payer
               );
+
+              // Fetch the balance after the transfer.
+              const balanceAfter = await getBalance(
+                connection,
+                payer.publicKey,
+                mint === NATIVE_MINT,
+                recipientTokenAccount
+              );
+
+              // Calculate the balance change and confirm it matches the expected. If
+              // wrap is true, then the balance should decrease by the amount sent
+              // plus the amount of lamports used to pay for the transaction.
+              if (mint === NATIVE_MINT) {
+                expect(balanceAfter - balanceBefore - receiveAmount).lte(
+                  tokenBridgeTransform(feeEpsilon, decimals)
+                );
+              } else {
+                expect(balanceAfter - balanceBefore).equals(
+                  tokenBridgeTransform(Number(receiveAmount), decimals)
+                );
+              }
+
+              await verifyTmpTokenAccountDoesNotExist(mint);
             });
 
             it("With Relayer (With Swap)", async function () {
@@ -1220,6 +1284,34 @@ describe(" 1: Token Bridge Relayer", function () {
                 postSignedMsgAsVaaOnSolana(signedMsg, relayer)
               ).to.be.fulfilled;
 
+              // Fetch the token balances before the transfer.
+              const recipientTokenBalanceBefore = await getBalance(
+                connection,
+                payer.publicKey,
+                mint === NATIVE_MINT,
+                recipientTokenAccount
+              );
+              const feeRecipientTokenBalanceBefore = await getBalance(
+                connection,
+                feeRecipient.publicKey,
+                mint === NATIVE_MINT,
+                feeRecipientTokenAccount
+              );
+
+              // Fetch the lamport balances before the transfer.
+              const recipientLamportBalanceBefore = await getBalance(
+                connection,
+                payer.publicKey,
+                true,
+                recipientTokenAccount
+              );
+              const relayerLamportBalanceBefore = await getBalance(
+                connection,
+                relayer.publicKey,
+                true,
+                relayerTokenAccount
+              );
+
               // Complete the transfer.
               await expectIxToSucceed(
                 createRedeemTransferWithPayloadIx(
@@ -1229,6 +1321,255 @@ describe(" 1: Token Bridge Relayer", function () {
                 ),
                 relayer
               );
+
+              // Fetch the token balances after the transfer.
+              const recipientTokenBalanceAfter = await getBalance(
+                connection,
+                payer.publicKey,
+                mint === NATIVE_MINT,
+                recipientTokenAccount
+              );
+              const feeRecipientTokenBalanceAfter = await getBalance(
+                connection,
+                feeRecipient.publicKey,
+                mint === NATIVE_MINT,
+                feeRecipientTokenAccount
+              );
+
+              // Fetch the lamport balances after the transfer.
+              const recipientLamportBalanceAfter = await getBalance(
+                connection,
+                payer.publicKey,
+                true,
+                recipientTokenAccount
+              );
+              const relayerLamportBalanceAfter = await getBalance(
+                connection,
+                relayer.publicKey,
+                true,
+                relayerTokenAccount
+              );
+
+              // Denormalize the transfer amount and relayer fee.
+              const denormalizedReceiveAmount = tokenBridgeTransform(
+                receiveAmount,
+                decimals
+              );
+              const denormalizedRelayerFee = tokenBridgeTransform(
+                relayerFee,
+                decimals
+              );
+
+              // Confirm the balance changes.
+              if (mint === NATIVE_MINT) {
+                // Confirm lamport changes for the recipient.
+                expect(
+                  recipientLamportBalanceAfter - recipientLamportBalanceBefore
+                ).equals(
+                  tokenBridgeTransform(
+                    Number(receiveAmount) - denormalizedRelayerFee,
+                    decimals
+                  )
+                );
+
+                // Confirm lamport changes for the relayer.
+                expect(
+                  relayerLamportBalanceAfter - relayerLamportBalanceBefore
+                ).gte(denormalizedRelayerFee - feeEpsilon);
+              } else {
+                // Calculate the expected token swap amounts.
+                const [expectedSwapAmountIn, expectedSwapAmountOut] =
+                  await calculateSwapAmounts(
+                    connection,
+                    program.programId,
+                    decimals,
+                    mint,
+                    denormalizedReceiveAmount
+                  );
+
+                // Confirm token changes for the recipient.
+                expect(
+                  recipientTokenBalanceAfter - recipientTokenBalanceBefore
+                ).equals(
+                  denormalizedReceiveAmount -
+                    expectedSwapAmountIn -
+                    denormalizedRelayerFee
+                );
+
+                // Confirm token changes for fee recipient.
+                expect(
+                  feeRecipientTokenBalanceAfter - feeRecipientTokenBalanceBefore
+                ).equals(expectedSwapAmountIn + denormalizedRelayerFee);
+
+                // Confirm lamports changes for the recipient.
+                expect(
+                  recipientLamportBalanceAfter - recipientLamportBalanceBefore
+                ).equals(expectedSwapAmountOut);
+
+                // Confirm lamports changes for the relayer.
+                expect(relayerLamportBalanceBefore - relayerLamportBalanceAfter)
+                  .gte(expectedSwapAmountOut)
+                  .lte(expectedSwapAmountOut + feeEpsilon);
+              }
+
+              await verifyTmpTokenAccountDoesNotExist(mint);
+            });
+
+            it("With Relayer (Without Swap)", async function () {
+              // Define inbound transfer parameters. Calcualte the fee
+              // using the foreignChain to simulate calculating the
+              // target relayer fee. This contract won't allow us to set
+              // a relayer fee for the Solana chain ID.
+              const relayerFee = await calculateRelayerFee(
+                connection,
+                program.programId,
+                foreignChain, // placeholder
+                decimals,
+                mint
+              );
+
+              // Create the encoded transfer with relay payload. Set the
+              // to native token amount to zero for this test.
+              const transferWithRelayPayload = createTransferWithRelayPayload(
+                tokenBridgeNormalizeAmount(relayerFee, decimals),
+                tokenBridgeNormalizeAmount(0, decimals),
+                payer.publicKey.toBuffer().toString("hex")
+              );
+
+              // Create the token bridge message.
+              const signedMsg = guardianSign(
+                foreignTokenBridge.publishTransferTokensWithPayload(
+                  tokenAddress,
+                  isNative ? CHAINS.solana : foreignChain, // tokenChain
+                  BigInt(tokenBridgeNormalizeAmount(receiveAmount, decimals)),
+                  CHAINS.solana, // recipientChain
+                  TOKEN_BRIDGE_RELAYER_PID.toBuffer().toString("hex"),
+                  foreignContractAddress,
+                  Buffer.from(transferWithRelayPayload.substring(2), "hex"),
+                  batchId
+                )
+              );
+
+              // Post the Wormhole message.
+              await expect(
+                postSignedMsgAsVaaOnSolana(signedMsg, relayer)
+              ).to.be.fulfilled;
+
+              // Fetch the token balances before the transfer.
+              const recipientTokenBalanceBefore = await getBalance(
+                connection,
+                payer.publicKey,
+                mint === NATIVE_MINT,
+                recipientTokenAccount
+              );
+              const feeRecipientTokenBalanceBefore = await getBalance(
+                connection,
+                feeRecipient.publicKey,
+                mint === NATIVE_MINT,
+                feeRecipientTokenAccount
+              );
+
+              // Fetch the lamport balances before the transfer.
+              const recipientLamportBalanceBefore = await getBalance(
+                connection,
+                payer.publicKey,
+                true,
+                recipientTokenAccount
+              );
+              const relayerLamportBalanceBefore = await getBalance(
+                connection,
+                relayer.publicKey,
+                true,
+                relayerTokenAccount
+              );
+
+              // Complete the transfer.
+              await expectIxToSucceed(
+                createRedeemTransferWithPayloadIx(
+                  relayer.publicKey,
+                  signedMsg,
+                  payer.publicKey
+                ),
+                relayer
+              );
+
+              // Fetch the token balances after the transfer.
+              const recipientTokenBalanceAfter = await getBalance(
+                connection,
+                payer.publicKey,
+                mint === NATIVE_MINT,
+                recipientTokenAccount
+              );
+              const feeRecipientTokenBalanceAfter = await getBalance(
+                connection,
+                feeRecipient.publicKey,
+                mint === NATIVE_MINT,
+                feeRecipientTokenAccount
+              );
+
+              // Fetch the lamport balances after the transfer.
+              const recipientLamportBalanceAfter = await getBalance(
+                connection,
+                payer.publicKey,
+                true,
+                recipientTokenAccount
+              );
+              const relayerLamportBalanceAfter = await getBalance(
+                connection,
+                relayer.publicKey,
+                true,
+                relayerTokenAccount
+              );
+
+              // Denormalize the transfer amount and relayer fee.
+              const denormalizedReceiveAmount = tokenBridgeTransform(
+                receiveAmount,
+                decimals
+              );
+              const denormalizedRelayerFee = tokenBridgeTransform(
+                relayerFee,
+                decimals
+              );
+
+              // Confirm the balance changes.
+              if (mint === NATIVE_MINT) {
+                // Confirm lamport changes for the recipient.
+                expect(
+                  recipientLamportBalanceAfter - recipientLamportBalanceBefore
+                ).equals(
+                  tokenBridgeTransform(
+                    Number(receiveAmount) - denormalizedRelayerFee,
+                    decimals
+                  )
+                );
+
+                // Confirm lamport changes for the relayer.
+                expect(
+                  relayerLamportBalanceAfter - relayerLamportBalanceBefore
+                ).gte(denormalizedRelayerFee - feeEpsilon);
+              } else {
+                // Confirm token changes for the recipient.
+                expect(
+                  recipientTokenBalanceAfter - recipientTokenBalanceBefore
+                ).equals(denormalizedReceiveAmount - denormalizedRelayerFee);
+
+                // Confirm token changes for fee recipient.
+                expect(
+                  feeRecipientTokenBalanceAfter - feeRecipientTokenBalanceBefore
+                ).equals(denormalizedRelayerFee);
+
+                // Confirm lamports changes for the recipient.
+                expect(
+                  recipientLamportBalanceAfter - recipientLamportBalanceBefore
+                ).equals(0);
+
+                // Confirm lamports changes for the relayer.
+                expect(
+                  relayerLamportBalanceBefore - relayerLamportBalanceAfter
+                ).lte(feeEpsilon);
+              }
+
+              await verifyTmpTokenAccountDoesNotExist(mint);
             });
           });
         });

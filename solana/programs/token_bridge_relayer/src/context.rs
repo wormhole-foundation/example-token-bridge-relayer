@@ -627,20 +627,19 @@ pub struct RedeemNativeTransferWithPayload<'info> {
     pub payer: Signer<'info>,
 
     #[account(
-        mut,
-        constraint = payer.key() == recipient.key() || payer_token_account.key() == anchor_spl::associated_token::get_associated_token_address(&payer.key(), &mint.key()) @ TokenBridgeRelayerError::InvalidPayerAta
-    )]
-    /// CHECK: Payer's token account. If payer != recipient, must be an
-    /// associated token account. Mutable.
-    pub payer_token_account: UncheckedAccount<'info>,
-
-    #[account(
         seeds = [RedeemerConfig::SEED_PREFIX],
         bump = config.bump
     )]
     /// Redeemer Config account. Acts as the Token Bridge redeemer, which signs
     /// for the complete transfer instruction. Read-only.
     pub config: Box<Account<'info, RedeemerConfig>>,
+
+    #[account(
+        mut,
+        constraint = fee_recipient_token_account.key() == anchor_spl::associated_token::get_associated_token_address(&config.fee_recipient.key(), &mint.key()) @ TokenBridgeRelayerError::InvalidFeeRecipientAta
+    )]
+    /// CHECK: Fee recipient's token account. Must be an associated token account. Mutable.
+    pub fee_recipient_token_account: UncheckedAccount<'info>,
 
     #[account(
         seeds = [
@@ -661,7 +660,7 @@ pub struct RedeemNativeTransferWithPayload<'info> {
     /// Mint info. This is the SPL token that will be bridged over from the
     /// foreign contract. This must match the token address specified in the
     /// signed Wormhole message. Read-only.
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<Account<'info, Mint>>,
 
     #[account(
         mut,
@@ -672,7 +671,7 @@ pub struct RedeemNativeTransferWithPayload<'info> {
     pub recipient_token_account: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
-    /// CHECK: Recipient may differ from payer if a relayer paid for this
+    /// CHECK: recipient may differ from payer if a relayer paid for this
     /// transaction.
     pub recipient: UncheckedAccount<'info>,
 
@@ -967,20 +966,19 @@ pub struct RedeemWrappedTransferWithPayload<'info> {
     pub payer: Signer<'info>,
 
     #[account(
-        mut,
-        constraint = payer.key() == recipient.key() || payer_token_account.key() == anchor_spl::associated_token::get_associated_token_address(&payer.key(), &token_bridge_wrapped_mint.key()) @ TokenBridgeRelayerError::InvalidPayerAta
-    )]
-    /// CHECK: Payer's token account. If payer != recipient, must be an
-    /// associated token account.
-    pub payer_token_account: UncheckedAccount<'info>,
-
-    #[account(
         seeds = [RedeemerConfig::SEED_PREFIX],
         bump
     )]
     /// Redeemer Config account. Acts as the Token Bridge redeemer, which signs
     /// for the complete transfer instruction. Read-only.
     pub config: Box<Account<'info, RedeemerConfig>>,
+
+    #[account(
+        mut,
+        constraint = fee_recipient_token_account.key() == anchor_spl::associated_token::get_associated_token_address(&config.fee_recipient.key(), &token_bridge_wrapped_mint.key()) @ TokenBridgeRelayerError::InvalidFeeRecipientAta
+    )]
+    /// CHECK: Fee recipient's token account. Must be an associated token account. Mutable.
+    pub fee_recipient_token_account: UncheckedAccount<'info>,
 
     #[account(
         seeds = [
@@ -1024,6 +1022,22 @@ pub struct RedeemWrappedTransferWithPayload<'info> {
     pub recipient: UncheckedAccount<'info>,
 
     #[account(
+        seeds = [b"mint", token_bridge_wrapped_mint.key().as_ref()],
+        bump
+    )]
+    // Registered token account for the specified mint. This account stores
+    // information about the token. Read-only.
+    pub registered_token: Box<Account<'info, RegisteredToken>>,
+
+    #[account(
+        seeds = [b"mint", spl_token::native_mint::ID.as_ref()],
+        bump
+    )]
+    // Registered token account for the native mint. This account stores
+    // information about the token and is used for the swap rate. Read-only.
+    pub native_registered_token: Box<Account<'info, RegisteredToken>>,
+
+    #[account(
         init,
         payer = payer,
         seeds = [
@@ -1060,13 +1074,13 @@ pub struct RedeemWrappedTransferWithPayload<'info> {
     ///   * Wormhole Chain ID
     ///   * Token's native contract address
     ///   * Token's native decimals
-    pub token_bridge_wrapped_meta: Account<'info, token_bridge::WrappedMeta>,
+    pub token_bridge_wrapped_meta: Box<Account<'info, token_bridge::WrappedMeta>>,
 
     #[account(
         address = config.token_bridge.config @ TokenBridgeRelayerError::InvalidTokenBridgeConfig
     )]
-    /// Token Bridge config. Read-only.
-    pub token_bridge_config: Account<'info, token_bridge::Config>,
+    /// CHECK: Token Bridge config. Read-only.
+    pub token_bridge_config: UncheckedAccount<'info>,
 
     #[account(
         seeds = [

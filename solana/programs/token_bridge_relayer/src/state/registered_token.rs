@@ -91,11 +91,8 @@ impl RegisteredToken {
             u128::from(swap_rate_precision)
                 .checked_mul(u128::from(to_native_token_amount))?
                 .checked_div(u128::from(native_swap_rate).checked_mul(
-                    u128::pow(10, (decimals - Self::NATIVE_DECIMALS).into()))?
-                )?
+                    u128::pow(10, (decimals - Self::NATIVE_DECIMALS).into()))?)?
         } else {
-            println!("native swap rate: {native_swap_rate}");
-            println!("max native swap amount: {to_native_token_amount}");
             u128::from(swap_rate_precision)
                 .checked_mul(u128::from(to_native_token_amount))?
                 .checked_mul(u128::pow(10, (Self::NATIVE_DECIMALS - decimals).into()))?

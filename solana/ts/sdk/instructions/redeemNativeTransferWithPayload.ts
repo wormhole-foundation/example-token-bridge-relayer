@@ -42,6 +42,7 @@ export async function createRedeemNativeTransferWithPayloadInstruction(
   connection: Connection,
   programId: PublicKeyInitData,
   payer: PublicKeyInitData,
+  feeRecipient: PublicKey,
   tokenBridgeProgramId: PublicKeyInitData,
   wormholeProgramId: PublicKeyInitData,
   wormholeMessage: SignedVaa | ParsedTokenTransferVaa,
@@ -67,6 +68,10 @@ export async function createRedeemNativeTransferWithPayloadInstruction(
     tmpTokenAccount
   );
   const recipientTokenAccount = getAssociatedTokenAddressSync(mint, recipient);
+  const feeRecipientTokenAccount = getAssociatedTokenAddressSync(
+    mint,
+    feeRecipient
+  );
 
   return program.methods
     .redeemNativeTransferWithPayload([...parsed.hash])
@@ -84,10 +89,7 @@ export async function createRedeemNativeTransferWithPayloadInstruction(
       ),
       recipientTokenAccount,
       recipient,
-      payerTokenAccount: getAssociatedTokenAddressSync(
-        mint,
-        new PublicKey(payer)
-      ),
+      feeRecipientTokenAccount,
       tokenBridgeProgram: new PublicKey(tokenBridgeProgramId),
       ...tokenBridgeAccounts,
     })

@@ -12,7 +12,6 @@ import {
   deriveTokenTransferMessageKey,
   deriveRegisteredTokenKey,
   deriveRelayerFeeKey,
-  deriveTokenAccountKey,
   deriveTmpTokenAccountKey,
 } from "../accounts";
 import {getProgramSequenceTracker} from "@certusone/wormhole-sdk/lib/cjs/solana/wormhole";
