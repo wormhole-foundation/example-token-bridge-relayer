@@ -25,7 +25,7 @@ async function parseArgs(): Promise<Arguments> {
     .option("setSwapRates", {
       string: false,
       boolean: true,
-      description: "sets swaps rates if true",
+      description: "sets swap rates if true",
       required: true,
     })
     .option("setMaxNativeAmount", {
@@ -62,10 +62,9 @@ async function registerToken(
 
   const successMessage = `Success: token registered, chainId=${chainId}, token=${contract}, txHash=${receipt.transactionHash}`;
   const failureMessage = `Failed: could not register token, chainId=${chainId}`;
-  return TxResult.create(receipt, successMessage, failureMessage, async () => {
-    // query the contract and see if the token was registered successfully
-    return relayer.isAcceptedToken(contract);
-  });
+  return TxResult.create(receipt, successMessage, failureMessage, () =>
+    relayer.isAcceptedToken(contract)
+  );
 }
 
 async function updateSwapRate(
@@ -118,9 +117,7 @@ async function updateMaxNativeSwapAmount(
   const failureMessage = `Failed: could not update max native swap amount, chainId=${chainId}, token=${originalTokenAddress}`;
 
   return TxResult.create(receipt, successMessage, failureMessage, async () => {
-    // query the contract and see if the max native swap amount was set correctly
     const maxNativeInContract = await relayer.maxNativeSwapAmount(contract);
-
     return maxNativeInContract.eq(maxNativeToUpdate);
   });
 }
@@ -128,18 +125,19 @@ async function updateMaxNativeSwapAmount(
 async function getLocalTokenAddress(
   tokenBridge: ITokenBridge,
   chainId: number,
-  address: Uint8Array
+  tokenAddress: string
 ) {
+  const buffer = ethers.utils.arrayify(tokenAddress);
   // fetch the wrapped of native address
   let localTokenAddress: string;
   if (chainId == RELEASE_CHAIN_ID) {
-    localTokenAddress = tryUint8ArrayToNative(address, chainId);
+    localTokenAddress = tryUint8ArrayToNative(buffer, chainId);
   } else {
     // fetch the wrapped address
-    localTokenAddress = await tokenBridge.wrappedAsset(chainId, address);
+    localTokenAddress = await tokenBridge.wrappedAsset(chainId, buffer);
     if (localTokenAddress === ZERO_ADDRESS) {
       console.log(
-        `Failed: token not attested, chainId=${chainId}, token=${Buffer.from(address).toString(
+        `Failed: token not attested, chainId=${chainId}, token=${Buffer.from(buffer).toString(
           "hex"
         )}`
       );
@@ -191,13 +189,12 @@ async function main() {
     // loop through tokens and register them
     for (const { contract: tokenContract, swapRate } of tokens) {
       const tokenAddress = "0x" + tokenContract;
-      const formattedAddress = ethers.utils.arrayify(tokenAddress);
 
       // fetch the address on the target chain
       const localTokenAddress = await getLocalTokenAddress(
         tokenBridge,
         chainIdToRegister,
-        formattedAddress
+        tokenAddress
       );
 
       // Query the contract and see if the token has been registered. If it hasn't,

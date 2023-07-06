@@ -17,12 +17,7 @@ export class TxResult {
     failureMessage: string,
     check: () => Promise<boolean>
   ) {
-    return new TxResult(
-      txReceipt.status === 1,
-      successMessage,
-      failureMessage,
-      check
-    );
+    return new TxResult(txReceipt.status === 1, successMessage, failureMessage, check);
   }
 
   static Success(successMessage: string) {
@@ -34,9 +29,7 @@ export function handleFailure(checks: Check[], result: TxResult) {
   if (result.txSuccess === false) {
     console.log(result.failureMessage);
   } else {
-    checks.push(() =>
-      doCheck(result)
-    );
+    checks.push(() => doCheck(result));
   }
 }
 
