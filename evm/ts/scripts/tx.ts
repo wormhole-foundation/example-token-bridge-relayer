@@ -84,6 +84,9 @@ export async function buildOverrides(
   if (chainId === 5 || chainId === 10) {
     // Polygon or Fantom
     overrides.type = 0;
+  } else if (chainId === 4) {
+    overrides.type = 0;
+    overrides.gasPrice = ethers.utils.parseUnits("3", "gwei");
   }
   return overrides;
 }
