@@ -1,3 +1,3 @@
 #/bin/bash
 
-ts-node ts/scripts/registerContracts.ts
+npx ts-node ts/scripts/registerContracts.ts $@
