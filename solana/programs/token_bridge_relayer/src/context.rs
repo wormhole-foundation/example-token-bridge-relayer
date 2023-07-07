@@ -75,7 +75,7 @@ pub struct Initialize<'info> {
     /// invoke the Wormhole program to post messages. Even though it is a
     /// required account for redeeming token transfers, it is not actually
     /// used for completing these transfers.
-    pub token_bridge_config: Account<'info, token_bridge::Config>,
+    pub token_bridge_config: Box<Account<'info, token_bridge::Config>>,
 
     #[account(
         seeds = [token_bridge::SEED_PREFIX_AUTHORITY_SIGNER],
@@ -132,7 +132,7 @@ pub struct Initialize<'info> {
     /// Wormhole fee collector account, which requires lamports before the
     /// program can post a message (if there is a fee). Token Bridge program
     /// handles the fee payments.
-    pub wormhole_fee_collector: Account<'info, wormhole::FeeCollector>,
+    pub wormhole_fee_collector: Box<Account<'info, wormhole::FeeCollector>>,
 
     #[account(
         seeds = [
@@ -145,7 +145,7 @@ pub struct Initialize<'info> {
     /// Token Bridge emitter's sequence account. Like with all Wormhole
     /// emitters, this account keeps track of the sequence number of the last
     /// posted message.
-    pub token_bridge_sequence: Account<'info, wormhole::SequenceTracker>,
+    pub token_bridge_sequence: Box<Account<'info, wormhole::SequenceTracker>>,
 
     /// System program.
     pub system_program: Program<'info, System>,
@@ -636,10 +636,11 @@ pub struct RedeemNativeTransferWithPayload<'info> {
 
     #[account(
         mut,
-        constraint = fee_recipient_token_account.key() == anchor_spl::associated_token::get_associated_token_address(&config.fee_recipient.key(), &mint.key()) @ TokenBridgeRelayerError::InvalidFeeRecipientAta
+        associated_token::mint = mint,
+        associated_token::authority = config.fee_recipient
     )]
-    /// CHECK: Fee recipient's token account. Must be an associated token account. Mutable.
-    pub fee_recipient_token_account: UncheckedAccount<'info>,
+    /// Fee recipient's token account. Must be an associated token account. Mutable.
+    pub fee_recipient_token_account: Box<Account<'info, TokenAccount>>,
 
     #[account(
         seeds = [
@@ -975,10 +976,11 @@ pub struct RedeemWrappedTransferWithPayload<'info> {
 
     #[account(
         mut,
-        constraint = fee_recipient_token_account.key() == anchor_spl::associated_token::get_associated_token_address(&config.fee_recipient.key(), &token_bridge_wrapped_mint.key()) @ TokenBridgeRelayerError::InvalidFeeRecipientAta
+        associated_token::mint = token_bridge_wrapped_mint,
+        associated_token::authority = config.fee_recipient
     )]
-    /// CHECK: Fee recipient's token account. Must be an associated token account. Mutable.
-    pub fee_recipient_token_account: UncheckedAccount<'info>,
+    /// Fee recipient's token account. Must be an associated token account. Mutable.
+    pub fee_recipient_token_account: Box<Account<'info, TokenAccount>>,
 
     #[account(
         seeds = [

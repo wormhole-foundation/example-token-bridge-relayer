@@ -7,7 +7,7 @@ pub const PAD_U64: usize = 24;
 
 #[derive(Clone, Copy)]
 /// Expected message types for this program. Only valid payloads are:
-/// * `Hello`: Payload ID == 1.
+/// * `TransferWithRelay`: Payload ID == 1.
 ///
 /// Payload IDs are encoded as u8.
 pub enum TokenBridgeRelayerMessage {
@@ -39,6 +39,15 @@ impl AnchorSerialize for TokenBridgeRelayerMessage {
 
 impl AnchorDeserialize for TokenBridgeRelayerMessage {
     fn deserialize(buf: &mut &[u8]) -> io::Result<Self> {
+        // Validate payload size.
+        if buf.len() != 97 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "invalid payload size",
+            ));
+        }
+
+        // Parse the payload.
         match u8::deserialize(buf)? {
             PAYLOAD_ID_TRANSFER_WITH_RELAY => {
                 const ZEROS: [u8; 24] = [0; 24];
@@ -121,6 +130,38 @@ pub mod test {
         assert_eq!(decoded_target_relayer_fee, target_relayer_fee);
         assert_eq!(decoded_to_native_token_amount, to_native_token_amount);
         assert_eq!(decoded_recipient, recipient);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_invalid_payload_size() -> Result<()> {
+        let recipient = Pubkey::new_unique().to_bytes();
+        let to_native_token_amount: u64 = 100000000;
+        let target_relayer_fee: u64 = 6900000;
+
+        // Create the message.
+        let msg = TokenBridgeRelayerMessage::TransferWithRelay {
+            target_relayer_fee,
+            to_native_token_amount,
+            recipient
+        };
+
+        // Serialize program ID above.
+        let mut encoded = Vec::new();
+        msg.serialize(&mut encoded)?;
+
+        // Create an array with random bytes and extend `encoded`.
+        let mut random_bytes = [0u8; 8];
+        random_bytes.copy_from_slice(&encoded[0..8]);
+        encoded.extend_from_slice(&random_bytes);
+
+        // Now deserialize the encoded message.
+        let result =
+            TokenBridgeRelayerMessage::deserialize(&mut encoded.as_slice());
+
+        // Verify results.
+        assert!(result.is_err());
 
         Ok(())
     }

@@ -289,6 +289,15 @@ pub mod token_bridge_relayer {
         Ok(())
     }
 
+    /// This instruction sets the `pending_owner` field in the `OwnerConfig`
+    /// account. This instruction is owner-only, meaning that only the owner
+    /// of the program (defined in the [Config] account) can submit an
+    /// ownership transfer request.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx`       - `RegisterForeignContract` context
+    /// * `new_owner` - Pubkey of the pending owner.
     pub fn submit_ownership_transfer_request(
         ctx: Context<ManageOwnershipTransfer>,
         new_owner: Pubkey
@@ -310,15 +319,9 @@ pub mod token_bridge_relayer {
         Ok(())
     }
 
-    pub fn cancel_ownership_transfer_request(
-        ctx: Context<ManageOwnershipTransfer>
-    ) -> Result<()> {
-        let owner_config = &mut ctx.accounts.owner_config;
-        owner_config.pending_owner = None;
-
-        Ok(())
-    }
-
+    /// This instruction confirms that the `pending_owner` is the signer of
+    /// the transaction and updates the `owner` field in the `SenderConfig`,
+    /// `RedeemerConfig`, and `OwnerConfig` accounts.
     pub fn confirm_ownership_transfer_request(
         ctx: Context<ConfirmOwnershipTransfer>
     ) -> Result<()> {
@@ -341,6 +344,15 @@ pub mod token_bridge_relayer {
 
         let owner_config = &mut ctx.accounts.owner_config;
         owner_config.owner = pending_owner;
+        owner_config.pending_owner = None;
+
+        Ok(())
+    }
+
+    pub fn cancel_ownership_transfer_request(
+        ctx: Context<ManageOwnershipTransfer>
+    ) -> Result<()> {
+        let owner_config = &mut ctx.accounts.owner_config;
         owner_config.pending_owner = None;
 
         Ok(())
@@ -389,7 +401,7 @@ pub mod token_bridge_relayer {
         require!(
             to_native_token_amount == 0 ||
             normalized_to_native_amount > 0,
-            TokenBridgeRelayerError::ZeroBridgeAmount
+            TokenBridgeRelayerError::InvalidToNativeAmount
         );
 
         // Compute the relayer fee in terms of the native token being
@@ -431,7 +443,7 @@ pub mod token_bridge_relayer {
         if wrap_native {
             require!(
                 ctx.accounts.mint.key() == spl_token::native_mint::ID,
-                TokenBridgeRelayerError::InvalidRecipient
+                TokenBridgeRelayerError::NativeMintRequired
             );
 
             // Transfer lamports to our token account (these lamports will be our WSOL).
@@ -677,13 +689,6 @@ pub mod token_bridge_relayer {
                     amount,
                 )?;
             } else {
-                // Does the fee_recipient have an associated token account already? If
-                // not, he needs to create one.
-                require!(
-                    !ctx.accounts.fee_recipient_token_account.data_is_empty(),
-                    TokenBridgeRelayerError::NonExistentFeeRecipientAta
-                );
-
                 // Denormalize the to_native_token_amount.
                 let denormalized_to_native_token_amount =
                     token_bridge::denormalize_amount(
@@ -1002,13 +1007,6 @@ pub mod token_bridge_relayer {
                 amount,
             )?;
         } else {
-            // Does the fee_recipient have an associated token account already? If
-            // not, he needs to create one.
-            require!(
-                !ctx.accounts.fee_recipient_token_account.data_is_empty(),
-                TokenBridgeRelayerError::NonExistentFeeRecipientAta
-            );
-
             // Denormalize the to_native_token_amount.
             let denormalized_to_native_token_amount =
                 token_bridge::denormalize_amount(

@@ -37,3 +37,100 @@ impl RelayerFee {
     /// AKA `b"relayer_fee"`.
     pub const SEED_PREFIX: &'static [u8; 11] = b"relayer_fee";
 }
+
+#[cfg(test)]
+pub mod test {
+    use super::*;
+    use anchor_lang::prelude::{Result};
+
+    #[test]
+    fn test_checked_token_fee() -> Result<()> {
+        // Test variables.
+        let swap_rate_precision: u32  = 1000000000;
+        let relayer_fee_precision: u32 = 1000000000;
+        let swap_rate: u64 = 6900000000;
+
+        // Create test RelayerFee.
+        let mut relayer_fee = RelayerFee {
+            chain: 2, // target chain Ethereum
+            fee: 42000000000 // $420.00
+        };
+
+        // Calculate the token fee for 10 decimals.
+        let expected_token_fee = 60869565217;
+        let token_fee = relayer_fee.checked_token_fee(
+            10, // decimals
+            swap_rate,
+            swap_rate_precision,
+            relayer_fee_precision
+        );
+        assert_eq!(token_fee.unwrap(), expected_token_fee);
+
+        // Calculate the token fee for 9 decimals.
+        let expected_token_fee = 6086956521;
+        let token_fee = relayer_fee.checked_token_fee(
+            9, // decimals
+            swap_rate,
+            swap_rate_precision,
+            relayer_fee_precision
+        );
+        assert_eq!(token_fee.unwrap(), expected_token_fee);
+
+        // Calculate the token fee for 8 decimals.
+        let expected_token_fee = 608695652;
+        let token_fee = relayer_fee.checked_token_fee(
+            8, // decimals
+            swap_rate,
+            swap_rate_precision,
+            relayer_fee_precision
+        );
+        assert_eq!(token_fee.unwrap(), expected_token_fee);
+
+        // Calculate the token fee with an increased swap rate.
+        let swap_rate: u64 = 100000000000000; // $100000.00
+        let expected_token_fee = 42000;
+        let token_fee = relayer_fee.checked_token_fee(
+            8, // decimals
+            swap_rate,
+            swap_rate_precision,
+            relayer_fee_precision
+        );
+        assert_eq!(token_fee.unwrap(), expected_token_fee);
+
+        // Calculate the token fee with an decreased swap rate.
+        let swap_rate: u64 = 1000000; // $0.01
+        let expected_token_fee = 4200000000000;
+        let token_fee = relayer_fee.checked_token_fee(
+            8, // decimals
+            swap_rate,
+            swap_rate_precision,
+            relayer_fee_precision
+        );
+        assert_eq!(token_fee.unwrap(), expected_token_fee);
+
+        // Calculate the token fee when the USD fee is zero.
+        relayer_fee.fee = 0;
+        let expected_token_fee = 0;
+        let token_fee = relayer_fee.checked_token_fee(
+            8, // decimals
+            swap_rate,
+            swap_rate_precision,
+            relayer_fee_precision
+        );
+        assert_eq!(token_fee.unwrap(), expected_token_fee);
+
+        // Cause an overflow.
+        relayer_fee.fee = u64::MAX;
+        let swap_rate = 1;
+        let relayer_fee_precision = 1;
+        let token_fee = relayer_fee.checked_token_fee(
+            8, // decimals
+            swap_rate,
+            swap_rate_precision,
+            relayer_fee_precision
+        );
+        assert!(token_fee.is_none());
+
+        Ok(())
+    }
+}

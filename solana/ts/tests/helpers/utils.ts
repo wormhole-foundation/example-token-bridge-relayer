@@ -208,7 +208,7 @@ export async function calculateRelayerFee(
   );
 }
 
-async function getSwapInputs(
+export async function getSwapInputs(
   connection: Connection,
   programId: PublicKey,
   decimals: number,

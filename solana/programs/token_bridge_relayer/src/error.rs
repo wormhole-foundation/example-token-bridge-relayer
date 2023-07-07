@@ -46,6 +46,14 @@ pub enum TokenBridgeRelayerError {
     /// Nothing to transfer if amount is zero.
     ZeroBridgeAmount,
 
+    #[msg("InvalidToNativeAmount")]
+    /// Must be strictly zero or nonzero when normalized.
+    InvalidToNativeAmount,
+
+    #[msg("NativeMintRequired")]
+    /// Must be the native mint.
+    NativeMintRequired,
+
     #[msg("InvalidTokenBridgeConfig")]
     /// Specified Token Bridge config PDA is wrong.
     InvalidTokenBridgeConfig,
@@ -79,7 +87,7 @@ pub enum TokenBridgeRelayerError {
     /// not match token account.
     InvalidTransferTokenAccount,
 
-    #[msg("InvalidTransferTokenChain")]
+    #[msg("InvalidTransferToChain")]
     /// Deserialized token chain is invalid.
     InvalidTransferToChain,
 
@@ -94,11 +102,6 @@ pub enum TokenBridgeRelayerError {
     #[msg("InvalidPrecision")]
     /// Relayer fee and swap rate precision must be nonzero.
     InvalidPrecision,
-
-    #[msg("InvalidPayerAta")]
-    /// To redeem transfers, the relayer (payer) must pass an associated token
-    /// account.
-    InvalidPayerAta,
 
     #[msg("InvalidFeeRecipientAta")]
     /// To redeem transfers, the fee recipient must pass an associated token
@@ -116,11 +119,6 @@ pub enum TokenBridgeRelayerError {
     #[msg("InvalidTokenBridgeForeignEndpoint")]
     /// Token Bridge program's foreign endpoint disagrees with registered one.
     InvalidTokenBridgeForeignEndpoint,
-
-    #[msg("NonExistentFeeRecipientAta")]
-    /// Fee recipient needs to create an associated token account before he can be
-    /// paid.
-    NonExistentFeeRecipientAta,
 
     #[msg("InvalidTokenBridgeMintAuthority")]
     /// Specified Token Bridge mint authority PDA is wrong.
