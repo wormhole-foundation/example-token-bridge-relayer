@@ -1256,6 +1256,42 @@ describe(" 1: Token Bridge Relayer", function () {
                 recipient
               );
 
+            it("Cannot Redeem From Unregistered Foreign Contract", async function () {
+              // Create the encoded transfer with relay payload.
+              const transferWithRelayPayload = createTransferWithRelayPayload(
+                0, // relayer fee
+                0, // to native token amount
+                payer.publicKey.toBuffer().toString("hex")
+              );
+
+              // Create the token bridge message.
+              const bogusMsg = guardianSign(
+                foreignTokenBridge.publishTransferTokensWithPayload(
+                  tokenAddress,
+                  isNative ? CHAINS.solana : foreignChain, // tokenChain
+                  BigInt(tokenBridgeNormalizeAmount(receiveAmount, decimals)),
+                  CHAINS.solana, // recipientChain
+                  TOKEN_BRIDGE_RELAYER_PID.toBuffer().toString("hex"),
+                  unregisteredContractAddress,
+                  Buffer.from(transferWithRelayPayload.substring(2), "hex"),
+                  batchId
+                )
+              );
+
+              // Post the Wormhole message.
+              await postSignedMsgAsVaaOnSolana(bogusMsg);
+
+              // Attempt to redeem the transfer.
+              await expectIxToFailWithError(
+                await createRedeemTransferWithPayloadIx(
+                  payer.publicKey,
+                  bogusMsg,
+                  payer.publicKey
+                ),
+                "InvalidForeignContract"
+              );
+            });
+
             it("Cannot Redeem Unregistered Token", async function () {
               // Define inbound transfer parameters. Calcualte the fee
               // using the foreignChain to simulate calculating the
