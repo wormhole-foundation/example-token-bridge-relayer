@@ -10,18 +10,6 @@ pub enum TokenBridgeRelayerError {
     /// Specified Wormhole fee collector PDA is wrong.
     InvalidWormholeFeeCollector,
 
-    #[msg("InvalidWormholeEmitter")]
-    /// Specified program's emitter PDA is wrong.
-    InvalidWormholeEmitter,
-
-    #[msg("InvalidWormholeSequence")]
-    /// Specified emitter's sequence PDA is wrong.
-    InvalidWormholeSequence,
-
-    #[msg("InvalidSysvar")]
-    /// Specified sysvar is wrong.
-    InvalidSysvar,
-
     #[msg("OwnerOnly")]
     /// Only the program's owner is permitted.
     OwnerOnly,
@@ -74,18 +62,9 @@ pub enum TokenBridgeRelayerError {
     /// Specified Token Bridge sequence PDA is wrong.
     InvalidTokenBridgeSequence,
 
-    #[msg("InvalidTokenBridgeSender")]
-    /// Specified Token Bridge sender PDA is wrong.
-    InvalidTokenBridgeSender,
-
     #[msg("InvalidRecipient")]
     /// Specified recipient has a bad chain ID or zero address.
     InvalidRecipient,
-
-    #[msg("InvalidTransferTokenAccount")]
-    /// Deserialized token account from Token Bridge's Wormhole message does
-    /// not match token account.
-    InvalidTransferTokenAccount,
 
     #[msg("InvalidTransferToChain")]
     /// Deserialized token chain is invalid.
@@ -95,18 +74,9 @@ pub enum TokenBridgeRelayerError {
     /// Deserialized recipient chain is invalid.
     InvalidTransferTokenChain,
 
-    #[msg("InvalidRelayerFee")]
-    /// Specified relayer fee must be less than its precision.
-    InvalidRelayerFee,
-
     #[msg("InvalidPrecision")]
     /// Relayer fee and swap rate precision must be nonzero.
     InvalidPrecision,
-
-    #[msg("InvalidFeeRecipientAta")]
-    /// To redeem transfers, the fee recipient must pass an associated token
-    /// account.
-    InvalidFeeRecipientAta,
 
     #[msg("InvalidTransferToAddress")]
     /// Deserialized recipient must be this program or the redeemer PDA.
