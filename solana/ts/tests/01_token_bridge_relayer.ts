@@ -122,6 +122,7 @@ describe(" 1: Token Bridge Relayer", function () {
       );
       expect(senderConfigData.owner).deep.equals(payer.publicKey);
       expect(senderConfigData.finality).equals(0);
+      expect(senderConfigData.paused).equals(false);
 
       const tokenBridgeAccounts = getTokenBridgeDerivedAccounts(
         TOKEN_BRIDGE_RELAYER_PID,
@@ -569,7 +570,7 @@ describe(" 1: Token Bridge Relayer", function () {
     it("Cannot Update Relayer Fee as Non-Owner", async function () {
       await expectIxToFailWithError(
         await createUpdateRelayerFeeIx({sender: relayer.publicKey}),
-        "OwnerOnly",
+        "OwnerOrAssistantOnly",
         relayer
       );
     });
@@ -634,6 +635,49 @@ describe(" 1: Token Bridge Relayer", function () {
     });
   });
 
+  describe("Set Pause for Transfer", async function () {
+    const createSetPauseForTransfersIx = (opts?: {
+      sender?: PublicKey;
+      paused?: boolean;
+    }) =>
+      tokenBridgeRelayer.createSetPauseForTransfersInstruction(
+        connection,
+        TOKEN_BRIDGE_RELAYER_PID,
+        opts?.sender ?? payer.publicKey,
+        opts?.paused ?? true
+      );
+
+    it("Cannot Set Pause for Transfers as Non-Owner", async function () {
+      await expectIxToFailWithError(
+        await createSetPauseForTransfersIx({sender: relayer.publicKey}),
+        "OwnerOnly",
+        relayer
+      );
+    });
+
+    it("Set Pause for Transfers to True as Owner", async function () {
+      await expectIxToSucceed(await createSetPauseForTransfersIx());
+
+      const senderConfigData = await tokenBridgeRelayer.getSenderConfigData(
+        connection,
+        TOKEN_BRIDGE_RELAYER_PID
+      );
+      expect(senderConfigData.paused).equals(true);
+    });
+
+    it("Set Pause for Transfers to False as Owner", async function () {
+      await expectIxToSucceed(
+        await createSetPauseForTransfersIx({paused: false})
+      );
+
+      const senderConfigData = await tokenBridgeRelayer.getSenderConfigData(
+        connection,
+        TOKEN_BRIDGE_RELAYER_PID
+      );
+      expect(senderConfigData.paused).equals(false);
+    });
+  });
+
   fetchTestTokens().forEach(([isNative, decimals, _1, mint, _2]) => {
     describe(getDescription(decimals, isNative, mint), function () {
       // Create random swapRate and maxNativeTokenAmount.
@@ -657,7 +701,9 @@ describe(" 1: Token Bridge Relayer", function () {
           opts?.sender ?? payer.publicKey,
           mint,
           opts?.swapRate ?? new BN(swapRate),
-          opts?.maxNativeSwapAmount ?? new BN(maxNative)
+          opts?.maxNativeSwapAmount ?? mint === NATIVE_MINT
+            ? new BN(0)
+            : new BN(maxNative)
         );
 
       // Token deregistration instruction.
@@ -711,6 +757,21 @@ describe(" 1: Token Bridge Relayer", function () {
           );
         });
 
+        if (mint === NATIVE_MINT)
+          it("Cannot Register Native Mint with Nonzero Max Native Token Amount", async function () {
+            await expectIxToFailWithError(
+              tokenBridgeRelayer.createRegisterTokenInstruction(
+                connection,
+                TOKEN_BRIDGE_RELAYER_PID,
+                payer.publicKey,
+                mint,
+                new BN(swapRate),
+                new BN(1)
+              ),
+              "SwapsNotAllowedForNativeMint"
+            );
+          });
+
         it("Register Token as Owner", async function () {
           await expectIxToSucceed(createRegisterTokenIx());
 
@@ -724,7 +785,7 @@ describe(" 1: Token Bridge Relayer", function () {
 
           expect(registeredTokenData.swapRate.toNumber()).equals(swapRate);
           expect(registeredTokenData.maxNativeSwapAmount.toNumber()).equals(
-            maxNative
+            mint === NATIVE_MINT ? 0 : maxNative
           );
           expect(registeredTokenData.isRegistered).equals(true);
         });
@@ -784,7 +845,7 @@ describe(" 1: Token Bridge Relayer", function () {
 
           expect(registeredTokenData.swapRate.toNumber()).equals(swapRate);
           expect(registeredTokenData.maxNativeSwapAmount.toNumber()).equals(
-            maxNative
+            mint === NATIVE_MINT ? 0 : maxNative
           );
           expect(registeredTokenData.isRegistered).equals(true);
         });
@@ -794,7 +855,7 @@ describe(" 1: Token Bridge Relayer", function () {
         it("Cannot Update Swap Rate as Non-Owner", async function () {
           await expectIxToFailWithError(
             await createUpdateSwapRateIx({sender: relayer.publicKey}),
-            "OwnerOnly",
+            "OwnerOrAssistantOnly",
             relayer
           );
         });
@@ -897,8 +958,11 @@ describe(" 1: Token Bridge Relayer", function () {
           await expectIxToSucceed(createRegisterTokenIx());
         });
 
-        it("Update Swap Rate as Owner", async function () {
-          const newMaxNative = getRandomInt(0, CONTRACT_PRECISION * 100000);
+        it("Update Max Native Swap Amount as Owner", async function () {
+          const newMaxNative =
+            mint === NATIVE_MINT
+              ? 0
+              : getRandomInt(0, CONTRACT_PRECISION * 100000);
 
           await expectIxToSucceed(
             await createUpdateMaxNativeSwapAmountIx({
@@ -918,6 +982,16 @@ describe(" 1: Token Bridge Relayer", function () {
             newMaxNative
           );
         });
+
+        if (mint === NATIVE_MINT)
+          it("Cannot Update Max Native Swap Amount to Nonzero value For Native Mint", async function () {
+            await expectIxToFailWithError(
+              await createUpdateMaxNativeSwapAmountIx({
+                maxNativeSwapAmount: new BN(1),
+              }),
+              "SwapsNotAllowedForNativeMint"
+            );
+          });
       });
     });
   });
@@ -1019,7 +1093,7 @@ describe(" 1: Token Bridge Relayer", function () {
                   TOKEN_BRIDGE_RELAYER_PID,
                   payer.publicKey,
                   mint,
-                  isNative ? new BN(maxNativeSwapAmount) : new BN(0)
+                  mint === NATIVE_MINT ? new BN(0) : new BN(maxNativeSwapAmount)
                 );
               await expectIxToSucceed(createUpdateMaxNativeSwapAmountIx);
             });
@@ -1037,7 +1111,35 @@ describe(" 1: Token Bridge Relayer", function () {
               await expectIxToSucceed(createUpdateRelayerFeeIx);
             });
 
-            it("Cannot transfer unregistered token", async function () {
+            it("Cannot Send When Paused", async function () {
+              // Pause transfers.
+              const createSetPauseForTransfersIx =
+                await tokenBridgeRelayer.createSetPauseForTransfersInstruction(
+                  connection,
+                  TOKEN_BRIDGE_RELAYER_PID,
+                  payer.publicKey,
+                  true
+                );
+              await expectIxToSucceed(createSetPauseForTransfersIx);
+
+              // Attempt to do the transfer.
+              await expectIxToFailWithError(
+                await createSendTokensWithPayloadIx(),
+                "OutboundTransfersPaused"
+              );
+
+              // Unpause transfers.
+              const createSetPauseForTransfersIx2 =
+                await tokenBridgeRelayer.createSetPauseForTransfersInstruction(
+                  connection,
+                  TOKEN_BRIDGE_RELAYER_PID,
+                  payer.publicKey,
+                  false
+                );
+              await expectIxToSucceed(createSetPauseForTransfersIx2);
+            });
+
+            it("Cannot Send Unregistered Token", async function () {
               // Deregister the token.
               await expectIxToSucceed(
                 await tokenBridgeRelayer.createDeregisterTokenInstruction(
@@ -1359,7 +1461,7 @@ describe(" 1: Token Bridge Relayer", function () {
                   payer.publicKey,
                   mint,
                   new BN(swapRate),
-                  isNative ? new BN(maxNativeSwapAmount) : new BN(0)
+                  mint === NATIVE_MINT ? new BN(0) : new BN(maxNativeSwapAmount)
                 )
               );
             });
@@ -1874,7 +1976,7 @@ describe(" 1: Token Bridge Relayer", function () {
                   TOKEN_BRIDGE_RELAYER_PID,
                   payer.publicKey,
                   mint,
-                  isNative ? new BN(maxNativeSwapAmount) : new BN(0)
+                  mint === NATIVE_MINT ? new BN(0) : new BN(maxNativeSwapAmount)
                 )
               );
 

@@ -5,16 +5,19 @@ use anchor_lang::{
 use anchor_spl::{
     token::{self, spl_token},
 };
+//use solana_program::{bpf_loader_upgradeable, program::invoke};
 
 pub use context::*;
 pub use error::*;
 pub use message::*;
 pub use state::*;
+pub use native_program::*;
 
 pub mod context;
 pub mod error;
 pub mod message;
 pub mod state;
+pub mod native_program;
 
 declare_id!("5S5LeEiouw4AdyUXBoDThpsepQha2HH8Qt5AMDn9zsk1");
 
@@ -23,29 +26,29 @@ pub mod token_bridge_relayer {
     use super::*;
     use wormhole_anchor_sdk::{token_bridge, wormhole};
 
-    /// This instruction can be used to generate your program's config.
+    /// This instruction is be used to generate your program's config.
     /// And for convenience, we will store Wormhole-related PDAs in the
     /// config so we can verify these accounts with a simple == constraint.
+    /// # Arguments
+    ///
+    /// * `ctx`           - `Initialize` context
+    /// * `fee_recipient` - Recipient of all relayer fees and swap proceeds
+    /// * `assistant`     - Priviledged key to manage certain accounts
     pub fn initialize(
         ctx: Context<Initialize>,
         fee_recipient: Pubkey,
         assistant: Pubkey
     ) -> Result<()> {
-        require_keys_neq!(
-            fee_recipient,
-            Pubkey::default(),
-            TokenBridgeRelayerError::InvalidPublicKey
-        );
-        require_keys_neq!(
-            assistant,
-            Pubkey::default(),
+        require!(
+            fee_recipient != Pubkey::default() &&
+            assistant != Pubkey::default(),
             TokenBridgeRelayerError::InvalidPublicKey
         );
 
         // Initial precision value for both relayer fees and swap rates.
         let initial_precision: u32 = 100000000;
 
-        // Initialize program's sender config
+        // Initialize program's sender config.
         let sender_config = &mut ctx.accounts.sender_config;
 
         // Set the owner of the sender config (effectively the owner of the
@@ -55,8 +58,14 @@ pub mod token_bridge_relayer {
             .bumps
             .get("sender_config")
             .ok_or(TokenBridgeRelayerError::BumpNotFound)?;
+
+        // Set the initial precision values.
         sender_config.relayer_fee_precision = initial_precision;
         sender_config.swap_rate_precision = initial_precision;
+
+        // Set the paused boolean to false. This value controls whether the
+        // program will allow outbound transfers.
+        sender_config.paused = false;
 
         // Set Token Bridge related addresses.
         {
@@ -80,6 +89,8 @@ pub mod token_bridge_relayer {
             .bumps
             .get("redeemer_config")
             .ok_or(TokenBridgeRelayerError::BumpNotFound)?;
+
+        // Set the initial precision values and the fee recipient.
         redeemer_config.relayer_fee_precision = initial_precision;
         redeemer_config.swap_rate_precision = initial_precision;
         redeemer_config.fee_recipient = fee_recipient;
@@ -99,6 +110,17 @@ pub mod token_bridge_relayer {
         owner_config.owner = ctx.accounts.owner.key();
         owner_config.assistant = assistant;
         owner_config.pending_owner = None;
+
+        // // Make the contract immutable by setting the new program authority
+        // // to `None`.
+        // invoke(
+        //     &bpf_loader_upgradeable::set_upgrade_authority(
+        //         &ID,
+        //         &ctx.accounts.owner.key(),
+        //         None
+        //     ),
+        //     &ctx.accounts.to_account_infos()
+        // ).map_err(|_| TokenBridgeRelayerError::FailedToMakeImmutable)?;
 
         // Done.
         Ok(())
@@ -137,6 +159,21 @@ pub mod token_bridge_relayer {
         Ok(())
     }
 
+    /// This instruction registers a new token and saves the initial `swap_rate`
+    /// and `max_native_token_amount` in a RegisteredToken account.
+    /// This instruction is owner-only, meaning that only the owner of the
+    /// program (defined in the [Config] account) can register a token.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - `RegisterToken` context
+    /// * `swap_rate`:
+    ///    - USD converion rate scaled by the `swap_rate_precision`. For example,
+    ///    - if the conversion rate is $15 and the `swap_rate_precision` is
+    ///    - 1000000, the `swap_rate` should be set to 15000000.
+    /// * `max_native_swap_amount`:
+    ///    - Maximum amount of native tokens that can be swapped for this token
+    ///    - on this chain.
     pub fn register_token(
         ctx: Context<RegisterToken>,
         swap_rate: u64,
@@ -151,6 +188,13 @@ pub mod token_bridge_relayer {
             TokenBridgeRelayerError::ZeroSwapRate
         );
 
+        // The max_native_swap_amount must be set to zero for the native mint.
+        require!(
+            ctx.accounts.mint.key() != spl_token::native_mint::ID
+            || max_native_swap_amount == 0,
+            TokenBridgeRelayerError::SwapsNotAllowedForNativeMint
+        );
+
         // Register the token by setting the swap_rate and max_native_swap_amount.
         ctx.accounts.registered_token.set_inner(RegisteredToken {
             swap_rate,
@@ -161,6 +205,11 @@ pub mod token_bridge_relayer {
         Ok(())
     }
 
+    /// This instruction deregisters a token by setting the `is_registered`
+    /// field in the `RegisteredToken` account to `false`. It also sets the
+    /// `swap_rate` and `max_native_swap_amount` to zero. This instruction
+    /// is owner-only, meaning that only the owner of the program (defined
+    /// in the [Config] account) can register a token.
     pub fn deregister_token(
         ctx: Context<DeregisterToken>
     ) -> Result<()> {
@@ -179,6 +228,18 @@ pub mod token_bridge_relayer {
         Ok(())
     }
 
+    /// This instruction updates the `relayer_fee` in the `RelayerFee` account.
+    /// The `relayer_fee` is scaled by the `relayer_fee_precision`. For example,
+    /// if the `relayer_fee` is $15 and the `relayer_fee_precision` is 1000000,
+    /// the `relayer_fee` should be set to 15000000. This instruction can
+    /// only be called by the owner or assistant, which are defined in the
+    /// [OwnerConfig] account.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx`   - `UpdateRelayerFee` context
+    /// * `chain` - Wormhole Chain ID
+    /// * `fee`   - Relayer fee scaled by the `relayer_fee_precision`
     pub fn update_relayer_fee(
         ctx: Context<UpdateRelayerFee>,
         chain: u16,
@@ -187,7 +248,7 @@ pub mod token_bridge_relayer {
         // Check that the signer is the owner or assistant.
         require!(
             ctx.accounts.owner_config.is_authorized(&ctx.accounts.payer.key()),
-            TokenBridgeRelayerError::OwnerOnly
+            TokenBridgeRelayerError::OwnerOrAssistantOnly
         );
 
         // NOTE: We do not have to check if the chainId is valid, or if a chainId
@@ -203,6 +264,16 @@ pub mod token_bridge_relayer {
         Ok(())
     }
 
+    /// This instruction updates the `relayer_fee_precision` in the
+    /// `SenderConfig` and `RedeemerConfig` accounts. The `relayer_fee_precision`
+    /// is used to scale the `relayer_fee`. This instruction is owner-only,
+    /// meaning that only the owner of the program (defined in the [Config]
+    /// account) can register a token.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - `UpdatePrecision` context
+    /// * `relayer_fee_precision` - Precision used to scale the relayer fee.
     pub fn update_relayer_fee_precision(
         ctx: Context<UpdatePrecision>,
         relayer_fee_precision: u32,
@@ -224,6 +295,14 @@ pub mod token_bridge_relayer {
         Ok(())
     }
 
+    /// This instruction updates the `swap_rate` in the `RegisteredToken`
+    /// account. This instruction can only be called by the owner or
+    /// assistant, which are defined in the [OwnerConfig] account.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx`       - `UpdateSwapRate` context
+    /// * `swap_rate` - USD conversion rate for the specified token.
     pub fn update_swap_rate(
         ctx: Context<UpdateSwapRate>,
         swap_rate: u64
@@ -231,7 +310,7 @@ pub mod token_bridge_relayer {
         // Check that the signer is the owner or assistant.
         require!(
             ctx.accounts.owner_config.is_authorized(&ctx.accounts.payer.key()),
-            TokenBridgeRelayerError::OwnerOnly
+            TokenBridgeRelayerError::OwnerOrAssistantOnly
         );
 
         // Confirm that the token is registered and the new swap rate
@@ -252,6 +331,16 @@ pub mod token_bridge_relayer {
         Ok(())
     }
 
+    /// This instruction updates the `swap_rate_precision` in the
+    /// `SenderConfig` and `RedeemerConfig` accounts. The `swap_rate_precision`
+    /// is used to scale the `swap_rate`. This instruction is owner-only,
+    /// meaning that only the owner of the program (defined in the [Config]
+    /// account) can register a token.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - `UpdatePrecision` context
+    /// * `swap_rate_precision` - Precision used to scale the `swap_rate`.
     pub fn update_swap_rate_precision(
         ctx: Context<UpdatePrecision>,
         swap_rate_precision: u32,
@@ -273,6 +362,17 @@ pub mod token_bridge_relayer {
         Ok(())
     }
 
+    /// This instruction updates the `max_native_swap_amount` in the
+    /// `RegisteredToken` account. This instruction is owner-only,
+    /// meaning that only the owner of the program (defined in the [Config]
+    /// account) can register a token.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - `UpdateMaxNativeSwapAmount` context
+    /// * `max_native_swap_amount`:
+    ///    - Maximum amount of native tokens that can be swapped for this token
+    ///    - on this chain.
     pub fn update_max_native_swap_amount(
         ctx: Context<ManageToken>,
         max_native_swap_amount: u64
@@ -282,9 +382,36 @@ pub mod token_bridge_relayer {
             TokenBridgeRelayerError::TokenNotRegistered
         );
 
-        // Set the new max native swap amount.
+        // The max_native_swap_amount must be set to zero for the native mint.
+        require!(
+            ctx.accounts.mint.key() != spl_token::native_mint::ID
+            || max_native_swap_amount == 0,
+            TokenBridgeRelayerError::SwapsNotAllowedForNativeMint
+        );
+
+        // Set the new max_native_swap_amount.
         let registered_token = &mut ctx.accounts.registered_token;
         registered_token.max_native_swap_amount = max_native_swap_amount;
+
+        Ok(())
+    }
+
+    /// This instruction updates the `paused` boolean in the `SenderConfig`
+    /// account. This instruction is owner-only, meaning that only the owner
+    /// of the program (defined in the [Config] account) can pause outbound
+    /// transfers.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - `PauseOutboundTransfers` context
+    /// * `paused` - Boolean indicating whether outbound transfers are paused.
+    pub fn set_pause_for_transfers(
+        ctx: Context<PauseOutboundTransfers>,
+        paused: bool
+    ) -> Result<()> {
+        // Set the new paused boolean.
+        let sender_config = &mut ctx.accounts.config;
+        sender_config.paused = paused;
 
         Ok(())
     }
@@ -349,6 +476,11 @@ pub mod token_bridge_relayer {
         Ok(())
     }
 
+    /// This instruction cancels the ownership transfer request by setting
+    /// the `pending_owner` field in the `OwnerConfig` account to `None`.
+    /// This instruction is owner-only, meaning that only the owner of the
+    /// program (defined in the [Config] account) can cancel an ownership
+    /// transfer request.
     pub fn cancel_ownership_transfer_request(
         ctx: Context<ManageOwnershipTransfer>
     ) -> Result<()> {
@@ -358,6 +490,23 @@ pub mod token_bridge_relayer {
         Ok(())
     }
 
+    /// This instruction is used to transfer native tokens from Solana to a
+    /// foreign blockchain. The user can optionally specify a
+    /// `to_native_token_amount` to swap some of the tokens for the native
+    /// asset on the target chain. For a fee, an off-chain relayer will redeem
+    /// the transfer on the target chain. If the user is transferring native
+    /// SOL, the contract will autormatically wrap the lamports into a WSOL.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - `SendNativeTokensWithPayload` context
+    /// * `amount` - Amount of tokens to send
+    /// * `to_native_token_amount`:
+    ///     - Amount of tokens to swap for native assets on the target chain
+    /// * `recipient_chain` - Chain ID of the target chain
+    /// * `recipient_address` - Address of the target wallet on the target chain
+    /// * `batch_id` - Nonce of Wormhole message
+    /// * `wrap_native` - Whether to wrap native SOL
     pub fn send_native_tokens_with_payload(
         ctx: Context<SendNativeTokensWithPayload>,
         amount: u64,
@@ -367,6 +516,12 @@ pub mod token_bridge_relayer {
         batch_id: u32,
         wrap_native: bool
     ) -> Result<()> {
+        // Confirm that outbound transfers are not paused.
+        require!(
+            !ctx.accounts.config.paused,
+            TokenBridgeRelayerError::OutboundTransfersPaused
+        );
+
         // Confirm that the mint is a registered token.
         require!(
             ctx.accounts.registered_token.is_registered,
@@ -382,8 +537,8 @@ pub mod token_bridge_relayer {
         );
 
         // Token Bridge program truncates amounts to 8 decimals, so there will
-        // be a residual amount if decimals of SPL is >8. We need to take into
-        // account how much will actually be bridged.
+        // be a residual amount if decimals of the SPL is >8. We need to take
+        // into account how much will actually be bridged.
         let truncated_amount = token_bridge::truncate_amount(
             amount,
             ctx.accounts.mint.decimals
@@ -439,14 +594,16 @@ pub mod token_bridge_relayer {
             &[ctx.accounts.config.bump],
         ];
 
-        // First transfer tokens from payer to tmp_token_account.
+        // If the user wishes to transfer native SOL, we need to transfer the
+        // lamports to the tmp_token_account and then convert it to native SOL. Otherwise,
+        // we can just transfer the specified token to the tmp_token_account.
         if wrap_native {
             require!(
                 ctx.accounts.mint.key() == spl_token::native_mint::ID,
                 TokenBridgeRelayerError::NativeMintRequired
             );
 
-            // Transfer lamports to our token account (these lamports will be our WSOL).
+            // Transfer lamports to the tmp_token_account (these lamports will be our WSOL).
             system_program::transfer(
                 CpiContext::new(
                     ctx.accounts.system_program.to_account_info(),
@@ -458,7 +615,8 @@ pub mod token_bridge_relayer {
                 truncated_amount,
             )?;
 
-            // Sync the token account based on the lamports we sent it.
+            // Sync the token account based on the lamports we sent it,
+            // this is where the wrapping takes place.
             token::sync_native(CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
                 token::SyncNative {
@@ -561,6 +719,18 @@ pub mod token_bridge_relayer {
         ))
     }
 
+    /// This instruction is used to redeem token transfers from foreign emitters.
+    /// It takes custody of the released native tokens and sends the tokens to the
+    /// encoded `recipient`. It pays the `fee_recipient` in the token
+    /// denomination. If requested by the user, it will perform a swap with the
+    /// off-chain relayer to provide the user with lamports. If the token
+    /// being transferred is WSOL, the contract will unwrap the WSOL and send
+    /// the lamports to the recipient and pay the relayer in lamports.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - `RedeemNativeTransferWithPayload` context
+    /// * `vaa_hash` - Hash of the VAA that triggered the transfer
     pub fn redeem_native_transfer_with_payload(
         ctx: Context<RedeemNativeTransferWithPayload>,
         _vaa_hash: [u8; 32],
@@ -583,7 +753,7 @@ pub mod token_bridge_relayer {
             TokenBridgeRelayerError::TokenNotRegistered
         );
 
-        // The intended recipient must agree with the recipient.
+        // The intended recipient must agree with the recipient account.
         let TokenBridgeRelayerMessage::TransferWithRelay {
             target_relayer_fee,
             to_native_token_amount,
@@ -597,7 +767,7 @@ pub mod token_bridge_relayer {
         // These seeds are used to:
         // 1.  Redeem Token Bridge program's
         //     complete_transfer_native_with_payload.
-        // 2.  Transfer tokens to relayer if he exists.
+        // 2.  Transfer tokens to relayer if it exists.
         // 3.  Transfer remaining tokens to recipient.
         // 4.  Close tmp_token_account.
         let config_seeds = &[
@@ -605,7 +775,7 @@ pub mod token_bridge_relayer {
             &[ctx.accounts.config.bump],
         ];
 
-        // Redeem the token transfer.
+        // Redeem the token transfer to the tmp_token_account.
         token_bridge::complete_transfer_native_with_payload(CpiContext::new_with_signer(
             ctx.accounts.token_bridge_program.to_account_info(),
             token_bridge::CompleteTransferNativeWithPayload {
@@ -721,11 +891,11 @@ pub mod token_bridge_relayer {
                     )?;
                 }
 
-                // Calculate the amount for the relayer.
-                let amount_for_relayer = token_amount_in + denormalized_relayer_fee;
+                // Calculate the amount for the fee recipient.
+                let amount_for_fee_recipient = token_amount_in + denormalized_relayer_fee;
 
                 // Transfer tokens from tmp_token_account to the fee recipient.
-                if amount_for_relayer > 0 {
+                if amount_for_fee_recipient > 0 {
                     anchor_spl::token::transfer(
                         CpiContext::new_with_signer(
                             ctx.accounts.token_program.to_account_info(),
@@ -736,7 +906,7 @@ pub mod token_bridge_relayer {
                             },
                             &[&config_seeds[..]],
                         ),
-                        amount_for_relayer
+                        amount_for_fee_recipient
                     )?;
                 }
 
@@ -751,7 +921,7 @@ pub mod token_bridge_relayer {
                         },
                         &[&config_seeds[..]],
                     ),
-                    amount - amount_for_relayer
+                    amount - amount_for_fee_recipient
                 )?;
             }
 
@@ -768,6 +938,22 @@ pub mod token_bridge_relayer {
         }
     }
 
+    /// This instruction is used to transfer wrapped tokens from Solana to a
+    /// foreign blockchain. The user can optionally specify a
+    /// `to_native_token_amount` to swap some of the tokens for the native
+    /// assets on the target chain. For a fee, an off-chain relayer will redeem
+    /// the transfer on the target chain. This instruction should only be called
+    /// when the user is transferring a wrapped token.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - `SendWrappedTokensWithPayload` context
+    /// * `amount` - Amount of tokens to send
+    /// * `to_native_token_amount`:
+    ///    - Amount of tokens to swap for native assets on the target chain
+    /// * `recipient_chain` - Chain ID of the target chain
+    /// * `recipient_address` - Address of the target wallet on the target chain
+    /// * `batch_id` - Nonce of Wormhole message
     pub fn send_wrapped_tokens_with_payload(
         ctx: Context<SendWrappedTokensWithPayload>,
         amount: u64,
@@ -776,6 +962,12 @@ pub mod token_bridge_relayer {
         recipient_address: [u8; 32],
         batch_id: u32
     ) -> Result<()> {
+        // Confirm that outbound transfers are not paused.
+        require!(
+            !ctx.accounts.config.paused,
+            TokenBridgeRelayerError::OutboundTransfersPaused
+        );
+
         require!(amount > 0, TokenBridgeRelayerError::ZeroBridgeAmount);
 
         // Confirm that the mint is a registered token.
@@ -913,6 +1105,16 @@ pub mod token_bridge_relayer {
         ))
     }
 
+    /// This instruction is used to redeem token transfers from foreign emitters.
+    /// It takes custody of the minted wrapped tokens and sends the tokens to the
+    /// encoded `recipient`. It pays the `fee_recipient` in the wrapped-token
+    /// denomination. If requested by the user, it will perform a swap with the
+    /// off-chain relayer to provide the user with lamports.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - `RedeemNativeTransferWithPayload` context
+    /// * `vaa_hash` - Hash of the VAA that triggered the transfer
     pub fn redeem_wrapped_transfer_with_payload(
         ctx: Context<RedeemWrappedTransferWithPayload>,
         _vaa_hash: [u8; 32],
@@ -935,7 +1137,7 @@ pub mod token_bridge_relayer {
             TokenBridgeRelayerError::TokenNotRegistered
         );
 
-       // The intended recipient must agree with the recipient.
+       // The intended recipient must agree with the recipient account.
        let TokenBridgeRelayerMessage::TransferWithRelay {
         target_relayer_fee,
         to_native_token_amount,
@@ -949,7 +1151,7 @@ pub mod token_bridge_relayer {
         // These seeds are used to:
         // 1.  Redeem Token Bridge program's
         //     complete_transfer_wrapped_with_payload.
-        // 2.  Transfer tokens to relayer if he exists.
+        // 2.  Transfer tokens to relayer if it exists.
         // 3.  Transfer remaining tokens to recipient.
         // 4.  Close tmp_token_account.
         let config_seeds = &[
@@ -957,7 +1159,7 @@ pub mod token_bridge_relayer {
             &[ctx.accounts.config.bump],
         ];
 
-        // Redeem the token transfer.
+        // Redeem the token transfer to the tmp_token_account.
         token_bridge::complete_transfer_wrapped_with_payload(CpiContext::new_with_signer(
             ctx.accounts.token_bridge_program.to_account_info(),
             token_bridge::CompleteTransferWrappedWithPayload {
@@ -1039,11 +1241,11 @@ pub mod token_bridge_relayer {
                 )?;
             }
 
-            // Calculate the amount for the relayer.
-            let amount_for_relayer = token_amount_in + denormalized_relayer_fee;
+            // Calculate the amount for the fee recipient.
+            let amount_for_fee_recipient = token_amount_in + denormalized_relayer_fee;
 
             // Transfer tokens from tmp_token_account to the fee recipient.
-            if amount_for_relayer > 0 {
+            if amount_for_fee_recipient > 0 {
                 anchor_spl::token::transfer(
                     CpiContext::new_with_signer(
                         ctx.accounts.token_program.to_account_info(),
@@ -1054,7 +1256,7 @@ pub mod token_bridge_relayer {
                         },
                         &[&config_seeds[..]],
                     ),
-                    amount_for_relayer
+                    amount_for_fee_recipient
                 )?;
             }
 
@@ -1069,7 +1271,7 @@ pub mod token_bridge_relayer {
                     },
                     &[&config_seeds[..]],
                 ),
-                amount - amount_for_relayer
+                amount - amount_for_fee_recipient
             )?;
         }
 

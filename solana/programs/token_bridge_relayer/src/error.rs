@@ -14,6 +14,14 @@ pub enum TokenBridgeRelayerError {
     /// Only the program's owner is permitted.
     OwnerOnly,
 
+    #[msg("OutboundTransfersPaused")]
+    /// Outbound transfers are paused.
+    OutboundTransfersPaused,
+
+    #[msg("OwnerOrAssistantOnly")]
+    // Only the program's owner or assistant is permitted.
+    OwnerOrAssistantOnly,
+
     #[msg("NotPendingOwner")]
     /// Only the program's pending owner is permitted.
     NotPendingOwner,
@@ -25,6 +33,10 @@ pub enum TokenBridgeRelayerError {
     #[msg("BumpNotFound")]
     /// Bump not found in `bumps` map.
     BumpNotFound,
+
+    #[msg("FailedToMakeImmutable")]
+    /// Failed to make program immutable.
+    FailedToMakeImmutable,
 
     #[msg("InvalidForeignContract")]
     /// Specified foreign contract has a bad chain ID or zero address.
@@ -41,6 +53,10 @@ pub enum TokenBridgeRelayerError {
     #[msg("NativeMintRequired")]
     /// Must be the native mint.
     NativeMintRequired,
+
+    #[msg("SwapsNotAllowedForNativeMint")]
+    /// Swaps are not allowed for the native mint.
+    SwapsNotAllowedForNativeMint,
 
     #[msg("InvalidTokenBridgeConfig")]
     /// Specified Token Bridge config PDA is wrong.

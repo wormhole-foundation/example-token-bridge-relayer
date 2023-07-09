@@ -7,7 +7,7 @@ use wormhole_anchor_sdk::{token_bridge, wormhole};
 
 use super::{
     state::{ForeignContract, RedeemerConfig, SenderConfig, OwnerConfig, RegisteredToken, RelayerFee},
-    TokenBridgeRelayerError, PostedTokenBridgeRelayerMessage,
+    TokenBridgeRelayerError, PostedTokenBridgeRelayerMessage, //ID, BpfLoaderUpgradeable
 };
 
 // AKA `b"bridged"`.
@@ -149,6 +149,22 @@ pub struct Initialize<'info> {
 
     /// System program.
     pub system_program: Program<'info, System>,
+
+    // /// CHECK: BPF Loader Upgradeable program needs to modify this program's data to change the
+    // /// upgrade authority. We check this PDA address just in case there is another program that this
+    // /// deployer has deployed.
+    // ///
+    // /// NOTE: Set upgrade authority is scary because any public key can be used to set as the
+    // /// authority.
+    // #[account(
+    //     mut,
+    //     seeds = [ID.as_ref()],
+    //     bump,
+    //     seeds::program = bpf_loader_upgradeable_program,
+    // )]
+    // program_data: AccountInfo<'info>,
+
+    // bpf_loader_upgradeable_program: Program<'info, BpfLoaderUpgradeable>,
 }
 
 #[derive(Accounts)]
@@ -392,6 +408,26 @@ pub struct UpdateSwapRate<'info> {
 
     pub mint: Account<'info, Mint>,
 
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct PauseOutboundTransfers<'info> {
+    #[account(mut)]
+    /// Owner of the program set in the [`SenderConfig`] account.
+    pub owner: Signer<'info>,
+
+    #[account(
+        mut,
+        has_one = owner @ TokenBridgeRelayerError::OwnerOnly,
+        seeds = [SenderConfig::SEED_PREFIX],
+        bump
+    )]
+    /// Sender Config account. This program requires that the `owner` specified
+    /// in the context equals the pubkey specified in this account. Mutable.
+    pub config: Box<Account<'info, SenderConfig>>,
+
+    /// System program.
     pub system_program: Program<'info, System>,
 }
 

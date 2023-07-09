@@ -12,6 +12,18 @@ import {
   deriveOwnerConfigKey,
 } from "../accounts";
 
+// export const BPF_LOADER_UPGRADEABLE_PROGRAM_ID = new PublicKey(
+//   "BPFLoaderUpgradeab1e11111111111111111111111"
+// );
+
+// export function getProgramData(programId: PublicKeyInitData) {
+//   const [addr] = PublicKey.findProgramAddressSync(
+//     [new PublicKey(programId).toBuffer()],
+//     BPF_LOADER_UPGRADEABLE_PROGRAM_ID
+//   );
+//   return addr;
+// }
+
 export async function createInitializeInstruction(
   connection: Connection,
   programId: PublicKeyInitData,
@@ -38,6 +50,8 @@ export async function createInitializeInstruction(
       redeemerConfig: deriveRedeemerConfigKey(programId),
       ownerConfig: deriveOwnerConfigKey(programId),
       tokenBridgeProgram: new PublicKey(tokenBridgeProgramId),
+      // programData: getProgramData(programId),
+      // bpfLoaderUpgradeableProgram: BPF_LOADER_UPGRADEABLE_PROGRAM_ID,
       wormholeProgram: new PublicKey(wormholeProgramId),
       ...tokenBridgeAccounts,
     })

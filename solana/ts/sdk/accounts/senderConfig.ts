@@ -23,6 +23,7 @@ export interface SenderConfigData {
   finality: number;
   relayerFeePrecision: number;
   swapRatePrecision: number;
+  paused: boolean;
 }
 
 export async function getSenderConfigData(

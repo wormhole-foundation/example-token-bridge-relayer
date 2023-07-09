@@ -10,3 +10,4 @@ export * from "./updateSwapRate";
 export * from "./registerToken";
 export * from "./updateMaxNativeSwapAmount";
 export * from "./ownershipTransfer";
+export * from "./setPauseForTransfers";
