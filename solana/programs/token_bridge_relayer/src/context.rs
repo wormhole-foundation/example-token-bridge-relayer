@@ -16,11 +16,11 @@ pub const SEED_PREFIX_BRIDGED: &[u8; 7] = b"bridged";
 pub const SEED_PREFIX_TMP: &[u8; 3] = b"tmp";
 
 #[derive(Accounts)]
-/// Context used to initialize program data (i.e. configs).
 pub struct Initialize<'info> {
     #[account(mut)]
     /// Whoever initializes the config will be the owner of the program. Signer
-    /// for creating the [`SenderConfig`] and [`RedeemerConfig`] accounts.
+    /// for creating the [`SenderConfig`], [`RedeemerConfig`] and [`OwnerConfig`]
+    /// accounts.
     pub owner: Signer<'info>,
 
     #[account(
@@ -56,8 +56,9 @@ pub struct Initialize<'info> {
         bump,
         space = 8 + OwnerConfig::INIT_SPACE
     )]
-    /// Owner config account, which saves the owner and assistant
-    /// public keys.
+    /// Owner config account, which saves the owner, assistant and
+    /// pending owner keys. This account is used to manage the ownership of the
+    /// program.
     pub owner_config: Box<Account<'info, OwnerConfig>>,
 
     /// Wormhole program.
@@ -224,6 +225,7 @@ pub struct RegisterForeignContract<'info> {
 #[instruction(chain: u16)]
 pub struct UpdateRelayerFee<'info> {
     #[account(mut)]
+    /// Signer of the transaction. Must be the owner or assistant.
     pub payer: Signer<'info>,
 
     #[account(
@@ -231,7 +233,7 @@ pub struct UpdateRelayerFee<'info> {
         bump
     )]
     /// The owner_config is used when updating the swap rate
-    /// so that the assistant key can be used instead of the
+    /// so that the assistant key can be used in addition to the
     /// owner key.
     pub owner_config: Account<'info, OwnerConfig>,
 
@@ -245,6 +247,10 @@ pub struct UpdateRelayerFee<'info> {
         bump,
         space = 8 + RelayerFee::INIT_SPACE
     )]
+    /// Relayer Fee account. This account holds the USD denominated relayer fee
+    /// for the specified `chain`. This account is used to determine the cost of
+    /// relaying a transfer to a target chain. If there already is a relayer
+    /// fee saved in this account, overwrite it.
     pub relayer_fee: Box<Account<'info, RelayerFee>>,
 
     #[account(
@@ -267,7 +273,7 @@ pub struct UpdateRelayerFee<'info> {
 // relayer_fee_precision.
 pub struct UpdatePrecision<'info> {
     #[account(mut)]
-    /// CHECK: Owner of the program set in the [`RedeemerConfig`] and [`SenderConfig`] account.
+    /// Owner of the program set in the [`RedeemerConfig`] and [`SenderConfig`] account.
     pub owner: Signer<'info>,
 
     #[account(
@@ -290,7 +296,7 @@ pub struct UpdatePrecision<'info> {
     /// Sender Config account. This program requires that the `owner`
     /// specified in the context equals the pubkey specified in this account.
     /// Mutable. The `owner` check is redundant here, but we keep it as an
-    /// extra protection for future changes to the context.
+    /// extra protection for future changes to the context. Mutable.
     pub sender_config: Box<Account<'info, SenderConfig>>,
 
     /// System program.
@@ -320,12 +326,19 @@ pub struct RegisterToken<'info> {
         seeds = [b"mint", mint.key().as_ref()],
         bump
     )]
+    /// Registered Token account. This account stores information about the
+    /// token, including the swap rate and max native swap amount. Create this
+    /// account if the mint has not been registered yet. Mutable.
     pub registered_token: Account<'info, RegisteredToken>,
 
+    /// Mint info. This is the SPL token that will be bridged over to the
+    /// foreign contract.
     pub mint: Account<'info, Mint>,
 
+    // Token program.
     pub token_program: Program<'info, Token>,
 
+    /// System program.
     pub system_program: Program<'info, System>,
 }
 
@@ -345,6 +358,8 @@ pub struct DeregisterToken<'info> {
     /// in the context equals the pubkey specified in this account. Read-only.
     pub config: Box<Account<'info, SenderConfig>>,
 
+    /// Mint info. This is the SPL token that will be bridged over to the
+    /// foreign contract.
     pub mint: Account<'info, Mint>,
 
     #[account(
@@ -352,8 +367,12 @@ pub struct DeregisterToken<'info> {
         seeds = [b"mint", mint.key().as_ref()],
         bump
     )]
+    /// Registered Token account. This account stores information about the
+    /// token, including the swap rate and max native swap amount. This account
+    /// also determines if a mint is registered or not.
     pub registered_token: Account<'info, RegisteredToken>,
 
+    /// System program.
     pub system_program: Program<'info, System>,
 }
 
@@ -378,25 +397,32 @@ pub struct ManageToken<'info> {
         seeds = [b"mint", mint.key().as_ref()],
         bump
     )]
+    /// Registered Token account. This account stores information about the
+    /// token, including the swap rate and max native swap amount. The program
+    /// will modify this account when the swap rate or max native swap amount
+    /// changes. Mutable.
     pub registered_token: Account<'info, RegisteredToken>,
 
+    /// Mint info. This is the SPL token that will be bridged over to the
+    /// foreign contract.
     pub mint: Account<'info, Mint>,
 
+    /// System program.
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
 pub struct UpdateSwapRate<'info> {
     #[account(mut)]
+    /// The signer of the transaction. Must be the owner or assistant.
     pub payer: Signer<'info>,
 
     #[account(
         seeds = [OwnerConfig::SEED_PREFIX],
         bump
     )]
-    /// The owner_config is used when updating the swap rate
-    /// so that the assistant key can be used instead of the
-    /// owner key.
+    /// The owner_config is used when updating the swap rate so that the
+    /// assistant key can be used in additional to the owner key.
     pub owner_config: Account<'info, OwnerConfig>,
 
     #[account(
@@ -404,10 +430,16 @@ pub struct UpdateSwapRate<'info> {
         seeds = [b"mint", mint.key().as_ref()],
         bump
     )]
+    /// Registered Token account. This account stores information about the
+    /// token, including the swap rate and max native swap amount. The program
+    /// will modify this account to update the swap rate. Mutable.
     pub registered_token: Account<'info, RegisteredToken>,
 
+    /// Mint info. This is the SPL token that will be bridged over to the
+    /// foreign contract.
     pub mint: Account<'info, Mint>,
 
+    /// System program.
     pub system_program: Program<'info, System>,
 }
 
@@ -434,6 +466,7 @@ pub struct PauseOutboundTransfers<'info> {
 #[derive(Accounts)]
 pub struct ManageOwnershipTransfer<'info> {
     #[account(mut)]
+    /// Owner of the program set in the [`OwnerConfig`] account.
     pub owner: Signer<'info>,
 
     #[account(
@@ -442,14 +475,19 @@ pub struct ManageOwnershipTransfer<'info> {
         seeds = [OwnerConfig::SEED_PREFIX],
         bump
     )]
+    /// Owner Config account. This program requires that the `owner` specified
+    /// in the context equals the pubkey specified in this account. Mutable.
     pub owner_config: Account<'info, OwnerConfig>,
 
+    /// System program.
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
 pub struct ConfirmOwnershipTransfer<'info> {
     #[account(mut)]
+    /// Must be the pending owner of the program set in the [`OwnerConfig`]
+    /// account.
     pub payer: Signer<'info>,
 
     #[account(
@@ -457,6 +495,8 @@ pub struct ConfirmOwnershipTransfer<'info> {
         seeds = [OwnerConfig::SEED_PREFIX],
         bump
     )]
+    /// Owner Config account. This program requires that the `pending_owner`
+    /// specified in the context equals the pubkey specified in this account.
     pub owner_config: Account<'info, OwnerConfig>,
 
     #[account(
@@ -464,6 +504,9 @@ pub struct ConfirmOwnershipTransfer<'info> {
         seeds = [SenderConfig::SEED_PREFIX],
         bump
     )]
+    /// Sender Config account. This instruction will update the `owner`
+    /// specified in this account to the `pending_owner` specified in the
+    /// [`OwnerConfig`] account. Mutable.
     pub sender_config: Box<Account<'info, SenderConfig>>,
 
     #[account(
@@ -471,8 +514,12 @@ pub struct ConfirmOwnershipTransfer<'info> {
         seeds = [RedeemerConfig::SEED_PREFIX],
         bump
     )]
+    /// Redeemer Config account. This instruction will update the `owner`
+    /// specified in this account to the `pending_owner` specified in the
+    /// [`OwnerConfig`] account. Mutable.
     pub redeemer_config: Box<Account<'info, RedeemerConfig>>,
 
+    /// System program.
     pub system_program: Program<'info, System>,
 }
 
@@ -704,12 +751,15 @@ pub struct RedeemNativeTransferWithPayload<'info> {
         associated_token::mint = mint,
         associated_token::authority = recipient
     )]
-    /// Recipient associated token account.
+    /// Recipient associated token account. The recipient authority check
+    /// is necessary to ensure that the recipient is the intended recipient
+    /// of the bridged tokens. Mutable.
     pub recipient_token_account: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
     /// CHECK: recipient may differ from payer if a relayer paid for this
-    /// transaction.
+    /// transaction. This instruction verifies that the recipient key
+    /// passed in this context matches the intended recipient in the vaa.
     pub recipient: UncheckedAccount<'info>,
 
     #[account(
@@ -867,6 +917,8 @@ pub struct SendWrappedTokensWithPayload<'info> {
         associated_token::mint = token_bridge_wrapped_mint,
         associated_token::authority = payer,
     )]
+    /// Payer's associated token account. We may want to make this a generic
+    /// token account in the future.
     pub from_token_account: Account<'info, TokenAccount>,
 
     #[account(
@@ -1051,12 +1103,15 @@ pub struct RedeemWrappedTransferWithPayload<'info> {
         associated_token::mint = token_bridge_wrapped_mint,
         associated_token::authority = recipient
     )]
-    /// Recipient associated token account.
+    /// Recipient associated token account. The recipient authority check
+    /// is necessary to ensure that the recipient is the intended recipient
+    /// of the bridged tokens. Mutable.
     pub recipient_token_account: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
     /// CHECK: recipient may differ from payer if a relayer paid for this
-    /// transaction.
+    /// transaction. This instruction verifies that the recipient key
+    /// passed in this context matches the intended recipient in the vaa.
     pub recipient: UncheckedAccount<'info>,
 
     #[account(

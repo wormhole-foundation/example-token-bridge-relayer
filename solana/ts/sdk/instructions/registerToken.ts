@@ -6,11 +6,7 @@ import {
 } from "@solana/web3.js";
 import {BN} from "@coral-xyz/anchor";
 import {createTokenBridgeRelayerProgramInterface} from "../program";
-import {
-  deriveSenderConfigKey,
-  deriveRegisteredTokenKey,
-  deriveTokenAccountKey,
-} from "../accounts";
+import {deriveSenderConfigKey, deriveRegisteredTokenKey} from "../accounts";
 
 export async function createRegisterTokenInstruction(
   connection: Connection,

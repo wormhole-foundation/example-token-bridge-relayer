@@ -2,9 +2,13 @@ use anchor_lang::prelude::*;
 
 #[account]
 #[derive(InitSpace)]
+/// Registered token account data.
 pub struct RegisteredToken {
+    /// Token swap rate. The swap rate is the USD conversion rate of the token.
     pub swap_rate: u64,
+    /// Maximum amount of native SOL the contract will swap for each transfer.
     pub max_native_swap_amount: u64,
+    /// Whether the token is registered.
     pub is_registered: bool
 }
 

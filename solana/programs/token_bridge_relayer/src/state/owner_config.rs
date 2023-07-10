@@ -2,9 +2,13 @@ use anchor_lang::prelude::*;
 
 #[account]
 #[derive(InitSpace)]
+/// Owner account data.
 pub struct OwnerConfig {
+    /// Program's owner.
     pub owner: Pubkey,
+    /// Program's assistant. Can be used to update the relayer fee and swap rate.
     pub assistant: Pubkey,
+    /// Intermediate storage for the pending owner. Is used to transfer ownership.
     pub pending_owner: Option<Pubkey>
 }
 
