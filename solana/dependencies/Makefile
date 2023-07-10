@@ -9,7 +9,7 @@ all: $(network_sos) mpl_token_metadata.so
 
 clean:
 	$(foreach network,$(supported_networks),rm -rf $(network);)
-	rm -f mpl_token_metadata.so
+	rm -rf mpl_token_metadata.so tmp-wormhole
 
 #building Wormhole bridges with Solana version 1.15 or newer causes very strange behavior with
 # the BPFLoaderUpgradeab1e program and how Wormhole bridges are loaded into the Solana validator

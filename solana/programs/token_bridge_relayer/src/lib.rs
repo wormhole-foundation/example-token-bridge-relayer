@@ -2,24 +2,23 @@ use anchor_lang::{
     prelude::*,
     system_program::{self, Transfer},
 };
-use anchor_spl::{
-    token::{self, spl_token},
-};
-use solana_program::{bpf_loader_upgradeable, program::invoke};
+use anchor_spl::token::{self, spl_token};
 
 pub use context::*;
 pub use error::*;
 pub use message::*;
-pub use state::*;
 pub use native_program::*;
+pub(crate) use processor::*;
+pub use state::*;
 
 pub mod context;
 pub mod error;
 pub mod message;
-pub mod state;
 pub mod native_program;
+mod processor;
+pub mod state;
 
-declare_id!("5S5LeEiouw4AdyUXBoDThpsepQha2HH8Qt5AMDn9zsk1");
+declare_id!("4LwyhdJCeiZuvKeEVs4r4q15wZibzXEfAEZXyyyKomLj");
 
 #[program]
 pub mod token_bridge_relayer {
@@ -37,93 +36,9 @@ pub mod token_bridge_relayer {
     pub fn initialize(
         ctx: Context<Initialize>,
         fee_recipient: Pubkey,
-        assistant: Pubkey
+        assistant: Pubkey,
     ) -> Result<()> {
-        require!(
-            fee_recipient != Pubkey::default() &&
-            assistant != Pubkey::default(),
-            TokenBridgeRelayerError::InvalidPublicKey
-        );
-
-        // Initial precision value for both relayer fees and swap rates.
-        let initial_precision: u32 = 100000000;
-
-        // Initialize program's sender config.
-        let sender_config = &mut ctx.accounts.sender_config;
-
-        // Set the owner of the sender config (effectively the owner of the
-        // program).
-        sender_config.owner = ctx.accounts.owner.key();
-        sender_config.bump = *ctx
-            .bumps
-            .get("sender_config")
-            .ok_or(TokenBridgeRelayerError::BumpNotFound)?;
-
-        // Set the initial precision values.
-        sender_config.relayer_fee_precision = initial_precision;
-        sender_config.swap_rate_precision = initial_precision;
-
-        // Set the paused boolean to false. This value controls whether the
-        // program will allow outbound transfers.
-        sender_config.paused = false;
-
-        // Set Token Bridge related addresses.
-        {
-            let token_bridge = &mut sender_config.token_bridge;
-            token_bridge.config = ctx.accounts.token_bridge_config.key();
-            token_bridge.authority_signer = ctx.accounts.token_bridge_authority_signer.key();
-            token_bridge.custody_signer = ctx.accounts.token_bridge_custody_signer.key();
-            token_bridge.emitter = ctx.accounts.token_bridge_emitter.key();
-            token_bridge.sequence = ctx.accounts.token_bridge_sequence.key();
-            token_bridge.wormhole_bridge = ctx.accounts.wormhole_bridge.key();
-            token_bridge.wormhole_fee_collector = ctx.accounts.wormhole_fee_collector.key();
-        }
-
-        // Initialize program's redeemer config.
-        let redeemer_config = &mut ctx.accounts.redeemer_config;
-
-        // Set the owner of the redeemer config (effectively the owner of the
-        // program).
-        redeemer_config.owner = ctx.accounts.owner.key();
-        redeemer_config.bump = *ctx
-            .bumps
-            .get("redeemer_config")
-            .ok_or(TokenBridgeRelayerError::BumpNotFound)?;
-
-        // Set the initial precision values and the fee recipient.
-        redeemer_config.relayer_fee_precision = initial_precision;
-        redeemer_config.swap_rate_precision = initial_precision;
-        redeemer_config.fee_recipient = fee_recipient;
-
-        // Set Token Bridge related addresses.
-        {
-            let token_bridge = &mut redeemer_config.token_bridge;
-            token_bridge.config = ctx.accounts.token_bridge_config.key();
-            token_bridge.custody_signer = ctx.accounts.token_bridge_custody_signer.key();
-            token_bridge.mint_authority = ctx.accounts.token_bridge_mint_authority.key();
-        }
-
-        // Initialize program's owner config.
-        let owner_config = &mut ctx.accounts.owner_config;
-
-        // Set the owner and assistant for the owner config.
-        owner_config.owner = ctx.accounts.owner.key();
-        owner_config.assistant = assistant;
-        owner_config.pending_owner = None;
-
-        // Make the contract immutable by setting the new program authority
-        // to `None`.
-        invoke(
-            &bpf_loader_upgradeable::set_upgrade_authority(
-                &ID,
-                &ctx.accounts.owner.key(),
-                None
-            ),
-            &ctx.accounts.to_account_infos()
-        ).map_err(|_| TokenBridgeRelayerError::FailedToMakeImmutable)?;
-
-        // Done.
-        Ok(())
+        processor::initialize(ctx, fee_recipient, assistant)
     }
 
     /// This instruction registers a new foreign contract (from another
@@ -177,21 +92,17 @@ pub mod token_bridge_relayer {
     pub fn register_token(
         ctx: Context<RegisterToken>,
         swap_rate: u64,
-        max_native_swap_amount: u64
+        max_native_swap_amount: u64,
     ) -> Result<()> {
         require!(
             !ctx.accounts.registered_token.is_registered,
             TokenBridgeRelayerError::TokenAlreadyRegistered
         );
-        require!(
-            swap_rate > 0,
-            TokenBridgeRelayerError::ZeroSwapRate
-        );
+        require!(swap_rate > 0, TokenBridgeRelayerError::ZeroSwapRate);
 
         // The max_native_swap_amount must be set to zero for the native mint.
         require!(
-            ctx.accounts.mint.key() != spl_token::native_mint::ID
-            || max_native_swap_amount == 0,
+            ctx.accounts.mint.key() != spl_token::native_mint::ID || max_native_swap_amount == 0,
             TokenBridgeRelayerError::SwapsNotAllowedForNativeMint
         );
 
@@ -199,7 +110,7 @@ pub mod token_bridge_relayer {
         ctx.accounts.registered_token.set_inner(RegisteredToken {
             swap_rate,
             max_native_swap_amount,
-            is_registered: true
+            is_registered: true,
         });
 
         Ok(())
@@ -210,9 +121,7 @@ pub mod token_bridge_relayer {
     /// `swap_rate` and `max_native_swap_amount` to zero. This instruction
     /// is owner-only, meaning that only the owner of the program (defined
     /// in the [Config] account) can register a token.
-    pub fn deregister_token(
-        ctx: Context<DeregisterToken>
-    ) -> Result<()> {
+    pub fn deregister_token(ctx: Context<DeregisterToken>) -> Result<()> {
         require!(
             ctx.accounts.registered_token.is_registered,
             TokenBridgeRelayerError::TokenAlreadyRegistered
@@ -222,7 +131,7 @@ pub mod token_bridge_relayer {
         ctx.accounts.registered_token.set_inner(RegisteredToken {
             swap_rate: 0,
             max_native_swap_amount: 0,
-            is_registered: false
+            is_registered: false,
         });
 
         Ok(())
@@ -240,14 +149,12 @@ pub mod token_bridge_relayer {
     /// * `ctx`   - `UpdateRelayerFee` context
     /// * `chain` - Wormhole Chain ID
     /// * `fee`   - Relayer fee scaled by the `relayer_fee_precision`
-    pub fn update_relayer_fee(
-        ctx: Context<UpdateRelayerFee>,
-        chain: u16,
-        fee: u64
-    ) -> Result<()> {
+    pub fn update_relayer_fee(ctx: Context<UpdateRelayerFee>, chain: u16, fee: u64) -> Result<()> {
         // Check that the signer is the owner or assistant.
         require!(
-            ctx.accounts.owner_config.is_authorized(&ctx.accounts.payer.key()),
+            ctx.accounts
+                .owner_config
+                .is_authorized(&ctx.accounts.payer.key()),
             TokenBridgeRelayerError::OwnerOrAssistantOnly
         );
 
@@ -303,13 +210,12 @@ pub mod token_bridge_relayer {
     ///
     /// * `ctx`       - `UpdateSwapRate` context
     /// * `swap_rate` - USD conversion rate for the specified token.
-    pub fn update_swap_rate(
-        ctx: Context<UpdateSwapRate>,
-        swap_rate: u64
-    ) -> Result<()> {
+    pub fn update_swap_rate(ctx: Context<UpdateSwapRate>, swap_rate: u64) -> Result<()> {
         // Check that the signer is the owner or assistant.
         require!(
-            ctx.accounts.owner_config.is_authorized(&ctx.accounts.payer.key()),
+            ctx.accounts
+                .owner_config
+                .is_authorized(&ctx.accounts.payer.key()),
             TokenBridgeRelayerError::OwnerOrAssistantOnly
         );
 
@@ -319,10 +225,7 @@ pub mod token_bridge_relayer {
             ctx.accounts.registered_token.is_registered,
             TokenBridgeRelayerError::TokenNotRegistered
         );
-        require!(
-            swap_rate > 0,
-            TokenBridgeRelayerError::ZeroSwapRate
-        );
+        require!(swap_rate > 0, TokenBridgeRelayerError::ZeroSwapRate);
 
         // Set the new swap rate.
         let registered_token = &mut ctx.accounts.registered_token;
@@ -375,7 +278,7 @@ pub mod token_bridge_relayer {
     ///    - on this chain.
     pub fn update_max_native_swap_amount(
         ctx: Context<ManageToken>,
-        max_native_swap_amount: u64
+        max_native_swap_amount: u64,
     ) -> Result<()> {
         require!(
             ctx.accounts.registered_token.is_registered,
@@ -384,8 +287,7 @@ pub mod token_bridge_relayer {
 
         // The max_native_swap_amount must be set to zero for the native mint.
         require!(
-            ctx.accounts.mint.key() != spl_token::native_mint::ID
-            || max_native_swap_amount == 0,
+            ctx.accounts.mint.key() != spl_token::native_mint::ID || max_native_swap_amount == 0,
             TokenBridgeRelayerError::SwapsNotAllowedForNativeMint
         );
 
@@ -407,7 +309,7 @@ pub mod token_bridge_relayer {
     /// * `paused` - Boolean indicating whether outbound transfers are paused.
     pub fn set_pause_for_transfers(
         ctx: Context<PauseOutboundTransfers>,
-        paused: bool
+        paused: bool,
     ) -> Result<()> {
         // Set the new paused boolean.
         let sender_config = &mut ctx.accounts.config;
@@ -427,7 +329,7 @@ pub mod token_bridge_relayer {
     /// * `new_owner` - Pubkey of the pending owner.
     pub fn submit_ownership_transfer_request(
         ctx: Context<ManageOwnershipTransfer>,
-        new_owner: Pubkey
+        new_owner: Pubkey,
     ) -> Result<()> {
         require_keys_neq!(
             new_owner,
@@ -440,7 +342,7 @@ pub mod token_bridge_relayer {
             TokenBridgeRelayerError::AlreadyTheOwner
         );
 
-        let owner_config= &mut ctx.accounts.owner_config;
+        let owner_config = &mut ctx.accounts.owner_config;
         owner_config.pending_owner = Some(new_owner);
 
         Ok(())
@@ -450,11 +352,13 @@ pub mod token_bridge_relayer {
     /// the transaction and updates the `owner` field in the `SenderConfig`,
     /// `RedeemerConfig`, and `OwnerConfig` accounts.
     pub fn confirm_ownership_transfer_request(
-        ctx: Context<ConfirmOwnershipTransfer>
+        ctx: Context<ConfirmOwnershipTransfer>,
     ) -> Result<()> {
         // Check that the signer is the pending owner.
         require!(
-            ctx.accounts.owner_config.is_pending_owner(&ctx.accounts.payer.key()),
+            ctx.accounts
+                .owner_config
+                .is_pending_owner(&ctx.accounts.payer.key()),
             TokenBridgeRelayerError::NotPendingOwner
         );
 
@@ -481,9 +385,7 @@ pub mod token_bridge_relayer {
     /// This instruction is owner-only, meaning that only the owner of the
     /// program (defined in the [Config] account) can cancel an ownership
     /// transfer request.
-    pub fn cancel_ownership_transfer_request(
-        ctx: Context<ManageOwnershipTransfer>
-    ) -> Result<()> {
+    pub fn cancel_ownership_transfer_request(ctx: Context<ManageOwnershipTransfer>) -> Result<()> {
         let owner_config = &mut ctx.accounts.owner_config;
         owner_config.pending_owner = None;
 
@@ -514,7 +416,7 @@ pub mod token_bridge_relayer {
         recipient_chain: u16,
         recipient_address: [u8; 32],
         batch_id: u32,
-        wrap_native: bool
+        wrap_native: bool,
     ) -> Result<()> {
         // Confirm that outbound transfers are not paused.
         require!(
@@ -532,53 +434,46 @@ pub mod token_bridge_relayer {
         // chain.
         require!(
             recipient_chain > wormhole::CHAIN_ID_SOLANA
-            && !recipient_address.iter().all(|&x| x == 0),
+                && !recipient_address.iter().all(|&x| x == 0),
             TokenBridgeRelayerError::InvalidRecipient,
         );
 
         // Token Bridge program truncates amounts to 8 decimals, so there will
         // be a residual amount if decimals of the SPL is >8. We need to take
         // into account how much will actually be bridged.
-        let truncated_amount = token_bridge::truncate_amount(
-            amount,
-            ctx.accounts.mint.decimals
-        );
+        let truncated_amount = token_bridge::truncate_amount(amount, ctx.accounts.mint.decimals);
         require!(
             truncated_amount > 0,
             TokenBridgeRelayerError::ZeroBridgeAmount
         );
 
         // Normalize the to_native_token_amount to 8 decimals.
-        let normalized_to_native_amount = token_bridge::normalize_amount(
-            to_native_token_amount,
-            ctx.accounts.mint.decimals
-        );
+        let normalized_to_native_amount =
+            token_bridge::normalize_amount(to_native_token_amount, ctx.accounts.mint.decimals);
         require!(
-            to_native_token_amount == 0 ||
-            normalized_to_native_amount > 0,
+            to_native_token_amount == 0 || normalized_to_native_amount > 0,
             TokenBridgeRelayerError::InvalidToNativeAmount
         );
 
         // Compute the relayer fee in terms of the native token being
         // transfered.
-        let token_fee = ctx.accounts.relayer_fee.checked_token_fee(
-            ctx.accounts.mint.decimals,
-            ctx.accounts.registered_token.swap_rate,
-            ctx.accounts.config.swap_rate_precision,
-            ctx.accounts.config.relayer_fee_precision
-        ).ok_or(TokenBridgeRelayerError::FeeCalculationError)?;
+        let token_fee = ctx
+            .accounts
+            .relayer_fee
+            .checked_token_fee(
+                ctx.accounts.mint.decimals,
+                ctx.accounts.registered_token.swap_rate,
+                ctx.accounts.config.swap_rate_precision,
+                ctx.accounts.config.relayer_fee_precision,
+            )
+            .ok_or(TokenBridgeRelayerError::FeeCalculationError)?;
 
         // Normalize the transfer amount and relayer fee and confirm that the
         // user has sent enough tokens to cover the native swap on the target
         // chain and to pay the relayer fee.
-        let normalized_relayer_fee = token_bridge::normalize_amount(
-            token_fee,
-            ctx.accounts.mint.decimals
-        );
-        let normalized_amount = token_bridge::normalize_amount(
-            amount,
-            ctx.accounts.mint.decimals
-        );
+        let normalized_relayer_fee =
+            token_bridge::normalize_amount(token_fee, ctx.accounts.mint.decimals);
+        let normalized_amount = token_bridge::normalize_amount(amount, ctx.accounts.mint.decimals);
         require!(
             normalized_amount > normalized_to_native_amount + normalized_relayer_fee,
             TokenBridgeRelayerError::InsufficientFunds
@@ -656,7 +551,7 @@ pub mod token_bridge_relayer {
         let payload = TokenBridgeRelayerMessage::TransferWithRelay {
             target_relayer_fee: normalized_relayer_fee,
             to_native_token_amount: normalized_to_native_amount,
-            recipient: recipient_address
+            recipient: recipient_address,
         }
         .try_to_vec()?;
 
@@ -757,7 +652,7 @@ pub mod token_bridge_relayer {
         let TokenBridgeRelayerMessage::TransferWithRelay {
             target_relayer_fee,
             to_native_token_amount,
-            recipient
+            recipient,
         } = ctx.accounts.vaa.message().data();
         require!(
             ctx.accounts.recipient.key().to_bytes() == *recipient,
@@ -803,10 +698,8 @@ pub mod token_bridge_relayer {
             ctx.accounts.vaa.data().amount(),
             ctx.accounts.mint.decimals,
         );
-        let denormalized_relayer_fee = token_bridge::denormalize_amount(
-            *target_relayer_fee,
-            ctx.accounts.mint.decimals,
-        );
+        let denormalized_relayer_fee =
+            token_bridge::denormalize_amount(*target_relayer_fee, ctx.accounts.mint.decimals);
 
         // Check to see if the transfer is for wrapped SOL. If it is,
         // unwrap and transfer the SOL to the recipient and relayer.
@@ -860,21 +753,23 @@ pub mod token_bridge_relayer {
                 )?;
             } else {
                 // Denormalize the to_native_token_amount.
-                let denormalized_to_native_token_amount =
-                    token_bridge::denormalize_amount(
-                        *to_native_token_amount,
-                        ctx.accounts.mint.decimals,
-                    );
+                let denormalized_to_native_token_amount = token_bridge::denormalize_amount(
+                    *to_native_token_amount,
+                    ctx.accounts.mint.decimals,
+                );
 
                 // Calculate the amount of SOL that should be sent to the
                 // recipient.
-                let (token_amount_in, native_amount_out) =
-                    ctx.accounts.registered_token.calculate_native_swap_amounts(
+                let (token_amount_in, native_amount_out) = ctx
+                    .accounts
+                    .registered_token
+                    .calculate_native_swap_amounts(
                         ctx.accounts.mint.decimals,
                         ctx.accounts.native_registered_token.swap_rate,
                         ctx.accounts.config.swap_rate_precision,
-                        denormalized_to_native_token_amount
-                    ).ok_or(TokenBridgeRelayerError::InvalidSwapCalculation)?;
+                        denormalized_to_native_token_amount,
+                    )
+                    .ok_or(TokenBridgeRelayerError::InvalidSwapCalculation)?;
 
                 // Transfer lamports from the payer to the recipient if the
                 // native_amount_out is nonzero.
@@ -887,7 +782,7 @@ pub mod token_bridge_relayer {
                                 to: ctx.accounts.recipient.to_account_info(),
                             },
                         ),
-                        native_amount_out
+                        native_amount_out,
                     )?;
 
                     msg!(
@@ -915,7 +810,7 @@ pub mod token_bridge_relayer {
                             },
                             &[&config_seeds[..]],
                         ),
-                        amount_for_fee_recipient
+                        amount_for_fee_recipient,
                     )?;
                 }
 
@@ -930,7 +825,7 @@ pub mod token_bridge_relayer {
                         },
                         &[&config_seeds[..]],
                     ),
-                    amount - amount_for_fee_recipient
+                    amount - amount_for_fee_recipient,
                 )?;
             }
 
@@ -969,7 +864,7 @@ pub mod token_bridge_relayer {
         to_native_token_amount: u64,
         recipient_chain: u16,
         recipient_address: [u8; 32],
-        batch_id: u32
+        batch_id: u32,
     ) -> Result<()> {
         // Confirm that outbound transfers are not paused.
         require!(
@@ -989,18 +884,22 @@ pub mod token_bridge_relayer {
         // chain.
         require!(
             recipient_chain > wormhole::CHAIN_ID_SOLANA
-            && !recipient_address.iter().all(|&x| x == 0),
+                && !recipient_address.iter().all(|&x| x == 0),
             TokenBridgeRelayerError::InvalidRecipient,
         );
 
         // Compute the relayer fee in terms of the native token being
         // transfered.
-        let relayer_fee = ctx.accounts.relayer_fee.checked_token_fee(
-            ctx.accounts.token_bridge_wrapped_mint.decimals,
-            ctx.accounts.registered_token.swap_rate,
-            ctx.accounts.config.swap_rate_precision,
-            ctx.accounts.config.relayer_fee_precision
-        ).ok_or(TokenBridgeRelayerError::FeeCalculationError)?;
+        let relayer_fee = ctx
+            .accounts
+            .relayer_fee
+            .checked_token_fee(
+                ctx.accounts.token_bridge_wrapped_mint.decimals,
+                ctx.accounts.registered_token.swap_rate,
+                ctx.accounts.config.swap_rate_precision,
+                ctx.accounts.config.relayer_fee_precision,
+            )
+            .ok_or(TokenBridgeRelayerError::FeeCalculationError)?;
 
         // Confirm that the user has sent enough tokens to cover the native
         // swap on the target chain and to the pay relayer fee.
@@ -1051,7 +950,7 @@ pub mod token_bridge_relayer {
         let payload = TokenBridgeRelayerMessage::TransferWithRelay {
             target_relayer_fee: relayer_fee,
             to_native_token_amount,
-            recipient: recipient_address
+            recipient: recipient_address,
         }
         .try_to_vec()?;
 
@@ -1146,11 +1045,11 @@ pub mod token_bridge_relayer {
             TokenBridgeRelayerError::TokenNotRegistered
         );
 
-       // The intended recipient must agree with the recipient account.
-       let TokenBridgeRelayerMessage::TransferWithRelay {
-        target_relayer_fee,
-        to_native_token_amount,
-        recipient
+        // The intended recipient must agree with the recipient account.
+        let TokenBridgeRelayerMessage::TransferWithRelay {
+            target_relayer_fee,
+            to_native_token_amount,
+            recipient,
         } = ctx.accounts.vaa.message().data();
         require!(
             ctx.accounts.recipient.key().to_bytes() == *recipient,
@@ -1219,21 +1118,23 @@ pub mod token_bridge_relayer {
             )?;
         } else {
             // Denormalize the to_native_token_amount.
-            let denormalized_to_native_token_amount =
-                token_bridge::denormalize_amount(
-                    *to_native_token_amount,
-                    ctx.accounts.token_bridge_wrapped_mint.decimals,
-                );
+            let denormalized_to_native_token_amount = token_bridge::denormalize_amount(
+                *to_native_token_amount,
+                ctx.accounts.token_bridge_wrapped_mint.decimals,
+            );
 
             // Calculate the amount of SOL that should be sent to the
             // recipient.
-            let (token_amount_in, native_amount_out) =
-                ctx.accounts.registered_token.calculate_native_swap_amounts(
+            let (token_amount_in, native_amount_out) = ctx
+                .accounts
+                .registered_token
+                .calculate_native_swap_amounts(
                     ctx.accounts.token_bridge_wrapped_mint.decimals,
                     ctx.accounts.native_registered_token.swap_rate,
                     ctx.accounts.config.swap_rate_precision,
-                    denormalized_to_native_token_amount
-                ).ok_or(TokenBridgeRelayerError::InvalidSwapCalculation)?;
+                    denormalized_to_native_token_amount,
+                )
+                .ok_or(TokenBridgeRelayerError::InvalidSwapCalculation)?;
 
             // Transfer lamports from the payer to the recipient if the
             // native_amount_out is nonzero.
@@ -1246,7 +1147,7 @@ pub mod token_bridge_relayer {
                             to: ctx.accounts.recipient.to_account_info(),
                         },
                     ),
-                    native_amount_out
+                    native_amount_out,
                 )?;
 
                 msg!(
@@ -1274,7 +1175,7 @@ pub mod token_bridge_relayer {
                         },
                         &[&config_seeds[..]],
                     ),
-                    amount_for_fee_recipient
+                    amount_for_fee_recipient,
                 )?;
             }
 
@@ -1289,7 +1190,7 @@ pub mod token_bridge_relayer {
                     },
                     &[&config_seeds[..]],
                 ),
-                amount - amount_for_fee_recipient
+                amount - amount_for_fee_recipient,
             )?;
         }
 
