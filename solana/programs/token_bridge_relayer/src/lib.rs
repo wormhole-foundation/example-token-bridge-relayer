@@ -5,7 +5,7 @@ use anchor_lang::{
 use anchor_spl::{
     token::{self, spl_token},
 };
-//use solana_program::{bpf_loader_upgradeable, program::invoke};
+use solana_program::{bpf_loader_upgradeable, program::invoke};
 
 pub use context::*;
 pub use error::*;
@@ -111,16 +111,16 @@ pub mod token_bridge_relayer {
         owner_config.assistant = assistant;
         owner_config.pending_owner = None;
 
-        // // Make the contract immutable by setting the new program authority
-        // // to `None`.
-        // invoke(
-        //     &bpf_loader_upgradeable::set_upgrade_authority(
-        //         &ID,
-        //         &ctx.accounts.owner.key(),
-        //         None
-        //     ),
-        //     &ctx.accounts.to_account_infos()
-        // ).map_err(|_| TokenBridgeRelayerError::FailedToMakeImmutable)?;
+        // Make the contract immutable by setting the new program authority
+        // to `None`.
+        invoke(
+            &bpf_loader_upgradeable::set_upgrade_authority(
+                &ID,
+                &ctx.accounts.owner.key(),
+                None
+            ),
+            &ctx.accounts.to_account_infos()
+        ).map_err(|_| TokenBridgeRelayerError::FailedToMakeImmutable)?;
 
         // Done.
         Ok(())
@@ -889,6 +889,15 @@ pub mod token_bridge_relayer {
                         ),
                         native_amount_out
                     )?;
+
+                    msg!(
+                        "Swap executed successfully, recipient: {}, relayer: {}, token: {}, tokenAmount: {}, nativeAmount: {}",
+                        ctx.accounts.recipient.key(),
+                        ctx.accounts.payer.key(),
+                        ctx.accounts.mint.key(),
+                        token_amount_in,
+                        native_amount_out
+                    );
                 }
 
                 // Calculate the amount for the fee recipient.
@@ -1239,6 +1248,15 @@ pub mod token_bridge_relayer {
                     ),
                     native_amount_out
                 )?;
+
+                msg!(
+                    "Swap executed successfully, recipient: {}, relayer: {}, token: {}, tokenAmount: {}, nativeAmount: {}",
+                    ctx.accounts.recipient.key(),
+                    ctx.accounts.payer.key(),
+                    ctx.accounts.token_bridge_wrapped_mint.key(),
+                    token_amount_in,
+                    native_amount_out
+                );
             }
 
             // Calculate the amount for the fee recipient.

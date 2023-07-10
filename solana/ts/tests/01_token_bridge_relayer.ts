@@ -1671,7 +1671,8 @@ describe(" 1: Token Bridge Relayer", function () {
                   signedMsg,
                   payer.publicKey
                 ),
-                relayer
+                relayer,
+                250_000
               );
 
               // Fetch the token balances after the transfer.
@@ -1872,7 +1873,8 @@ describe(" 1: Token Bridge Relayer", function () {
                   signedMsg,
                   payer.publicKey
                 ),
-                relayer
+                relayer,
+                250_000
               );
 
               // Fetch the token balances after the transfer.
@@ -2058,7 +2060,8 @@ describe(" 1: Token Bridge Relayer", function () {
                   signedMsg,
                   payer.publicKey
                 ),
-                relayer
+                relayer,
+                250_000
               );
 
               // Fetch the token balances after the transfer.
