@@ -77,10 +77,11 @@ $(foreach pname,$(programs),\
 test: unit-test integration-test
 
 unit-test: build-prerequs
-	cargo clippy --features $(NETWORK) -- --allow clippy::result_large_err
-	cargo test --features $(NETWORK)
+	cargo clippy --features devnet -- --allow clippy::result_large_err
+	cargo test --features devnet
 
 integration-test: dependencies/devnet dependencies/mpl_token_metadata.so
+	NETWORK=devnet $(MAKE) build
 	bash run_integration_test.sh
 
 build:
@@ -89,14 +90,14 @@ build:
 
 build-prerequs: dependencies node_modules \
     $(foreach pname,$(programs),$($(pname)_pid_bin_file))
-	
-dependencies:
-	@echo "> Building dependencies for $(NETWORK)"
-	@$(MAKE) -C dependencies
+
+dependencies/devnet:
+	NETWORK=devnet $(MAKE) -C dependencies
 
 clean:
 	@$(MAKE) -C dependencies clean
-	rm -rf node_modules target .anchor
+	rm -rf node_modules .anchor
+	anchor clean
 
 #phony targets above, non-phony targets below
 
@@ -117,7 +118,7 @@ $($(1)_pid_bin_file): $($(1)_keypair_file) node_modules
 	yarn run ts-node ts/generate_pid_bytes_file.ts $($(1)_base58_pid) $($(1)_pid_bin_file)
 endef
 $(foreach pname,$(programs),$(eval $(call pid_bin_file_rule,$(pname))))
-	
+
 node_modules: package.json yarn.lock
 	@echo "> Updating node modules"
 	yarn

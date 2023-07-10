@@ -39,7 +39,7 @@ import {
   deriveWrappedMintKey,
 } from "@certusone/wormhole-sdk/lib/cjs/solana/tokenBridge";
 
-export async function createRedeemWrappedTransferWithPayloadInstruction(
+export async function createCompleteWrappedTransferWithRelayInstruction(
   connection: Connection,
   programId: PublicKeyInitData,
   payer: PublicKeyInitData,
@@ -83,7 +83,7 @@ export async function createRedeemWrappedTransferWithPayloadInstruction(
   );
 
   return program.methods
-    .redeemWrappedTransferWithPayload([...parsed.hash])
+    .completeWrappedTransferWithRelay([...parsed.hash])
     .accounts({
       config: deriveRedeemerConfigKey(programId),
       foreignContract: deriveForeignContractKey(

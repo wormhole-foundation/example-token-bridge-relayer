@@ -28,4 +28,4 @@ address = "B6RHG3mfcckmrYN1UhmJzyS1XX3fZKbkeUcpJe9Sy3FE"
 program = "./dependencies/devnet/token_bridge.so"
 
 [programs.localnet]
-token_bridge_relayer = "4LwyhdJCeiZuvKeEVs4r4q15wZibzXEfAEZXyyyKomLj"
+token_bridge_relayer = "4fkhk7mXFSwtWNopUDhcCXCDX7CHDwPgZACysEPxf5Gh"

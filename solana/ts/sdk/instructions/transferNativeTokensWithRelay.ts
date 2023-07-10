@@ -19,7 +19,7 @@ import {getAssociatedTokenAddressSync} from "@solana/spl-token";
 import {SendTokensParams} from "./types";
 import {BN} from "@coral-xyz/anchor";
 
-export async function createSendNativeTokensWithPayloadInstruction(
+export async function createTransferNativeTokensWithRelayInstruction(
   connection: Connection,
   programId: PublicKeyInitData,
   payer: PublicKeyInitData,
@@ -58,7 +58,7 @@ export async function createSendNativeTokensWithPayloadInstruction(
       );
 
       return program.methods
-        .sendNativeTokensWithPayload(
+        .transferNativeTokensWithRelay(
           new BN(params.amount.toString()),
           new BN(params.toNativeTokenAmount.toString()),
           params.recipientChain,

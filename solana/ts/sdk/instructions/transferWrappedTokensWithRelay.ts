@@ -21,7 +21,7 @@ import {SendTokensParams} from "./types";
 import {getWrappedMeta} from "@certusone/wormhole-sdk/lib/cjs/solana/tokenBridge";
 import {BN} from "@coral-xyz/anchor";
 
-export async function createSendWrappedTokensWithPayloadInstruction(
+export async function createTransferWrappedTokensWithRelayInstruction(
   connection: Connection,
   programId: PublicKeyInitData,
   payer: PublicKeyInitData,
@@ -67,7 +67,7 @@ export async function createSendWrappedTokensWithPayloadInstruction(
       );
 
       return program.methods
-        .sendWrappedTokensWithPayload(
+        .transferWrappedTokensWithRelay(
           new BN(params.amount.toString()),
           new BN(params.toNativeTokenAmount.toString()),
           params.recipientChain,

@@ -1052,8 +1052,8 @@ describe(" 1: Token Bridge Relayer", function () {
               wrap_native?: boolean;
             }) =>
               (isNative
-                ? tokenBridgeRelayer.createSendNativeTokensWithPayloadInstruction
-                : tokenBridgeRelayer.createSendWrappedTokensWithPayloadInstruction)(
+                ? tokenBridgeRelayer.createTransferNativeTokensWithRelayInstruction
+                : tokenBridgeRelayer.createTransferWrappedTokensWithRelayInstruction)(
                 connection,
                 TOKEN_BRIDGE_RELAYER_PID,
                 opts?.sender ?? payer.publicKey,
@@ -1346,8 +1346,8 @@ describe(" 1: Token Bridge Relayer", function () {
               recipient: PublicKey
             ) =>
               (isNative
-                ? tokenBridgeRelayer.createRedeemNativeTransferWithPayloadInstruction
-                : tokenBridgeRelayer.createRedeemWrappedTransferWithPayloadInstruction)(
+                ? tokenBridgeRelayer.createCompleteNativeTransferWithRelayInstruction
+                : tokenBridgeRelayer.createCompleteWrappedTransferWithRelayInstruction)(
                 connection,
                 TOKEN_BRIDGE_RELAYER_PID,
                 sender,

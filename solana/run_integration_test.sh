@@ -1,8 +1,7 @@
 #!/bin/bash
 
 export NETWORK=devnet
-export TOKEN_BRIDGE_RELAYER_PROGRAM_ID="4LwyhdJCeiZuvKeEVs4r4q15wZibzXEfAEZXyyyKomLj"
-
+export TOKEN_BRIDGE_RELAYER_PROGRAM_ID="4fkhk7mXFSwtWNopUDhcCXCDX7CHDwPgZACysEPxf5Gh"
 
 ### maybe a validator is already running
 pgrep -f solana-test-validator
@@ -17,6 +16,7 @@ ROOT=$TEST_ROOT/../..
 ### prepare local validator
 ARTIFACTS=$ROOT/target/deploy
 ACCOUNTS=$TEST_ROOT/accounts
+mkdir -p $ACCOUNTS
 DEPENDENCIES=$ROOT/dependencies
 
 MPL_TOKEN_METADATA_PUBKEY=metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s

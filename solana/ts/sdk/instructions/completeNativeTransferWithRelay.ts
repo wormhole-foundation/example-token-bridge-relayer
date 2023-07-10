@@ -38,7 +38,7 @@ import {
   deriveTokenBridgeConfigKey,
 } from "@certusone/wormhole-sdk/lib/cjs/solana/tokenBridge";
 
-export async function createRedeemNativeTransferWithPayloadInstruction(
+export async function createCompleteNativeTransferWithRelayInstruction(
   connection: Connection,
   programId: PublicKeyInitData,
   payer: PublicKeyInitData,
@@ -74,7 +74,7 @@ export async function createRedeemNativeTransferWithPayloadInstruction(
   );
 
   return program.methods
-    .redeemNativeTransferWithPayload([...parsed.hash])
+    .completeNativeTransferWithRelay([...parsed.hash])
     .accounts({
       config: deriveRedeemerConfigKey(programId),
       foreignContract: deriveForeignContractKey(
