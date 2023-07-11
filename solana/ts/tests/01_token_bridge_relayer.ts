@@ -1,18 +1,18 @@
-import { expect, use as chaiUse } from "chai";
+import {expect, use as chaiUse} from "chai";
 import chaiAsPromised from "chai-as-promised";
 chaiUse(chaiAsPromised);
-import { Connection, PublicKey } from "@solana/web3.js";
+import {Connection, PublicKey} from "@solana/web3.js";
 import {
   getAccount,
   getAssociatedTokenAddressSync,
   NATIVE_MINT,
 } from "@solana/spl-token";
-import { CHAINS, ChainId } from "@certusone/wormhole-sdk";
+import {CHAINS, ChainId} from "@certusone/wormhole-sdk";
 import * as mock from "@certusone/wormhole-sdk/lib/cjs/mock";
-import { getTokenBridgeDerivedAccounts } from "@certusone/wormhole-sdk/lib/cjs/solana";
+import {getTokenBridgeDerivedAccounts} from "@certusone/wormhole-sdk/lib/cjs/solana";
 import * as wormhole from "@certusone/wormhole-sdk/lib/cjs/solana/wormhole";
 import * as tokenBridgeRelayer from "../sdk/";
-import { BN } from "@coral-xyz/anchor";
+import {BN} from "@coral-xyz/anchor";
 import {
   LOCALHOST,
   PAYER_KEYPAIR,
@@ -46,6 +46,8 @@ const TOKEN_BRIDGE_RELAYER_PID = programIdFromEnvVar(
 const ETHEREUM_TOKEN_BRIDGE_ADDRESS = WORMHOLE_CONTRACTS.ethereum.token_bridge;
 
 describe(" 1: Token Bridge Relayer", function () {
+  console.log(TOKEN_BRIDGE_RELAYER_PID, TOKEN_BRIDGE_PID, CORE_BRIDGE_PID);
+
   const connection = new Connection(LOCALHOST, "confirmed");
   // payer is also the recipient in all tests
   const payer = PAYER_KEYPAIR;
@@ -94,14 +96,14 @@ describe(" 1: Token Bridge Relayer", function () {
 
     it("Cannot Initialize With Default Fee Recipient", async function () {
       await expectIxToFailWithError(
-        await createInitializeIx({ feeRecipient: PublicKey.default }),
+        await createInitializeIx({feeRecipient: PublicKey.default}),
         "InvalidPublicKey"
       );
     });
 
     it("Cannot Initialize With Default Assistant", async function () {
       await expectIxToFailWithError(
-        await createInitializeIx({ assistant: PublicKey.default }),
+        await createInitializeIx({assistant: PublicKey.default}),
         "InvalidPublicKey"
       );
     });
@@ -181,7 +183,7 @@ describe(" 1: Token Bridge Relayer", function () {
 
     // Create the confirm ownership transfer instruction, which will be used
     // to set the new owner to the `relayer` key.
-    const createConfirmOwnershipTransferIx = (opts?: { sender?: PublicKey }) =>
+    const createConfirmOwnershipTransferIx = (opts?: {sender?: PublicKey}) =>
       tokenBridgeRelayer.createConfirmOwnershipTransferInstruction(
         connection,
         TOKEN_BRIDGE_RELAYER_PID,
@@ -189,7 +191,7 @@ describe(" 1: Token Bridge Relayer", function () {
       );
 
     // Instruction to cancel an ownership transfer request.
-    const createCancelOwnershipTransferIx = (opts?: { sender?: PublicKey }) =>
+    const createCancelOwnershipTransferIx = (opts?: {sender?: PublicKey}) =>
       tokenBridgeRelayer.createCancelOwnershipTransferInstruction(
         connection,
         TOKEN_BRIDGE_RELAYER_PID,
@@ -270,7 +272,7 @@ describe(" 1: Token Bridge Relayer", function () {
       );
 
       await expectIxToSucceed(
-        createConfirmOwnershipTransferIx({ sender: payer.publicKey }),
+        createConfirmOwnershipTransferIx({sender: payer.publicKey}),
         payer
       );
 
@@ -300,7 +302,7 @@ describe(" 1: Token Bridge Relayer", function () {
 
       // Confirm that the cancel ownership transfer request fails.
       await expectIxToFailWithError(
-        await createCancelOwnershipTransferIx({ sender: relayer.publicKey }),
+        await createCancelOwnershipTransferIx({sender: relayer.publicKey}),
         "OwnerOnly",
         relayer
       );
@@ -344,7 +346,7 @@ describe(" 1: Token Bridge Relayer", function () {
 
     it("Cannot Update With relayer_fee_precision == 0", async function () {
       await expectIxToFailWithError(
-        await createUpdateRelayerFeePrecisionIx({ relayerFeePrecision: 0 }),
+        await createUpdateRelayerFeePrecisionIx({relayerFeePrecision: 0}),
         "InvalidPrecision"
       );
     });
@@ -402,7 +404,7 @@ describe(" 1: Token Bridge Relayer", function () {
 
     it("Cannot Update With relayer_fee_precision == 0", async function () {
       await expectIxToFailWithError(
-        await createUpdateSwapRatePrecisionIx({ swapRatePrecision: 0 }),
+        await createUpdateSwapRatePrecisionIx({swapRatePrecision: 0}),
         "InvalidPrecision"
       );
     });
@@ -510,10 +512,10 @@ describe(" 1: Token Bridge Relayer", function () {
           contractAddress === foreignContractAddress ? "Final" : "Random"
         } Address`, async function () {
           await expectIxToSucceed(
-            createRegisterForeignContractIx({ contractAddress })
+            createRegisterForeignContractIx({contractAddress})
           );
 
-          const { chain, address } =
+          const {chain, address} =
             await tokenBridgeRelayer.getForeignContractData(
               connection,
               TOKEN_BRIDGE_RELAYER_PID,
@@ -546,7 +548,7 @@ describe(" 1: Token Bridge Relayer", function () {
 
     it("Cannot Update Relayer Fee as Non-Owner", async function () {
       await expectIxToFailWithError(
-        await createUpdateRelayerFeeIx({ sender: relayer.publicKey }),
+        await createUpdateRelayerFeeIx({sender: relayer.publicKey}),
         "OwnerOrAssistantOnly",
         relayer
       );
@@ -626,7 +628,7 @@ describe(" 1: Token Bridge Relayer", function () {
 
     it("Cannot Set Pause for Transfers as Non-Owner", async function () {
       await expectIxToFailWithError(
-        await createSetPauseForTransfersIx({ sender: relayer.publicKey }),
+        await createSetPauseForTransfersIx({sender: relayer.publicKey}),
         "OwnerOnly",
         relayer
       );
@@ -644,7 +646,7 @@ describe(" 1: Token Bridge Relayer", function () {
 
     it("Set Pause for Transfers to False as Owner", async function () {
       await expectIxToSucceed(
-        await createSetPauseForTransfersIx({ paused: false })
+        await createSetPauseForTransfersIx({paused: false})
       );
 
       const senderConfigData = await tokenBridgeRelayer.getSenderConfigData(
@@ -684,7 +686,7 @@ describe(" 1: Token Bridge Relayer", function () {
         );
 
       // Token deregistration instruction.
-      const createDeregisterTokenIx = (opts?: { sender?: PublicKey }) =>
+      const createDeregisterTokenIx = (opts?: {sender?: PublicKey}) =>
         tokenBridgeRelayer.createDeregisterTokenInstruction(
           connection,
           TOKEN_BRIDGE_RELAYER_PID,
@@ -721,14 +723,14 @@ describe(" 1: Token Bridge Relayer", function () {
       describe("Register Token", async function () {
         it("Cannot Register Token Swap Rate == 0", async function () {
           await expectIxToFailWithError(
-            await createRegisterTokenIx({ swapRate: new BN(0) }),
+            await createRegisterTokenIx({swapRate: new BN(0)}),
             "ZeroSwapRate"
           );
         });
 
         it("Cannot Register Token as Non-Owner", async function () {
           await expectIxToFailWithError(
-            await createRegisterTokenIx({ sender: assistant.publicKey }),
+            await createRegisterTokenIx({sender: assistant.publicKey}),
             "OwnerOnly",
             assistant
           );
@@ -779,7 +781,7 @@ describe(" 1: Token Bridge Relayer", function () {
       describe("Deregister Token", async function () {
         it("Cannot Deregister Token as Non-Owner", async function () {
           await expectIxToFailWithError(
-            await createDeregisterTokenIx({ sender: assistant.publicKey }),
+            await createDeregisterTokenIx({sender: assistant.publicKey}),
             "OwnerOnly",
             assistant
           );
@@ -831,7 +833,7 @@ describe(" 1: Token Bridge Relayer", function () {
       describe("Update Swap Rate", async function () {
         it("Cannot Update Swap Rate as Non-Owner", async function () {
           await expectIxToFailWithError(
-            await createUpdateSwapRateIx({ sender: relayer.publicKey }),
+            await createUpdateSwapRateIx({sender: relayer.publicKey}),
             "OwnerOrAssistantOnly",
             relayer
           );
@@ -854,7 +856,7 @@ describe(" 1: Token Bridge Relayer", function () {
 
         it("Cannot Update Swap Rate == 0", async function () {
           await expectIxToFailWithError(
-            await createUpdateSwapRateIx({ swapRate: new BN(0) }),
+            await createUpdateSwapRateIx({swapRate: new BN(0)}),
             "ZeroSwapRate",
             payer
           );
@@ -1149,7 +1151,7 @@ describe(" 1: Token Bridge Relayer", function () {
             if (isNative && decimals > 8)
               it("Cannot Send Amount Less Than Bridgeable", async function () {
                 await expectIxToFailWithError(
-                  await createSendTokensWithPayloadIx({ amount: 1 }),
+                  await createSendTokensWithPayloadIx({amount: 1}),
                   "ZeroBridgeAmount"
                 );
               });
@@ -1200,7 +1202,7 @@ describe(" 1: Token Bridge Relayer", function () {
             [CHAINS.unset, CHAINS.solana].forEach((recipientChain) =>
               it(`Cannot Send To Chain ID == ${recipientChain}`, async function () {
                 await expectIxToFailWithError(
-                  await createSendTokensWithPayloadIx({ recipientChain }),
+                  await createSendTokensWithPayloadIx({recipientChain}),
                   "AnchorError caused by account: foreign_contract. Error Code: AccountNotInitialized"
                 );
               })
@@ -1372,7 +1374,7 @@ describe(" 1: Token Bridge Relayer", function () {
             });
 
             it("Cannot Redeem Unregistered Token", async function () {
-              // Define inbound transfer parameters. Calcualte the fee
+              // Define inbound transfer parameters. Calculate the fee
               // using the foreignChain to simulate calculating the
               // target relayer fee. This contract won't allow us to set
               // a relayer fee for the Solana chain ID.
@@ -1444,7 +1446,7 @@ describe(" 1: Token Bridge Relayer", function () {
             });
 
             it("Cannot Redeem Invalid Recipient", async function () {
-              // Define inbound transfer parameters. Calcualte the fee
+              // Define inbound transfer parameters. Calculate the fee
               // using the foreignChain to simulate calculating the
               // target relayer fee. This contract won't allow us to set
               // a relayer fee for the Solana chain ID.
@@ -1494,7 +1496,7 @@ describe(" 1: Token Bridge Relayer", function () {
             });
 
             it("Self Redeem", async function () {
-              // Define inbound transfer parameters. Calcualte the fee
+              // Define inbound transfer parameters. Calculate the fee
               // using the foreignChain to simulate calculating the
               // target relayer fee. This contract won't allow us to set
               // a relayer fee for the Solana chain ID.
@@ -1575,7 +1577,7 @@ describe(" 1: Token Bridge Relayer", function () {
             });
 
             it("With Relayer (With Swap)", async function () {
-              // Define inbound transfer parameters. Calcualte the fee
+              // Define inbound transfer parameters. Calculate the fee
               // using the foreignChain to simulate calculating the
               // target relayer fee. This contract won't allow us to set
               // a relayer fee for the Solana chain ID.
@@ -1746,7 +1748,7 @@ describe(" 1: Token Bridge Relayer", function () {
             });
 
             it("With Relayer (With Max Swap Limit Reached)", async function () {
-              // Define inbound transfer parameters. Calcualte the fee
+              // Define inbound transfer parameters. Calculate the fee
               // using the foreignChain to simulate calculating the
               // target relayer fee. This contract won't allow us to set
               // a relayer fee for the Solana chain ID.
@@ -1963,7 +1965,7 @@ describe(" 1: Token Bridge Relayer", function () {
             });
 
             it("With Relayer (With Swap No Fee)", async function () {
-              // Define inbound transfer parameters. Calcualte the fee
+              // Define inbound transfer parameters. Calculate the fee
               // using the foreignChain to simulate calculating the
               // target relayer fee. This contract won't allow us to set
               // a relayer fee for the Solana chain ID.
@@ -2126,7 +2128,7 @@ describe(" 1: Token Bridge Relayer", function () {
             });
 
             it("With Relayer (No Fee and No Swap)", async function () {
-              // Define inbound transfer parameters. Calcualte the fee
+              // Define inbound transfer parameters. Calculate the fee
               // using the foreignChain to simulate calculating the
               // target relayer fee. This contract won't allow us to set
               // a relayer fee for the Solana chain ID.
@@ -2274,7 +2276,7 @@ describe(" 1: Token Bridge Relayer", function () {
             });
 
             it("With Relayer (No Swap With Fee)", async function () {
-              // Define inbound transfer parameters. Calcualte the fee
+              // Define inbound transfer parameters. Calculate the fee
               // using the foreignChain to simulate calculating the
               // target relayer fee. This contract won't allow us to set
               // a relayer fee for the Solana chain ID.

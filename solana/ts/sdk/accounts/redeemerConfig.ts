@@ -6,16 +6,10 @@ export function deriveRedeemerConfigKey(programId: PublicKeyInitData) {
   return deriveAddress([Buffer.from("redeemer")], programId);
 }
 
-export interface InboundTokenBridgeAddresses {
-  config: PublicKey;
-  custodySigner: PublicKey;
-  mintAuthority: PublicKey;
-}
-
 export interface RedeemerConfigData {
   owner: PublicKey;
   bump: number;
-  tokenBridge: InboundTokenBridgeAddresses;
+  tokenBridge: any;
   relayerFeePrecision: number;
   swapRatePrecision: number;
   feeRecipient: PublicKey;

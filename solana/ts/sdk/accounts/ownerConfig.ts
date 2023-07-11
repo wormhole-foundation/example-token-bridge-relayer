@@ -9,7 +9,7 @@ export function deriveOwnerConfigKey(programId: PublicKeyInitData) {
 export interface OwnerConfigData {
   owner: PublicKey;
   assistant: PublicKey;
-  pendingOwner: PublicKey;
+  pendingOwner: PublicKey | null;
 }
 
 export async function getOwnerConfigData(

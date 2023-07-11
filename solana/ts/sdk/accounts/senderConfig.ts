@@ -5,21 +5,10 @@ import {createTokenBridgeRelayerProgramInterface} from "../program";
 export function deriveSenderConfigKey(programId: PublicKeyInitData) {
   return deriveAddress([Buffer.from("sender")], programId);
 }
-
-export interface OutboundTokenBridgeAddresses {
-  config: PublicKey;
-  authoritySigner: PublicKey;
-  custodySigner: PublicKey;
-  emitter: PublicKey;
-  sequence: PublicKey;
-  wormholeBridge: PublicKey;
-  wormholeFeeCollector: PublicKey;
-}
-
 export interface SenderConfigData {
   owner: PublicKey;
   bump: number;
-  tokenBridge: OutboundTokenBridgeAddresses;
+  tokenBridge: any;
   finality: number;
   relayerFeePrecision: number;
   swapRatePrecision: number;
