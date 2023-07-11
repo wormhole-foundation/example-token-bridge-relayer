@@ -1,13 +1,12 @@
 use crate::{
     error::TokenBridgeRelayerError,
-    state::{SenderConfig, RegisteredToken},
-    token::{spl_token, Token, Mint}
+    state::{RegisteredToken, SenderConfig},
+    token::{spl_token, Mint},
 };
 use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
-pub struct RegisterToken<'info> {
-    #[account(mut)]
+pub struct UpdateMaxNativeSwapAmount<'info> {
     /// Owner of the program set in the [`SenderConfig`] account. Signer for
     /// creating [`ForeignContract`] account.
     pub owner: Signer<'info>,
@@ -22,38 +21,29 @@ pub struct RegisterToken<'info> {
     pub config: Box<Account<'info, SenderConfig>>,
 
     #[account(
-        init_if_needed,
-        payer = owner,
-        space = 8 + RegisteredToken::INIT_SPACE,
-        seeds = [b"mint", mint.key().as_ref()],
+        mut,
+        seeds = [RegisteredToken::SEED_PREFIX, mint.key().as_ref()],
         bump
     )]
     /// Registered Token account. This account stores information about the
-    /// token, including the swap rate and max native swap amount. Create this
-    /// account if the mint has not been registered yet. Mutable.
+    /// token, including the swap rate and max native swap amount. The program
+    /// will modify this account when the swap rate or max native swap amount
+    /// changes. Mutable.
     pub registered_token: Account<'info, RegisteredToken>,
 
     /// Mint info. This is the SPL token that will be bridged over to the
     /// foreign contract.
     pub mint: Account<'info, Mint>,
-
-    // Token program.
-    pub token_program: Program<'info, Token>,
-
-    /// System program.
-    pub system_program: Program<'info, System>,
 }
 
-pub fn register_token(
-    ctx: Context<RegisterToken>,
-    swap_rate: u64,
+pub fn update_max_native_swap_amount(
+    ctx: Context<UpdateMaxNativeSwapAmount>,
     max_native_swap_amount: u64,
 ) -> Result<()> {
     require!(
-        !ctx.accounts.registered_token.is_registered,
-        TokenBridgeRelayerError::TokenAlreadyRegistered
+        ctx.accounts.registered_token.is_registered,
+        TokenBridgeRelayerError::TokenNotRegistered
     );
-    require!(swap_rate > 0, TokenBridgeRelayerError::ZeroSwapRate);
 
     // The max_native_swap_amount must be set to zero for the native mint.
     require!(
@@ -61,12 +51,9 @@ pub fn register_token(
         TokenBridgeRelayerError::SwapsNotAllowedForNativeMint
     );
 
-    // Register the token by setting the swap_rate and max_native_swap_amount.
-    ctx.accounts.registered_token.set_inner(RegisteredToken {
-        swap_rate,
-        max_native_swap_amount,
-        is_registered: true,
-    });
+    // Set the new max_native_swap_amount.
+    let registered_token = &mut ctx.accounts.registered_token;
+    registered_token.max_native_swap_amount = max_native_swap_amount;
 
     Ok(())
 }

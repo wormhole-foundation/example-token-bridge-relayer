@@ -7,7 +7,7 @@ pub struct RelayerFee {
     /// Emitter chain. Cannot equal `0` or `1` (Solana's Chain ID).
     pub chain: u16,
     /// Relayer fee in USD terms.
-    pub fee: u64
+    pub fee: u64,
 }
 
 impl RelayerFee {
@@ -24,9 +24,7 @@ impl RelayerFee {
             .checked_mul(swap_rate_precision.into())?;
 
         // Compute the denominator.
-        let denominator = u128::from(swap_rate).checked_mul(
-            relayer_fee_precision.into()
-        )?;
+        let denominator = u128::from(swap_rate).checked_mul(relayer_fee_precision.into())?;
 
         // Calculate the fee in token terms.
         let token_fee = numerator.checked_div(denominator)?;
@@ -41,19 +39,19 @@ impl RelayerFee {
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use anchor_lang::prelude::{Result};
+    use anchor_lang::prelude::Result;
 
     #[test]
     fn test_checked_token_fee() -> Result<()> {
         // Test variables.
-        let swap_rate_precision: u32  = 1000000000;
+        let swap_rate_precision: u32 = 1000000000;
         let relayer_fee_precision: u32 = 1000000000;
         let swap_rate: u64 = 6900000000;
 
         // Create test RelayerFee.
         let mut relayer_fee = RelayerFee {
-            chain: 2, // target chain Ethereum
-            fee: 42000000000 // $420.00
+            chain: 2,         // target chain Ethereum
+            fee: 42000000000, // $420.00
         };
 
         // Calculate the token fee for 10 decimals.
@@ -62,7 +60,7 @@ pub mod test {
             10, // decimals
             swap_rate,
             swap_rate_precision,
-            relayer_fee_precision
+            relayer_fee_precision,
         );
         assert_eq!(token_fee.unwrap(), expected_token_fee);
 
@@ -72,7 +70,7 @@ pub mod test {
             9, // decimals
             swap_rate,
             swap_rate_precision,
-            relayer_fee_precision
+            relayer_fee_precision,
         );
         assert_eq!(token_fee.unwrap(), expected_token_fee);
 
@@ -82,7 +80,7 @@ pub mod test {
             8, // decimals
             swap_rate,
             swap_rate_precision,
-            relayer_fee_precision
+            relayer_fee_precision,
         );
         assert_eq!(token_fee.unwrap(), expected_token_fee);
 
@@ -93,7 +91,7 @@ pub mod test {
             8, // decimals
             swap_rate,
             swap_rate_precision,
-            relayer_fee_precision
+            relayer_fee_precision,
         );
         assert_eq!(token_fee.unwrap(), expected_token_fee);
 
@@ -104,7 +102,7 @@ pub mod test {
             8, // decimals
             swap_rate,
             swap_rate_precision,
-            relayer_fee_precision
+            relayer_fee_precision,
         );
         assert_eq!(token_fee.unwrap(), expected_token_fee);
 
@@ -115,7 +113,7 @@ pub mod test {
             8, // decimals
             swap_rate,
             swap_rate_precision,
-            relayer_fee_precision
+            relayer_fee_precision,
         );
         assert_eq!(token_fee.unwrap(), expected_token_fee);
 
@@ -127,7 +125,7 @@ pub mod test {
             8, // decimals
             swap_rate,
             swap_rate_precision,
-            relayer_fee_precision
+            relayer_fee_precision,
         );
         assert!(token_fee.is_none());
 

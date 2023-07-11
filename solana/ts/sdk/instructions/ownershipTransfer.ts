@@ -4,7 +4,7 @@ import {
   PublicKeyInitData,
   TransactionInstruction,
 } from "@solana/web3.js";
-import {createTokenBridgeRelayerProgramInterface} from "../program";
+import { createTokenBridgeRelayerProgramInterface } from "../program";
 import {
   deriveSenderConfigKey,
   deriveRedeemerConfigKey,
@@ -14,7 +14,7 @@ import {
 export async function createSubmitOwnershipTransferInstruction(
   connection: Connection,
   programId: PublicKeyInitData,
-  payer: PublicKeyInitData,
+  owner: PublicKeyInitData,
   newOwner: PublicKeyInitData
 ): Promise<TransactionInstruction> {
   const program = createTokenBridgeRelayerProgramInterface(
@@ -25,7 +25,7 @@ export async function createSubmitOwnershipTransferInstruction(
   return program.methods
     .submitOwnershipTransferRequest(new PublicKey(newOwner))
     .accounts({
-      owner: new PublicKey(payer),
+      owner: new PublicKey(owner),
       ownerConfig: deriveOwnerConfigKey(programId),
     })
     .instruction();
@@ -34,7 +34,7 @@ export async function createSubmitOwnershipTransferInstruction(
 export async function createCancelOwnershipTransferInstruction(
   connection: Connection,
   programId: PublicKeyInitData,
-  payer: PublicKeyInitData
+  owner: PublicKeyInitData
 ): Promise<TransactionInstruction> {
   const program = createTokenBridgeRelayerProgramInterface(
     connection,
@@ -44,7 +44,7 @@ export async function createCancelOwnershipTransferInstruction(
   return program.methods
     .cancelOwnershipTransferRequest()
     .accounts({
-      owner: new PublicKey(payer),
+      owner: new PublicKey(owner),
       ownerConfig: deriveOwnerConfigKey(programId),
     })
     .instruction();
@@ -53,7 +53,7 @@ export async function createCancelOwnershipTransferInstruction(
 export async function createConfirmOwnershipTransferInstruction(
   connection: Connection,
   programId: PublicKeyInitData,
-  payer: PublicKeyInitData
+  pendingOwner: PublicKeyInitData
 ): Promise<TransactionInstruction> {
   const program = createTokenBridgeRelayerProgramInterface(
     connection,
@@ -63,7 +63,7 @@ export async function createConfirmOwnershipTransferInstruction(
   return program.methods
     .confirmOwnershipTransferRequest()
     .accounts({
-      payer: new PublicKey(payer),
+      pendingOwner: new PublicKey(pendingOwner),
       ownerConfig: deriveOwnerConfigKey(programId),
       senderConfig: deriveSenderConfigKey(programId),
       redeemerConfig: deriveRedeemerConfigKey(programId),

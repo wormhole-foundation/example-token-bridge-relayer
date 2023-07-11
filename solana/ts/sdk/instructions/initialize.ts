@@ -4,8 +4,8 @@ import {
   PublicKeyInitData,
   TransactionInstruction,
 } from "@solana/web3.js";
-import {getTokenBridgeDerivedAccounts} from "@certusone/wormhole-sdk/lib/cjs/solana";
-import {createTokenBridgeRelayerProgramInterface} from "../program";
+import { getTokenBridgeDerivedAccounts } from "@certusone/wormhole-sdk/lib/cjs/solana";
+import { createTokenBridgeRelayerProgramInterface } from "../program";
 import {
   deriveSenderConfigKey,
   deriveRedeemerConfigKey,
@@ -37,11 +37,12 @@ export async function createInitializeInstruction(
     connection,
     programId
   );
-  const tokenBridgeAccounts = getTokenBridgeDerivedAccounts(
-    program.programId,
-    tokenBridgeProgramId,
-    wormholeProgramId
-  );
+  const { tokenBridgeEmitter, tokenBridgeSequence } =
+    getTokenBridgeDerivedAccounts(
+      program.programId,
+      tokenBridgeProgramId,
+      wormholeProgramId
+    );
   return program.methods
     .initialize(new PublicKey(feeRecipient), new PublicKey(assistant))
     .accounts({
@@ -49,11 +50,10 @@ export async function createInitializeInstruction(
       senderConfig: deriveSenderConfigKey(programId),
       redeemerConfig: deriveRedeemerConfigKey(programId),
       ownerConfig: deriveOwnerConfigKey(programId),
-      tokenBridgeProgram: new PublicKey(tokenBridgeProgramId),
       programData: getProgramData(programId),
       bpfLoaderUpgradeableProgram: BPF_LOADER_UPGRADEABLE_PROGRAM_ID,
-      wormholeProgram: new PublicKey(wormholeProgramId),
-      ...tokenBridgeAccounts,
+      tokenBridgeEmitter,
+      tokenBridgeSequence,
     })
     .instruction();
 }

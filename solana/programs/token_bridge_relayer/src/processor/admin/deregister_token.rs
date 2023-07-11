@@ -1,13 +1,12 @@
 use crate::{
     error::TokenBridgeRelayerError,
-    state::{SenderConfig, RegisteredToken},
-    token::{Mint}
+    state::{RegisteredToken, SenderConfig},
+    token::Mint,
 };
 use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
 pub struct DeregisterToken<'info> {
-    #[account(mut)]
     /// Owner of the program set in the [`SenderConfig`] account. Signer for
     /// creating [`ForeignContract`] account.
     pub owner: Signer<'info>,
@@ -27,16 +26,13 @@ pub struct DeregisterToken<'info> {
 
     #[account(
         mut,
-        seeds = [b"mint", mint.key().as_ref()],
+        seeds = [RegisteredToken::SEED_PREFIX, mint.key().as_ref()],
         bump
     )]
     /// Registered Token account. This account stores information about the
     /// token, including the swap rate and max native swap amount. This account
     /// also determines if a mint is registered or not.
     pub registered_token: Account<'info, RegisteredToken>,
-
-    /// System program.
-    pub system_program: Program<'info, System>,
 }
 
 pub fn deregister_token(ctx: Context<DeregisterToken>) -> Result<()> {

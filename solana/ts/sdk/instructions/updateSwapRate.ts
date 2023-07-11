@@ -4,8 +4,8 @@ import {
   PublicKeyInitData,
   TransactionInstruction,
 } from "@solana/web3.js";
-import {BN} from "@coral-xyz/anchor";
-import {createTokenBridgeRelayerProgramInterface} from "../program";
+import { BN } from "@coral-xyz/anchor";
+import { createTokenBridgeRelayerProgramInterface } from "../program";
 import {
   deriveOwnerConfigKey,
   deriveRedeemerConfigKey,
@@ -16,7 +16,7 @@ import {
 export async function createUpdateSwapRateInstruction(
   connection: Connection,
   programId: PublicKeyInitData,
-  payer: PublicKeyInitData,
+  owner: PublicKeyInitData,
   mint: PublicKeyInitData,
   relayerFee: BN
 ) {
@@ -28,7 +28,7 @@ export async function createUpdateSwapRateInstruction(
   return program.methods
     .updateSwapRate(relayerFee)
     .accounts({
-      payer: new PublicKey(payer),
+      owner: new PublicKey(owner),
       ownerConfig: deriveOwnerConfigKey(programId),
       registeredToken: deriveRegisteredTokenKey(
         program.programId,
@@ -42,7 +42,7 @@ export async function createUpdateSwapRateInstruction(
 export async function createUpdateSwapRatePrecisionInstruction(
   connection: Connection,
   programId: PublicKeyInitData,
-  payer: PublicKeyInitData,
+  owner: PublicKeyInitData,
   relayerFeePrecision: number
 ): Promise<TransactionInstruction> {
   const program = createTokenBridgeRelayerProgramInterface(
@@ -53,7 +53,7 @@ export async function createUpdateSwapRatePrecisionInstruction(
   return program.methods
     .updateSwapRatePrecision(relayerFeePrecision)
     .accounts({
-      owner: new PublicKey(payer),
+      owner: new PublicKey(owner),
       redeemerConfig: deriveRedeemerConfigKey(programId),
       senderConfig: deriveSenderConfigKey(programId),
     })

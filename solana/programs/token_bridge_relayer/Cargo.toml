@@ -9,6 +9,7 @@ crate-type = ["cdylib", "lib"]
 name = "token_bridge_relayer"
 
 [features]
+default = ["devnet"]
 mainnet = ["wormhole-anchor-sdk/mainnet"]
 testnet = ["wormhole-anchor-sdk/solana-devnet"]
 devnet = ["wormhole-anchor-sdk/tilt-devnet"]
@@ -16,10 +17,9 @@ no-entrypoint = []
 no-idl = []
 no-log-ix-name = []
 cpi = ["no-entrypoint"]
-default = []
 
 [dependencies]
-anchor-lang = { version="0.27.0", features = ["init-if-needed"]}
+anchor-lang = { version = "0.27.0", features = ["init-if-needed"]}
 anchor-spl = "0.27.0"
-wormhole-anchor-sdk = { path = "../../modules/wormhole-anchor-sdk", features = ["token-bridge"]}
+wormhole-anchor-sdk = { git = "https://github.com/wormhole-foundation/wormhole-scaffolding", rev = "2917c61198ab4172680aabc821953020492eec6c", features = ["token-bridge"]}
 solana-program = "=1.14.16"

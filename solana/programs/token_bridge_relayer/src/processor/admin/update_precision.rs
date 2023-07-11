@@ -1,6 +1,6 @@
 use crate::{
     error::TokenBridgeRelayerError,
-    state::{SenderConfig, RedeemerConfig}
+    state::{RedeemerConfig, SenderConfig},
 };
 use anchor_lang::prelude::*;
 
@@ -8,7 +8,6 @@ use anchor_lang::prelude::*;
 // This context is used to update both the swap_rate_precision and
 // relayer_fee_precision.
 pub struct UpdatePrecision<'info> {
-    #[account(mut)]
     /// Owner of the program set in the [`RedeemerConfig`] and [`SenderConfig`] account.
     pub owner: Signer<'info>,
 
@@ -34,9 +33,6 @@ pub struct UpdatePrecision<'info> {
     /// Mutable. The `owner` check is redundant here, but we keep it as an
     /// extra protection for future changes to the context. Mutable.
     pub sender_config: Box<Account<'info, SenderConfig>>,
-
-    /// System program.
-    pub system_program: Program<'info, System>,
 }
 
 pub fn update_relayer_fee_precision(

@@ -13,12 +13,14 @@ pub struct RegisteredToken {
 }
 
 impl RegisteredToken {
+    /// AKA `b"mint"`.
+    pub const SEED_PREFIX: &'static [u8] = b"mint";
     pub const NATIVE_DECIMALS: u8 = 9;
 
     fn native_swap_rate(&self, sol_swap_rate: u64, swap_rate_precision: u32) -> Option<u64> {
         let native_swap_rate = u128::from(swap_rate_precision)
-            .checked_mul(u128::from(sol_swap_rate))?
-            .checked_div(u128::from(self.swap_rate))?;
+            .checked_mul(sol_swap_rate.into())?
+            .checked_div(self.swap_rate.into())?;
 
         // NOTE: The native_swap_rate should not be zero. If it is, the contract's
         // state is grossly misconfigured.
@@ -38,11 +40,12 @@ impl RegisteredToken {
     ) -> Option<u64> {
         let max_swap_amount_in = if decimals > Self::NATIVE_DECIMALS {
             u128::from(self.max_native_swap_amount)
-                .checked_mul(u128::from(native_swap_rate))?
+                .checked_mul(native_swap_rate.into())?
                 .checked_mul(u128::pow(10, (decimals - Self::NATIVE_DECIMALS).into()))?
-                .checked_div(u128::from(swap_rate_precision))?
+                .checked_div(swap_rate_precision.into())?
         } else {
-            (u128::from(self.max_native_swap_amount).checked_mul(u128::from(native_swap_rate))?)
+            u128::from(self.max_native_swap_amount)
+                .checked_mul(native_swap_rate.into())?
                 .checked_div(
                     u128::pow(10, (Self::NATIVE_DECIMALS - decimals).into())
                         .checked_mul(u128::from(swap_rate_precision))?,
@@ -83,18 +86,18 @@ impl RegisteredToken {
         };
 
         // Calculate the native_swap_amount_out.
-        let native_swap_amount_out: u128 = if decimals > Self::NATIVE_DECIMALS {
+        let native_swap_amount_out = if decimals > Self::NATIVE_DECIMALS {
             u128::from(swap_rate_precision)
-                .checked_mul(u128::from(to_native_token_amount))?
+                .checked_mul(to_native_token_amount.into())?
                 .checked_div(
                     u128::from(native_swap_rate)
                         .checked_mul(u128::pow(10, (decimals - Self::NATIVE_DECIMALS).into()))?,
                 )?
         } else {
             u128::from(swap_rate_precision)
-                .checked_mul(u128::from(to_native_token_amount))?
+                .checked_mul(to_native_token_amount.into())?
                 .checked_mul(u128::pow(10, (Self::NATIVE_DECIMALS - decimals).into()))?
-                .checked_div(u128::from(native_swap_rate))?
+                .checked_div(native_swap_rate.into())?
         };
 
         // Handle the case where the native_swap_amount_out is zero due to

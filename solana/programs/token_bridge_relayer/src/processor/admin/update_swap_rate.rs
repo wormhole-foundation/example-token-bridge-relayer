@@ -1,15 +1,14 @@
 use crate::{
     error::TokenBridgeRelayerError,
-    state::{RegisteredToken, OwnerConfig},
-    token::{Mint}
+    state::{OwnerConfig, RegisteredToken},
+    token::Mint,
 };
 use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
 pub struct UpdateSwapRate<'info> {
-    #[account(mut)]
     /// The signer of the transaction. Must be the owner or assistant.
-    pub payer: Signer<'info>,
+    pub owner: Signer<'info>,
 
     #[account(
         seeds = [OwnerConfig::SEED_PREFIX],
@@ -21,7 +20,7 @@ pub struct UpdateSwapRate<'info> {
 
     #[account(
         mut,
-        seeds = [b"mint", mint.key().as_ref()],
+        seeds = [RegisteredToken::SEED_PREFIX, mint.key().as_ref()],
         bump
     )]
     /// Registered Token account. This account stores information about the
@@ -32,9 +31,6 @@ pub struct UpdateSwapRate<'info> {
     /// Mint info. This is the SPL token that will be bridged over to the
     /// foreign contract.
     pub mint: Account<'info, Mint>,
-
-    /// System program.
-    pub system_program: Program<'info, System>,
 }
 
 pub fn update_swap_rate(ctx: Context<UpdateSwapRate>, swap_rate: u64) -> Result<()> {
@@ -42,7 +38,7 @@ pub fn update_swap_rate(ctx: Context<UpdateSwapRate>, swap_rate: u64) -> Result<
     require!(
         ctx.accounts
             .owner_config
-            .is_authorized(&ctx.accounts.payer.key()),
+            .is_authorized(&ctx.accounts.owner.key()),
         TokenBridgeRelayerError::OwnerOrAssistantOnly
     );
 

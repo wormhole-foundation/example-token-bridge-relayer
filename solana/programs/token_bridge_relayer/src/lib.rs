@@ -1,19 +1,21 @@
+#![allow(clippy::result_large_err)]
+
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self};
 
+pub use constants::*;
 pub use error::*;
 pub use message::*;
 pub use native_program::*;
 pub(crate) use processor::*;
 pub use state::*;
-pub use constants::*;
 
+pub mod constants;
 pub mod error;
 pub mod message;
 pub mod native_program;
 mod processor;
 pub mod state;
-pub mod constants;
 
 declare_id!("4fkhk7mXFSwtWNopUDhcCXCDX7CHDwPgZACysEPxf5Gh");
 

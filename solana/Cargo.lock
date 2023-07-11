@@ -2014,6 +2014,7 @@ checksum = "c811ca4a8c853ef420abd8592ba53ddbbac90410fab6903b3e79972a631f7680"
 [[package]]
 name = "wormhole-anchor-sdk"
 version = "0.1.0"
+source = "git+https://github.com/wormhole-foundation/wormhole-scaffolding?rev=2917c61198ab4172680aabc821953020492eec6c#2917c61198ab4172680aabc821953020492eec6c"
 dependencies = [
  "anchor-lang",
  "anchor-spl",

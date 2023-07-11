@@ -1,12 +1,8 @@
-use crate::{
-    error::TokenBridgeRelayerError,
-    state::{SenderConfig},
-};
+use crate::{error::TokenBridgeRelayerError, state::SenderConfig};
 use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
 pub struct PauseOutboundTransfers<'info> {
-    #[account(mut)]
     /// Owner of the program set in the [`SenderConfig`] account.
     pub owner: Signer<'info>,
 
@@ -19,15 +15,9 @@ pub struct PauseOutboundTransfers<'info> {
     /// Sender Config account. This program requires that the `owner` specified
     /// in the context equals the pubkey specified in this account. Mutable.
     pub config: Box<Account<'info, SenderConfig>>,
-
-    /// System program.
-    pub system_program: Program<'info, System>,
 }
 
-pub fn set_pause_for_transfers(
-    ctx: Context<PauseOutboundTransfers>,
-    paused: bool,
-) -> Result<()> {
+pub fn set_pause_for_transfers(ctx: Context<PauseOutboundTransfers>, paused: bool) -> Result<()> {
     // Set the new paused boolean.
     let sender_config = &mut ctx.accounts.config;
     sender_config.paused = paused;

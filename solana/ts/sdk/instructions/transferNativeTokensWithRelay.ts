@@ -4,8 +4,8 @@ import {
   PublicKeyInitData,
   TransactionInstruction,
 } from "@solana/web3.js";
-import {getTransferNativeWithPayloadCpiAccounts} from "@certusone/wormhole-sdk/lib/cjs/solana";
-import {createTokenBridgeRelayerProgramInterface} from "../program";
+import { getTransferNativeWithPayloadCpiAccounts } from "@certusone/wormhole-sdk/lib/cjs/solana";
+import { createTokenBridgeRelayerProgramInterface } from "../program";
 import {
   deriveForeignContractKey,
   deriveSenderConfigKey,
@@ -14,10 +14,10 @@ import {
   deriveRelayerFeeKey,
   deriveTmpTokenAccountKey,
 } from "../accounts";
-import {getProgramSequenceTracker} from "@certusone/wormhole-sdk/lib/cjs/solana/wormhole";
-import {getAssociatedTokenAddressSync} from "@solana/spl-token";
-import {SendTokensParams} from "./types";
-import {BN} from "@coral-xyz/anchor";
+import { getProgramSequenceTracker } from "@certusone/wormhole-sdk/lib/cjs/solana/wormhole";
+import { getAssociatedTokenAddressSync } from "@solana/spl-token";
+import { SendTokensParams } from "./types";
+import { BN } from "@coral-xyz/anchor";
 
 export async function createTransferNativeTokensWithRelayInstruction(
   connection: Connection,
@@ -39,7 +39,7 @@ export async function createTransferNativeTokensWithRelayInstruction(
     wormholeProgramId
   )
     .then((tracker) =>
-      deriveTokenTransferMessageKey(programId, tracker.sequence + 1n)
+      deriveTokenTransferMessageKey(programId, tracker.sequence)
     )
     .then((message) => {
       const fromTokenAccount = getAssociatedTokenAddressSync(
@@ -64,7 +64,7 @@ export async function createTransferNativeTokensWithRelayInstruction(
           params.recipientChain,
           [...params.recipientAddress],
           params.batchId,
-          params.wrap_native
+          params.wrapNative
         )
         .accounts({
           config: deriveSenderConfigKey(programId),

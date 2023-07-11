@@ -1,12 +1,11 @@
 use crate::{
     error::TokenBridgeRelayerError,
-    state::{SenderConfig, RedeemerConfig, OwnerConfig},
+    state::{OwnerConfig, RedeemerConfig, SenderConfig},
 };
 use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
 pub struct ManageOwnershipTransfer<'info> {
-    #[account(mut)]
     /// Owner of the program set in the [`OwnerConfig`] account.
     pub owner: Signer<'info>,
 
@@ -19,17 +18,13 @@ pub struct ManageOwnershipTransfer<'info> {
     /// Owner Config account. This program requires that the `owner` specified
     /// in the context equals the pubkey specified in this account. Mutable.
     pub owner_config: Account<'info, OwnerConfig>,
-
-    /// System program.
-    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
 pub struct ConfirmOwnershipTransfer<'info> {
-    #[account(mut)]
     /// Must be the pending owner of the program set in the [`OwnerConfig`]
     /// account.
-    pub payer: Signer<'info>,
+    pub pending_owner: Signer<'info>,
 
     #[account(
         mut,
@@ -59,9 +54,6 @@ pub struct ConfirmOwnershipTransfer<'info> {
     /// specified in this account to the `pending_owner` specified in the
     /// [`OwnerConfig`] account. Mutable.
     pub redeemer_config: Box<Account<'info, RedeemerConfig>>,
-
-    /// System program.
-    pub system_program: Program<'info, System>,
 }
 
 pub fn submit_ownership_transfer_request(
@@ -85,19 +77,13 @@ pub fn submit_ownership_transfer_request(
     Ok(())
 }
 
-pub fn confirm_ownership_transfer_request(
-    ctx: Context<ConfirmOwnershipTransfer>,
-) -> Result<()> {
+pub fn confirm_ownership_transfer_request(ctx: Context<ConfirmOwnershipTransfer>) -> Result<()> {
     // Check that the signer is the pending owner.
+    let pending_owner = ctx.accounts.pending_owner.key();
     require!(
-        ctx.accounts
-            .owner_config
-            .is_pending_owner(&ctx.accounts.payer.key()),
+        ctx.accounts.owner_config.is_pending_owner(&pending_owner),
         TokenBridgeRelayerError::NotPendingOwner
     );
-
-    // Unwrap the pending owner.
-    let pending_owner = ctx.accounts.owner_config.pending_owner.unwrap();
 
     // Update the sender config.
     let sender_config = &mut ctx.accounts.sender_config;
