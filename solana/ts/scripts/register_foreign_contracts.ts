@@ -79,7 +79,7 @@ async function register_foreign_contract(
     );
 
     if (tx === undefined) {
-      console.log("Transaction failed:", tx);
+      console.log("Transaction failed");
     } else {
       console.log("Transaction successful:", tx);
     }

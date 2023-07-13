@@ -60,7 +60,7 @@ async function set_relayer_fees(
     // Send the transaction.
     const tx = await sendAndConfirmIx(connection, createSetRelayerFeeIx, payer);
     if (tx === undefined) {
-      console.log("Transaction failed:", tx);
+      console.log("Transaction failed");
     } else {
       console.log("Transaction successful:", tx);
     }

@@ -56,7 +56,7 @@ async function register_tokens(
     // Send the transaction.
     const tx = await sendAndConfirmIx(connection, registerTokenIx, payer);
     if (tx === undefined) {
-      console.log("Transaction failed:", tx);
+      console.log("Transaction failed");
     } else {
       console.log("Transaction successful:", tx);
     }
