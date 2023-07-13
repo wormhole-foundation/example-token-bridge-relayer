@@ -48,55 +48,55 @@
     },
     {
       "symbol": "SUI",
-      "mint": "",
+      "mint": "BJZ72CjPQojVoH68mzrd4VQ4nr6KuhbAGnhZEZCujKxY",
       "swapRate": "100000000",
       "maxNativeSwapAmount": "100000000"
     },
     {
       "symbol": "USDC",
-      "mint": "",
+      "mint": "GQtMXZxnuacCFTXVeTvyHi6P9F6chbtzhVc8JgD8hv7c",
       "swapRate": "100000000",
       "maxNativeSwapAmount": "100000000"
     },
     {
       "symbol": "WBNB",
-      "mint": "",
+      "mint": "BaGfF51MQ3a61papTRDYaNefBgTQ9ywnVne5fCff4bxT",
       "swapRate": "30000000000",
       "maxNativeSwapAmount": "100000000"
     },
     {
       "symbol": "WMATIC",
-      "mint": "",
+      "mint": "ACbmcQxbbhiXWM1GmapUSMmBYKMvnFLfAAXKqdo8xKwo",
       "swapRate": "110000000",
       "maxNativeSwapAmount": "100000000"
     },
     {
       "symbol": "WETH",
-      "mint": "",
+      "mint": "7VPWjBhCXrpYYBiRKZh1ubh9tLZZNkZGp2ReRphEV4Mc",
       "swapRate": "180000000000",
       "maxNativeSwapAmount": "100000000"
     },
     {
       "symbol": "DAI",
-      "mint": "",
+      "mint": "3WK3mEDNPrNuQReBvM28NcsqrExMnPxD9pPJmgrUeKKH",
       "swapRate": "100000000",
       "maxNativeSwapAmount": "100000000"
     },
     {
       "symbol": "WFTM",
-      "mint": "",
+      "mint": "DMw2tLaq1bVoAEKtkoUtieSk9bfCPUvubYLatTMsSVop",
       "swapRate": "50000000",
       "maxNativeSwapAmount": "100000000"
     },
     {
       "symbol": "WCELO",
-      "mint": "",
+      "mint": "84F2QX9278ToDmA98u4A86xSV9hz1ovazr8zwGaX6qjS",
       "swapRate": "65000000",
       "maxNativeSwapAmount": "100000000"
     },
     {
       "symbol": "WGLMR",
-      "mint": "",
+      "mint": "8987WGkYa5viiZ9DD8sS3PB5XghKmWjkEgmzvwDuoAEc",
       "swapRate": "50000000",
       "maxNativeSwapAmount": "100000000"
     }
@@ -109,6 +109,6 @@
     "10": "2500000",
     "14": "5000000",
     "16": "5000000",
-    "21": "10000000"
+    "21": "5000000"
   }
 }
