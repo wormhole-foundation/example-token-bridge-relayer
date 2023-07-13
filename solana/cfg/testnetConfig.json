@@ -1,0 +1,114 @@
+{
+  "deployedContracts": {
+    "2": {
+      "relayer": "0000000000000000000000009563a59c15842a6f322b10f69d1dd88b41f2e97b",
+      "tokenBridge": "000000000000000000000000F890982f9310df57d00f659cf4fd87e65adEd8d7"
+    },
+    "4": {
+      "relayer": "0000000000000000000000009563a59c15842a6f322b10f69d1dd88b41f2e97b",
+      "tokenBridge": "0000000000000000000000009dcF9D205C9De35334D646BeE44b2D2859712A09"
+    },
+    "5": {
+      "relayer": "0000000000000000000000009563a59c15842a6f322b10f69d1dd88b41f2e97b",
+      "tokenBridge": "000000000000000000000000377D55a7928c046E18eEbb61977e714d2a76472a"
+    },
+    "6": {
+      "relayer": "0000000000000000000000009563a59c15842a6f322b10f69d1dd88b41f2e97b",
+      "tokenBridge": "00000000000000000000000061E44E506Ca5659E6c0bba9b678586fA2d729756"
+    },
+    "10": {
+      "relayer": "0000000000000000000000009563a59c15842a6f322b10f69d1dd88b41f2e97b",
+      "tokenBridge": "000000000000000000000000599CEa2204B4FaECd584Ab1F2b6aCA137a0afbE8"
+    },
+    "14": {
+      "relayer": "0000000000000000000000009563a59c15842a6f322b10f69d1dd88b41f2e97b",
+      "tokenBridge": "00000000000000000000000005ca6037eC51F8b712eD2E6Fa72219FEaE74E153"
+    },
+    "16": {
+      "relayer": "0000000000000000000000009563a59c15842a6f322b10f69d1dd88b41f2e97b",
+      "tokenBridge": "000000000000000000000000bc976D4b9D57E57c3cA52e1Fd136C45FF7955A96"
+    },
+    "21": {
+      "relayer": "5b15004fca4fa94c9396a92bbdb19ab00fc067906447eb6c35029ebb7e5f7a32",
+      "tokenBridge": "40440411a170b4842ae7dee4f4a7b7a58bc0a98566e998850a7bb87bf5dc05b9"
+    }
+  },
+  "acceptedTokensList": [
+    {
+      "symbol": "SOL",
+      "mint": "So11111111111111111111111111111111111111112",
+      "swapRate": "2000000000",
+      "maxNativeSwapAmount": "0"
+    },
+    {
+      "symbol": "WAVAX",
+      "mint": "3Ftc5hTz9sG4huk79onufGiebJNDMZNL8HYgdMJ9E7JR",
+      "swapRate": "1600000000",
+      "maxNativeSwapAmount": "100000000"
+    },
+    {
+      "symbol": "SUI",
+      "mint": "",
+      "swapRate": "100000000",
+      "maxNativeSwapAmount": "100000000"
+    },
+    {
+      "symbol": "USDC",
+      "mint": "",
+      "swapRate": "100000000",
+      "maxNativeSwapAmount": "100000000"
+    },
+    {
+      "symbol": "WBNB",
+      "mint": "",
+      "swapRate": "30000000000",
+      "maxNativeSwapAmount": "100000000"
+    },
+    {
+      "symbol": "WMATIC",
+      "mint": "",
+      "swapRate": "110000000",
+      "maxNativeSwapAmount": "100000000"
+    },
+    {
+      "symbol": "WETH",
+      "mint": "",
+      "swapRate": "180000000000",
+      "maxNativeSwapAmount": "100000000"
+    },
+    {
+      "symbol": "DAI",
+      "mint": "",
+      "swapRate": "100000000",
+      "maxNativeSwapAmount": "100000000"
+    },
+    {
+      "symbol": "WFTM",
+      "mint": "",
+      "swapRate": "50000000",
+      "maxNativeSwapAmount": "100000000"
+    },
+    {
+      "symbol": "WCELO",
+      "mint": "",
+      "swapRate": "65000000",
+      "maxNativeSwapAmount": "100000000"
+    },
+    {
+      "symbol": "WGLMR",
+      "mint": "",
+      "swapRate": "50000000",
+      "maxNativeSwapAmount": "100000000"
+    }
+  ],
+  "relayerFeesInUsd": {
+    "2": "25000000",
+    "4": "10000000",
+    "5": "5000000",
+    "6": "5000000",
+    "10": "2500000",
+    "14": "5000000",
+    "16": "5000000",
+    "21": "10000000"
+  }
+}

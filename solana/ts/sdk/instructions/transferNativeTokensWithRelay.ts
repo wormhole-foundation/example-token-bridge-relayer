@@ -4,8 +4,8 @@ import {
   PublicKeyInitData,
   TransactionInstruction,
 } from "@solana/web3.js";
-import { getTransferNativeWithPayloadCpiAccounts } from "@certusone/wormhole-sdk/lib/cjs/solana";
-import { createTokenBridgeRelayerProgramInterface } from "../program";
+import {getTransferNativeWithPayloadCpiAccounts} from "@certusone/wormhole-sdk/lib/cjs/solana";
+import {createTokenBridgeRelayerProgramInterface} from "../program";
 import {
   deriveForeignContractKey,
   deriveSenderConfigKey,
@@ -14,10 +14,10 @@ import {
   deriveRelayerFeeKey,
   deriveTmpTokenAccountKey,
 } from "../accounts";
-import { getProgramSequenceTracker } from "@certusone/wormhole-sdk/lib/cjs/solana/wormhole";
-import { getAssociatedTokenAddressSync } from "@solana/spl-token";
-import { SendTokensParams } from "./types";
-import { BN } from "@coral-xyz/anchor";
+import {getProgramSequenceTracker} from "@certusone/wormhole-sdk/lib/cjs/solana/wormhole";
+import {getAssociatedTokenAddressSync} from "@solana/spl-token";
+import {SendTokensParams} from "./types";
+import {BN} from "@coral-xyz/anchor";
 
 export async function createTransferNativeTokensWithRelayInstruction(
   connection: Connection,

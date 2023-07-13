@@ -7,7 +7,7 @@ import {
   getAssociatedTokenAddressSync,
   NATIVE_MINT,
 } from "@solana/spl-token";
-import {CHAINS, ChainId} from "@certusone/wormhole-sdk";
+import {CHAINS, ChainId, tryNativeToHexString} from "@certusone/wormhole-sdk";
 import * as mock from "@certusone/wormhole-sdk/lib/cjs/mock";
 import {getTokenBridgeDerivedAccounts} from "@certusone/wormhole-sdk/lib/cjs/solana";
 import * as wormhole from "@certusone/wormhole-sdk/lib/cjs/solana/wormhole";
@@ -43,11 +43,11 @@ const CONTRACT_PRECISION = 100000000;
 const TOKEN_BRIDGE_RELAYER_PID = programIdFromEnvVar(
   "TOKEN_BRIDGE_RELAYER_PROGRAM_ID"
 );
-const ETHEREUM_TOKEN_BRIDGE_ADDRESS = WORMHOLE_CONTRACTS.ethereum.token_bridge;
+const ETHEREUM_TOKEN_BRIDGE_ADDRESS =
+  "0x" +
+  tryNativeToHexString(WORMHOLE_CONTRACTS.ethereum.token_bridge, "ethereum");
 
 describe(" 1: Token Bridge Relayer", function () {
-  console.log(TOKEN_BRIDGE_RELAYER_PID, TOKEN_BRIDGE_PID, CORE_BRIDGE_PID);
-
   const connection = new Connection(LOCALHOST, "confirmed");
   // payer is also the recipient in all tests
   const payer = PAYER_KEYPAIR;

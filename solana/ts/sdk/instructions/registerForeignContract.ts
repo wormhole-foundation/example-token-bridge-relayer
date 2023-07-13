@@ -32,7 +32,9 @@ export async function createRegisterForeignContractInstruction(
       tokenBridgeForeignEndpoint: deriveEndpointKey(
         tokenBridgeProgramId,
         chain,
-        tokenBridgeForeignAddress
+        Uint8Array.from(
+          Buffer.from(tokenBridgeForeignAddress.substring(2), "hex")
+        )
       ),
       tokenBridgeProgram: new PublicKey(tokenBridgeProgramId),
     })
