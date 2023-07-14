@@ -193,10 +193,10 @@ pub mod token_bridge_relayer {
     ///
     /// # Arguments
     ///
-    /// * `ctx`       - `ManageOwnershipTransfer` context
+    /// * `ctx`       - `ManageOwnership` context
     /// * `new_owner` - Pubkey of the pending owner.
     pub fn submit_ownership_transfer_request(
-        ctx: Context<ManageOwnershipTransfer>,
+        ctx: Context<ManageOwnership>,
         new_owner: Pubkey,
     ) -> Result<()> {
         processor::submit_ownership_transfer_request(ctx, new_owner)
@@ -216,8 +216,37 @@ pub mod token_bridge_relayer {
     /// This instruction is owner-only, meaning that only the owner of the
     /// program (defined in the [Config] account) can cancel an ownership
     /// transfer request.
-    pub fn cancel_ownership_transfer_request(ctx: Context<ManageOwnershipTransfer>) -> Result<()> {
+    pub fn cancel_ownership_transfer_request(ctx: Context<ManageOwnership>) -> Result<()> {
         processor::cancel_ownership_transfer_request(ctx)
+    }
+
+    /// This instruction updates the `assistant` field in the `OwnerConfig`
+    /// account. This instruction is owner-only, meaning that only the owner
+    /// of the program (defined in the [Config] account) can update the
+    /// assistant.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - `ManageOwnership` context
+    /// * `new_assistant` - Pubkey of the new assistant.
+    pub fn update_assistant(ctx: Context<ManageOwnership>, new_assistant: Pubkey) -> Result<()> {
+        processor::update_assistant(ctx, new_assistant)
+    }
+
+    /// This instruction updates the `fee_recipient` field in the `RedeemerConfig`
+    /// account. This instruction is owner-only, meaning that only the owner
+    /// of the program (defined in the [Config] account) can update the
+    /// fee recipient.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - `UpdateFeeRecipient` context
+    /// * `new_fee_recipient` - Pubkey of the new fee recipient.
+    pub fn update_fee_recipient(
+        ctx: Context<UpdateFeeRecipient>,
+        new_fee_recipient: Pubkey,
+    ) -> Result<()> {
+        processor::update_fee_recipient(ctx, new_fee_recipient)
     }
 
     /// This instruction is used to transfer native tokens from Solana to a

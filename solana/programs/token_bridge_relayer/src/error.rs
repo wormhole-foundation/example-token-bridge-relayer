@@ -30,6 +30,14 @@ pub enum TokenBridgeRelayerError {
     /// Specified key is already the program's owner.
     AlreadyTheOwner,
 
+    #[msg("AlreadyTheAssistant")]
+    /// Specified key is already the program's assistant.
+    AlreadyTheAssistant,
+
+    #[msg("AlreadyTheFeeRecipient")]
+    /// Specified key is already the program's fee recipient.
+    AlreadyTheFeeRecipient,
+
     #[msg("BumpNotFound")]
     /// Bump not found in `bumps` map.
     BumpNotFound,

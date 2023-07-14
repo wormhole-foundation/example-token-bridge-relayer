@@ -4,7 +4,7 @@ import {
   PublicKeyInitData,
   TransactionInstruction,
 } from "@solana/web3.js";
-import { createTokenBridgeRelayerProgramInterface } from "../program";
+import {createTokenBridgeRelayerProgramInterface} from "../program";
 import {
   deriveSenderConfigKey,
   deriveRedeemerConfigKey,
@@ -67,6 +67,26 @@ export async function createConfirmOwnershipTransferInstruction(
       ownerConfig: deriveOwnerConfigKey(programId),
       senderConfig: deriveSenderConfigKey(programId),
       redeemerConfig: deriveRedeemerConfigKey(programId),
+    })
+    .instruction();
+}
+
+export async function createUpdateAssistantInstruction(
+  connection: Connection,
+  programId: PublicKeyInitData,
+  owner: PublicKeyInitData,
+  newAssistant: PublicKeyInitData
+) {
+  const program = createTokenBridgeRelayerProgramInterface(
+    connection,
+    programId
+  );
+
+  return program.methods
+    .updateAssistant(new PublicKey(newAssistant))
+    .accounts({
+      owner: new PublicKey(owner),
+      ownerConfig: deriveOwnerConfigKey(programId),
     })
     .instruction();
 }

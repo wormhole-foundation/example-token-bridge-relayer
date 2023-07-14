@@ -5,7 +5,7 @@ use crate::{
 use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
-pub struct ManageOwnershipTransfer<'info> {
+pub struct ManageOwnership<'info> {
     /// Owner of the program set in the [`OwnerConfig`] account.
     pub owner: Signer<'info>,
 
@@ -57,7 +57,7 @@ pub struct ConfirmOwnershipTransfer<'info> {
 }
 
 pub fn submit_ownership_transfer_request(
-    ctx: Context<ManageOwnershipTransfer>,
+    ctx: Context<ManageOwnership>,
     new_owner: Pubkey,
 ) -> Result<()> {
     require_keys_neq!(
@@ -100,9 +100,31 @@ pub fn confirm_ownership_transfer_request(ctx: Context<ConfirmOwnershipTransfer>
     Ok(())
 }
 
-pub fn cancel_ownership_transfer_request(ctx: Context<ManageOwnershipTransfer>) -> Result<()> {
+pub fn cancel_ownership_transfer_request(ctx: Context<ManageOwnership>) -> Result<()> {
     let owner_config = &mut ctx.accounts.owner_config;
     owner_config.pending_owner = None;
+
+    Ok(())
+}
+
+pub fn update_assistant(
+    ctx: Context<ManageOwnership>,
+    new_assistant: Pubkey,
+) -> Result<()> {
+    require_keys_neq!(
+        new_assistant,
+        Pubkey::default(),
+        TokenBridgeRelayerError::InvalidPublicKey
+    );
+    require_keys_neq!(
+        new_assistant,
+        ctx.accounts.owner_config.assistant,
+        TokenBridgeRelayerError::AlreadyTheAssistant
+    );
+
+    // Update the assistant key.
+    let owner_config = &mut ctx.accounts.owner_config;
+    owner_config.assistant = new_assistant;
 
     Ok(())
 }

@@ -320,6 +320,116 @@ describe(" 1: Token Bridge Relayer", function () {
     });
   });
 
+  describe("Update Owner Assistant", async function () {
+    // Create the update owner assistant instruction.
+    const createUpdateOwnerAssistantIx = (opts?: {
+      sender?: PublicKey;
+      newAssistant?: PublicKey;
+    }) =>
+      tokenBridgeRelayer.createUpdateAssistantInstruction(
+        connection,
+        TOKEN_BRIDGE_RELAYER_PID,
+        opts?.sender ?? payer.publicKey,
+        opts?.newAssistant ?? relayer.publicKey // set it to the relayer key
+      );
+
+    it("Cannot Update Assistant (New Assistant == Address(0))", async function () {
+      await expectIxToFailWithError(
+        await createUpdateOwnerAssistantIx({newAssistant: PublicKey.default}),
+        "InvalidPublicKey"
+      );
+    });
+    it("Cannot Update Assistant (New Assistant == Assistant)", async function () {
+      await expectIxToFailWithError(
+        await createUpdateOwnerAssistantIx({newAssistant: assistant.publicKey}),
+        "AlreadyTheAssistant",
+        payer
+      );
+    });
+    it("Cannot Update Assistant as Non-Owner", async function () {
+      await expectIxToFailWithError(
+        await createUpdateOwnerAssistantIx({sender: relayer.publicKey}),
+        "OwnerOnly",
+        relayer
+      );
+    });
+    it("Update Assistant as Owner", async function () {
+      await expectIxToSucceed(createUpdateOwnerAssistantIx());
+
+      // Confirm the assistant field was updated.
+      const ownerConfigData = await tokenBridgeRelayer.getOwnerConfigData(
+        connection,
+        TOKEN_BRIDGE_RELAYER_PID
+      );
+      expect(ownerConfigData.assistant).deep.equals(relayer.publicKey);
+
+      // Set the assistant back to the assistant key.
+      await expectIxToSucceed(
+        createUpdateOwnerAssistantIx({
+          newAssistant: assistant.publicKey,
+        }),
+        payer
+      );
+    });
+  });
+
+  describe("Update Fee Recipient", async function () {
+    // Create the update fee recipient instruction.
+    const createUpdateFeeRecipientIx = (opts?: {
+      sender?: PublicKey;
+      newFeeRecipient?: PublicKey;
+    }) =>
+      tokenBridgeRelayer.createUpdateFeeRecipientInstruction(
+        connection,
+        TOKEN_BRIDGE_RELAYER_PID,
+        opts?.sender ?? payer.publicKey,
+        opts?.newFeeRecipient ?? assistant.publicKey // set it to the assistant key
+      );
+
+    it("Cannot Update Fee Recipient (New Fee Recipient == Address(0))", async function () {
+      await expectIxToFailWithError(
+        await createUpdateFeeRecipientIx({
+          newFeeRecipient: PublicKey.default,
+        }),
+        "InvalidPublicKey"
+      );
+    });
+    it("Cannot Update Fee Recipient (New Fee Recipient == Fee Recipient)", async function () {
+      await expectIxToFailWithError(
+        await createUpdateFeeRecipientIx({
+          newFeeRecipient: feeRecipient.publicKey,
+        }),
+        "AlreadyTheFeeRecipient",
+        payer
+      );
+    });
+    it("Cannot Update Fee Recipient as Non-Owner", async function () {
+      await expectIxToFailWithError(
+        await createUpdateFeeRecipientIx({sender: relayer.publicKey}),
+        "OwnerOnly",
+        relayer
+      );
+    });
+    it("Update Fee Recipient as Owner", async function () {
+      await expectIxToSucceed(createUpdateFeeRecipientIx());
+
+      // Confirm the fee recipient field was updated.
+      const redeemerConfigData = await tokenBridgeRelayer.getRedeemerConfigData(
+        connection,
+        TOKEN_BRIDGE_RELAYER_PID
+      );
+      expect(redeemerConfigData.feeRecipient).deep.equals(assistant.publicKey);
+
+      // Set the fee recipient back to the fee recipient key.
+      await expectIxToSucceed(
+        createUpdateFeeRecipientIx({
+          newFeeRecipient: feeRecipient.publicKey,
+        }),
+        payer
+      );
+    });
+  });
+
   describe("Update Relayer Fee Precision", function () {
     const relayerFeePrecision = 1_000_000_000;
 
