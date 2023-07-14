@@ -1,0 +1,120 @@
+{
+  "deployedContracts": {
+    "2": {
+      "relayer": "",
+      "tokenBridge": ""
+    },
+    "4": {
+      "relayer": "",
+      "tokenBridge": ""
+    },
+    "5": {
+      "relayer": "",
+      "tokenBridge": ""
+    },
+    "6": {
+      "relayer": "",
+      "tokenBridge": ""
+    },
+    "10": {
+      "relayer": "",
+      "tokenBridge": ""
+    },
+    "14": {
+      "relayer": "",
+      "tokenBridge": ""
+    },
+    "16": {
+      "relayer": "",
+      "tokenBridge": ""
+    },
+    "21": {
+      "relayer": "",
+      "tokenBridge": ""
+    }
+  },
+  "acceptedTokensList": [
+    {
+      "symbol": "SOL",
+      "mint": "So11111111111111111111111111111111111111112",
+      "swapRate": "2000000000",
+      "maxNativeSwapAmount": "0"
+    },
+    {
+      "symbol": "WAVAX",
+      "mint": "",
+      "swapRate": "",
+      "maxNativeSwapAmount": ""
+    },
+    {
+      "symbol": "SUI",
+      "mint": "",
+      "swapRate": "",
+      "maxNativeSwapAmount": ""
+    },
+    {
+      "symbol": "WBNB",
+      "mint": "",
+      "swapRate": "",
+      "maxNativeSwapAmount": ""
+    },
+    {
+      "symbol": "WMATIC",
+      "mint": "",
+      "swapRate": "",
+      "maxNativeSwapAmount": ""
+    },
+    {
+      "symbol": "WETH",
+      "mint": "",
+      "swapRate": "",
+      "maxNativeSwapAmount": ""
+    },
+    {
+      "symbol": "WBTC",
+      "mint": "",
+      "swapRate": "",
+      "maxNativeSwapAmount": ""
+    },
+    {
+      "symbol": "USDT",
+      "mint": "",
+      "swapRate": "",
+      "maxNativeSwapAmount": ""
+    },
+    {
+      "symbol": "USDC",
+      "mint": "",
+      "swapRate": "",
+      "maxNativeSwapAmount": ""
+    },
+    {
+      "symbol": "WFTM",
+      "mint": "",
+      "swapRate": "",
+      "maxNativeSwapAmount": ""
+    },
+    {
+      "symbol": "WCELO",
+      "mint": "",
+      "swapRate": "",
+      "maxNativeSwapAmount": ""
+    },
+    {
+      "symbol": "WGLMR",
+      "mint": "",
+      "swapRate": "",
+      "maxNativeSwapAmount": ""
+    }
+  ],
+  "relayerFeesInUsd": {
+    "2": "",
+    "4": "",
+    "5": "",
+    "6": "",
+    "10": "",
+    "14": "",
+    "16": "",
+    "21": ""
+  }
+}
