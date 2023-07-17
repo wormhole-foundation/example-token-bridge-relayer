@@ -86,7 +86,7 @@ integration-test: dependencies/devnet dependencies/mpl_token_metadata.so
 
 build:
 	@echo "> Building programs"
-	anchor build --arch sbf -- --features $(NETWORK)
+	anchor build --arch sbf -- --features $(NETWORK) -- --no-default-features
 
 build-prerequs: dependencies node_modules \
     $(foreach pname,$(programs),$($(pname)_pid_bin_file))

@@ -1,0 +1,26 @@
+# Token Bridge Relayer Solana
+
+## Getting Started
+
+> **Warning**
+> Known to cause problems with Solana version 1.15 - downgrade to Solana 1.14.14
+
+First, you will need `cargo` and `anchor` CLI tools. If you need these tools,
+please visit the [Anchor book] for more details.
+
+Once you have the above CLI tools, you can build the programs by simply running
+`make dependencies` which will also install this subdirectory's dependencies, such as
+`node_modules` and the Wormhole programs from the `solana` directory of the
+[Wormhole repo].
+
+## Tests
+
+To run both unit and integration tests, run `make test`. If you want to isolate
+your testing, use either of these commands:
+
+- `make unit-test` - Runs `cargo clippy` and `cargo test`
+- `make integration-test` - Spawns a solana local validator and uses `ts-mocha`
+  with `@solana/web3.js` to interact with the example programs.
+
+[anchor book]: https://book.anchor-lang.com/getting_started/installation.html
+[wormhole repo]: https://github.com/wormhole-foundation/wormhole/tree/dev.v2/solana
