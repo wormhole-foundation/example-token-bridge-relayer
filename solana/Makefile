@@ -84,7 +84,7 @@ integration-test: dependencies/devnet dependencies/mpl_token_metadata.so
 	NETWORK=devnet $(MAKE) build
 	bash run_integration_test.sh
 
-build:
+build: build-prerequs
 	@echo "> Building programs"
 	anchor build --arch sbf -- --features $(NETWORK) -- --no-default-features
 

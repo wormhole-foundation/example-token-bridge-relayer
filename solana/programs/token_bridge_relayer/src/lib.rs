@@ -17,7 +17,7 @@ pub mod native_program;
 mod processor;
 pub mod state;
 
-declare_id!("4fkhk7mXFSwtWNopUDhcCXCDX7CHDwPgZACysEPxf5Gh");
+declare_id!("554qGaQhwRBDbXoUE6VYpGff6zCZW57UVPTMuzvawo2V");
 
 #[program]
 pub mod token_bridge_relayer {

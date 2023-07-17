@@ -1,7 +1,7 @@
 #!/bin/bash
 
 export NETWORK=devnet
-export TOKEN_BRIDGE_RELAYER_PROGRAM_ID="4fkhk7mXFSwtWNopUDhcCXCDX7CHDwPgZACysEPxf5Gh"
+export TOKEN_BRIDGE_RELAYER_PROGRAM_ID=554qGaQhwRBDbXoUE6VYpGff6zCZW57UVPTMuzvawo2V
 
 ### maybe a validator is already running
 pgrep -f solana-test-validator
@@ -21,10 +21,6 @@ DEPENDENCIES=$ROOT/dependencies
 
 MPL_TOKEN_METADATA_PUBKEY=metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s
 MPL_TOKEN_METADATA_BPF=$DEPENDENCIES/mpl_token_metadata.so
-# if [ ! -f $MPL_TOKEN_METADATA_BPF ]; then
-#   echo "> Fetching MPL Token Metadata program from mainnet-beta"
-#   solana program dump -u m $MPL_TOKEN_METADATA_PUBKEY $MPL_TOKEN_METADATA_BPF
-# fi
 
 ### Fetch Wormhole programs from main branch
 CORE_BRIDGE_BPF=$DEPENDENCIES/$NETWORK/bridge.so
