@@ -42,7 +42,7 @@ async function set_relayer_fees(
   payer: Keypair,
   relayerFees: RelayerFee[]
 ) {
-  for (const target of relayerFees.slice(0, 1)) {
+  for (const target of relayerFees) {
     // Create registration transaction.
     const createSetRelayerFeeIx =
       await tokenBridgeRelayer.createUpdateRelayerFeeInstruction(

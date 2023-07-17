@@ -53,6 +53,8 @@ async function register_tokens(
         new BN(tokenConfig.maxNativeSwapAmount)
       );
 
+    console.log("\n", tokenConfig);
+
     // Send the transaction.
     const tx = await sendAndConfirmIx(connection, registerTokenIx, payer);
     if (tx === undefined) {

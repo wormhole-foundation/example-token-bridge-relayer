@@ -58,8 +58,36 @@ solana program deploy target/deploy/token_bridge_relayer.so \
   --program-id target/deploy/token_bridge_relayer-keypair.json \
   --commitment confirmed \
   -u your_testnet_rpc \
-  -k your_deloyment_keypair.json`
+  -k your_deployment_keypair.json`
 ```
+
+## Program Setup
+
+### Step 1: Env File
+
+You should still have your environment file from the [deployment](#deployment) section of this README. However (if you deleted it) create a new one and set the `FEE_RECIPIENT`, `ASSISTANT` and `TOKEN_BRIDGE_RELAYER_PID` environment variables.
+
+### Step 2: Setup Configuration File
+
+Depending on your target network, there should be an example config file in the `cfg` directory. Open your file of choice and configure it to your liking. DO NOT change the name of this file.
+
+### Step 3: Initialize the program
+
+Run the following command to initialize the program. Make sure to supply the keypair that was used to deploy the program:
+
+- `source env/testnet.env && yarn initialize -k your_deployment_keypair.json`
+
+### Step 4: Register Foreign Contracts
+
+- `source env/testnet.env && yarn register-contracts -k your_deployment_keypair.json -n testnet`
+
+### Step 5: Register Tokens (Sets Swap Rate and Max Swap Amount)
+
+- `source env/testnet.env && yarn register-tokens -k your_deployment_keypair.json -n testnet`
+
+### Step 6: Set Relayer Fees
+
+- `source env/testnet.env && yarn set-relayer-fees -k your_deployment_keypair.json -n testnet`
 
 [anchor book]: https://book.anchor-lang.com/getting_started/installation.html
 [wormhole repo]: https://github.com/wormhole-foundation/wormhole/tree/dev.v2/solana

@@ -51,7 +51,7 @@ async function register_foreign_contract(
   payer: Keypair,
   foreignContract: ForeignContract[]
 ) {
-  for (const contract of foreignContract.slice(0, 1)) {
+  for (const contract of foreignContract) {
     // Validate contract addresses.
     validateContractAddress(contract.relayerAddress);
     validateContractAddress(contract.tokenBridgeAddress);

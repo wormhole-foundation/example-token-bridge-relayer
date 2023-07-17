@@ -48,7 +48,7 @@ async function initialize(connection: Connection, payer: Keypair) {
   // Send the transaction.
   const tx = await sendAndConfirmIx(connection, createInitializeIx, payer);
 
-  if (tx === undefined) {
+  if (tx !== undefined) {
     console.log("Transaction signature:", tx);
   } else {
     console.log("Transaction failed");
