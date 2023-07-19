@@ -25,4 +25,4 @@ address = "B6RHG3mfcckmrYN1UhmJzyS1XX3fZKbkeUcpJe9Sy3FE"
 program = "./dependencies/devnet/token_bridge.so"
 
 [programs.localnet]
-token_bridge_relayer = "554qGaQhwRBDbXoUE6VYpGff6zCZW57UVPTMuzvawo2V"
+token_bridge_relayer = "88LJdNKRZ2eahYaMt2ijtXrjnGBk11V9bH5KXcNfeg2t"
