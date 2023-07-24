@@ -18,7 +18,7 @@ import {
   configArgsParser,
 } from "./config";
 import { SignerArguments, addSignerArgsParser, getSigner } from "./signer";
-import { Check, TxResult, buildOverrides, handleFailure } from "./tx";
+import { Check, TxResult, buildOverrides, executeChecks, handleFailure } from "./tx";
 
 interface CustomArguments {
   setSwapRates: boolean;
@@ -242,7 +242,7 @@ async function main() {
     handleFailure(checks, result);
   }
 
-  const messages = (await Promise.all(checks.map((check) => check()))).join("\n");
+  const messages = await executeChecks(checks);
   console.log(messages);
 
   console.log("\n");

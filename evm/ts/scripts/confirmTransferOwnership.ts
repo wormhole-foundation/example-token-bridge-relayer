@@ -5,7 +5,7 @@ import { ITokenBridgeRelayer__factory, ITokenBridgeRelayer } from "../src/ethers
 import * as fs from "fs";
 import { Config, isOperatingChain, parseArgs } from "./config";
 import { getSigner } from "./signer";
-import { Check, TxResult, buildOverrides, handleFailure } from "./tx";
+import { Check, TxResult, buildOverrides, executeChecks, handleFailure } from "./tx";
 
 async function confirmOwnership(relayer: ITokenBridgeRelayer): Promise<TxResult> {
   const overrides = await buildOverrides(
@@ -49,7 +49,7 @@ async function main() {
   const result = await confirmOwnership(relayer);
   handleFailure(checks, result);
 
-  const messages = (await Promise.all(checks.map((check) => check()))).join("\n");
+  const messages = await executeChecks(checks);
   console.log(messages);
 }
 

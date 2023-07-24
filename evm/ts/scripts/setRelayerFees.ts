@@ -5,7 +5,7 @@ import { ITokenBridgeRelayer__factory, ITokenBridgeRelayer } from "../src/ethers
 import * as fs from "fs";
 import { Config, SupportedChainId, isChain, isOperatingChain, parseArgs } from "./config";
 import { getSigner } from "./signer";
-import { Check, TxResult, buildOverrides, handleFailure } from "./tx";
+import { Check, TxResult, buildOverrides, executeChecks, handleFailure } from "./tx";
 
 async function updateRelayerFee(
   relayer: ITokenBridgeRelayer,
@@ -68,7 +68,7 @@ async function main() {
     handleFailure(checks, result);
   }
 
-  const messages = (await Promise.all(checks.map((check) => check()))).join("\n");
+  const messages = await executeChecks(checks);
   console.log(messages);
 }
 

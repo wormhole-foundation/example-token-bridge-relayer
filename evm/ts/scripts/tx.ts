@@ -83,3 +83,12 @@ export async function buildOverrides(
   }
   return overrides;
 }
+
+export async function executeChecks(checks: Check[]): Promise<string> {
+  const results = await Promise.all(checks.map((check) => check()));
+  return results
+    .filter((log) => {
+      return log !== "";
+    })
+    .join("\n");
+}

@@ -5,7 +5,7 @@ import { ITokenBridgeRelayer__factory, ITokenBridgeRelayer } from "../src/ethers
 import * as fs from "fs";
 import { Config, ConfigArguments, isOperatingChain, configArgsParser } from "./config";
 import { SignerArguments, addSignerArgsParser, getSigner } from "./signer";
-import { Check, TxResult, buildOverrides, handleFailure } from "./tx";
+import { Check, TxResult, buildOverrides, executeChecks, handleFailure } from "./tx";
 
 interface CustomArguments {
   newOwner: string;
@@ -79,7 +79,7 @@ async function main() {
   const result = await transferOwnership(relayer, args.newOwner);
   handleFailure(checks, result);
 
-  const messages = (await Promise.all(checks.map((check) => check()))).join("\n");
+  const messages = await executeChecks(checks);
   console.log(messages);
 }
 
