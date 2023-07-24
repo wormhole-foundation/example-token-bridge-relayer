@@ -41,7 +41,7 @@ async function main() {
   ) as Config;
 
   if (!isOperatingChain(RELEASE_CHAIN_ID)) {
-    throw new Error(`Unknown wormhole chain id ${RELEASE_CHAIN_ID}`);
+    throw new Error(`Transaction signing unsupported for wormhole chain id ${RELEASE_CHAIN_ID}`);
   }
 
   const provider = new ethers.providers.StaticJsonRpcProvider(RELEASE_RPC);

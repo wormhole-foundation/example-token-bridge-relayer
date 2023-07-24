@@ -165,7 +165,7 @@ async function main() {
   } = JSON.parse(fs.readFileSync(args.config, "utf8")) as Config;
 
   if (!isOperatingChain(RELEASE_CHAIN_ID)) {
-    throw new Error(`Unknown wormhole chain id ${RELEASE_CHAIN_ID}`);
+    throw new Error(`Transaction signing unsupported for wormhole chain id ${RELEASE_CHAIN_ID}`);
   }
 
   // set up ethers wallet

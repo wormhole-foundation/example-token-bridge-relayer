@@ -59,7 +59,7 @@ async function main() {
   ) as Config;
 
   if (!isOperatingChain(RELEASE_CHAIN_ID)) {
-    throw new Error(`Unknown wormhole chain id ${RELEASE_CHAIN_ID}`);
+    throw new Error(`Transaction signing unsupported for wormhole chain id ${RELEASE_CHAIN_ID}`);
   }
   if (!ethers.utils.isAddress(args.newFeeRecipient)) {
     throw new Error(`Invalid EVM address for fee recipient: ${args.newFeeRecipient}`);
