@@ -3,7 +3,7 @@ import { RELEASE_CHAIN_ID, RELEASE_RPC } from "./consts";
 import { tryHexToNativeString } from "@certusone/wormhole-sdk";
 import { ITokenBridgeRelayer__factory, ITokenBridgeRelayer } from "../src/ethers-contracts";
 import * as fs from "fs";
-import { Config, ConfigArguments, isChain, configArgsParser } from "./config";
+import { Config, ConfigArguments, isOperatingChain, configArgsParser } from "./config";
 import { SignerArguments, addSignerArgsParser, getSigner } from "./signer";
 import { Check, TxResult, buildOverrides, handleFailure } from "./tx";
 
@@ -58,7 +58,7 @@ async function main() {
     fs.readFileSync(args.config, "utf8")
   ) as Config;
 
-  if (!isChain(RELEASE_CHAIN_ID)) {
+  if (!isOperatingChain(RELEASE_CHAIN_ID)) {
     throw new Error(`Unknown wormhole chain id ${RELEASE_CHAIN_ID}`);
   }
   if (!ethers.utils.isAddress(args.newFeeRecipient)) {

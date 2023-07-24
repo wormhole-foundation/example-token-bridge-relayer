@@ -6,7 +6,8 @@ export interface ConfigArguments {
     config: string;
 }
 
-export type SupportedChainId = 2 | 4 | 5 | 6 | 10 | 14 | 16;
+export type SupportedChainId = 1 | 2 | 4 | 5 | 6 | 10 | 14 | 16 | 21;
+export type OperatingChainId = 2 | 4 | 5 | 6 | 10 | 14 | 16;
 
 export interface Config {
     deployedContracts: Record<SupportedChainId, string>;
@@ -22,7 +23,29 @@ export interface Config {
     relayerFeesInUsd: Record<SupportedChainId, string>;
 }
 
+/**
+ * These are the chains that we talk about in our configuration payloads.
+ * These should include all the chains where the TBR is deployed on.
+ */
 export function isChain(chainId: number): chainId is SupportedChainId {
+    return (
+        chainId === 1 ||
+        chainId === 2 ||
+        chainId === 4 ||
+        chainId === 5 ||
+        chainId === 6 ||
+        chainId === 10 ||
+        chainId === 14 ||
+        chainId === 16 ||
+        chainId === 21
+    );
+}
+
+/**
+ * These are the chains where we sign and send transactions.
+ * We currently only support EVM chains in these scripts.
+ */
+export function isOperatingChain(chainId: number): chainId is OperatingChainId {
     return (
         chainId === 2 ||
         chainId === 4 ||

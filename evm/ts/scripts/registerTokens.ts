@@ -9,7 +9,14 @@ import {
 } from "../src/ethers-contracts";
 import { SwapRateUpdate } from "../helpers/interfaces";
 import * as fs from "fs";
-import { Config, ConfigArguments, SupportedChainId, isChain, configArgsParser } from "./config";
+import {
+  Config,
+  ConfigArguments,
+  SupportedChainId,
+  isChain,
+  isOperatingChain,
+  configArgsParser,
+} from "./config";
 import { SignerArguments, addSignerArgsParser, getSigner } from "./signer";
 import { Check, TxResult, buildOverrides, handleFailure } from "./tx";
 
@@ -157,7 +164,7 @@ async function main() {
     maxNativeSwapAmount: maxNativeSwapAmounts,
   } = JSON.parse(fs.readFileSync(args.config, "utf8")) as Config;
 
-  if (!isChain(RELEASE_CHAIN_ID)) {
+  if (!isOperatingChain(RELEASE_CHAIN_ID)) {
     throw new Error(`Unknown wormhole chain id ${RELEASE_CHAIN_ID}`);
   }
 
