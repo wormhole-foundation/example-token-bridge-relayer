@@ -6,8 +6,8 @@ export interface ConfigArguments {
     config: string;
 }
 
-export type SupportedChainId = 1 | 2 | 4 | 5 | 6 | 10 | 14 | 16 | 21;
 export type OperatingChainId = 2 | 4 | 5 | 6 | 10 | 14 | 16;
+export type SupportedChainId = OperatingChainId | 1 | 21;
 
 export interface Config {
     deployedContracts: Record<SupportedChainId, string>;
@@ -29,14 +29,8 @@ export interface Config {
  */
 export function isChain(chainId: number): chainId is SupportedChainId {
     return (
+        isOperatingChain(chainId) ||
         chainId === 1 ||
-        chainId === 2 ||
-        chainId === 4 ||
-        chainId === 5 ||
-        chainId === 6 ||
-        chainId === 10 ||
-        chainId === 14 ||
-        chainId === 16 ||
         chainId === 21
     );
 }
