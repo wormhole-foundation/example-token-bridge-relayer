@@ -18,6 +18,7 @@ async function registerContract(
     console.log(`Contract already registered for chainId=${chainId}`);
     return TxResult.Success("");
   } else if (beforeRegistrationEmitter !== ZERO_BYTES32) {
+    // TODO: either add an option to override this and reregister or remove this error altogether
     throw new Error(`A different contract is already registered for chainId=${chainId}`);
   }
 
