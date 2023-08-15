@@ -6,7 +6,7 @@ export interface ConfigArguments {
     config: string;
 }
 
-export type OperatingChainId = 2 | 4 | 5 | 6 | 10 | 14 | 16;
+export type OperatingChainId = 2 | 4 | 5 | 6 | 10 | 14 | 16 | 30;
 export type SupportedChainId = OperatingChainId | 1 | 21;
 
 export interface Config {
@@ -47,7 +47,8 @@ export function isOperatingChain(chainId: number): chainId is OperatingChainId {
         chainId === 6 ||
         chainId === 10 ||
         chainId === 14 ||
-        chainId === 16
+        chainId === 16 ||
+        chainId === 30
     );
 }
 
