@@ -36,7 +36,7 @@ async function registerContract(
   const failureMessage = `Failed to register chain=${chainId}`;
   return TxResult.create(receipt, successMessage, failureMessage, async () => {
     const emitterInContractState = await relayer.getRegisteredContract(chainId);
-    return emitterInContractState === contract;
+    return emitterInContractState.toLowerCase() === contract.toLowerCase();
   });
 }
 
