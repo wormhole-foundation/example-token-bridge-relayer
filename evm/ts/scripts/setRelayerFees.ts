@@ -13,6 +13,11 @@ async function updateRelayerFee(
   relayerFee: string
 ): Promise<TxResult> {
   const relayerFeeToUpdate = ethers.BigNumber.from(relayerFee);
+  const currentFee = await relayer.relayerFee(chainId);
+  if (currentFee.eq(relayerFee)) {
+    console.log(`Relayer fee for chainId=${chainId} already set to fee=${relayerFee}`);
+    return TxResult.Success("");
+  }
 
   const overrides = await buildOverrides(
     () => relayer.estimateGas.updateRelayerFee(chainId, relayerFeeToUpdate),
