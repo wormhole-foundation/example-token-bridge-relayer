@@ -41,6 +41,23 @@ To complete the transfer, the off-chain relayer invokes the `completeTransferWit
 7. Determines if the relayer sent enough native assets to perform a swap (if requested by the user)
 8. Sends the remaining tokens (and native assets) to the recipient
 9. Sends swap proceeds to the off-chain relayer, and refunds any excess native assets
+10. Pays the off-chain relayer a fee for facilitating the transfer and swap
+
+## Solana Design
+
+Given Solana's architecture, the design for the `TokenBridgeRelayer` smart contract is slightly different when compared with the Sui and EVM contracts.
+
+#### Native Swaps
+
+Solana does not allow the transaction `payer` (the off-chain relayer) to specify an amount of lamports (native asset) to pass to the contract during execution. To bypass this, the Solana `TokenBridgeRelayer` contract directly transfers lamports from the `payer` to the `recipient` when performing a native asset swap. This does change the trust assumptions between the off-chain relayer and the Solana contract, since the contract directly determines how many lamports to deduct from the off-chain relayer's account. However, the Solana contract will never deduct more than the `max_native_swap_amount`.
+
+#### Relayer Fees for SOL Transfers
+
+Instead of paying the `fee_recipient` a `relayer_fee` when completing a transfer for native SOL, the `payer` will receive the `relayer_fee`. The Wormhole Token Bridge releases WSOL when completing a native transfer on Solana, which is not the desired asset for users. Instead, this contract unwraps the WSOL by closing the WSOL account and transfers the lamports to the `payer`. The contract then transfers the intended amount of lamports from the `payer` account to the `recipient` account. This design reduces the need for a temporary system account for warehousing the SOL after closing the WSOL account. It also doesn't require the `fee_recipient` to sign the transaction.
+
+#### Native vs. Wrapped
+
+There are separate instruction handlers for handling inbound and outbound transfers of native (tokens created on Solana) and wrapped (Wormhole-wrapped) tokens.
 
 ## Future Considerations
 
@@ -72,6 +89,39 @@ function completeTransferWithRelay(bytes calldata encodedTransferMessage) extern
 function calculateMaxSwapAmountIn(address token) external view returns (uint256);
 
 function calculateNativeSwapAmountOut(address token, uint256 toNativeAmount) external view returns (uint256);
+```
+
+### Solana
+
+```rust
+pub fn transfer_native_tokens_with_relay(
+    ctx: Context<TransferNativeWithRelay>,
+    amount: u64,
+    to_native_token_amount: u64,
+    recipient_chain: u16,
+    recipient_address: [u8; 32],
+    batch_id: u32,
+    wrap_native: bool,
+);
+
+pub fn transfer_wrapped_tokens_with_relay(
+    ctx: Context<TransferWrappedWithRelay>,
+    amount: u64,
+    to_native_token_amount: u64,
+    recipient_chain: u16,
+    recipient_address: [u8; 32],
+    batch_id: u32,
+);
+
+pub fn complete_native_transfer_with_relay(
+    ctx: Context<CompleteNativeWithRelay>,
+    _vaa_hash: [u8; 32],
+);
+
+pub fn complete_wrapped_transfer_with_relay(
+    ctx: Context<CompleteWrappedWithRelay>,
+    _vaa_hash: [u8; 32],
+);
 ```
 
 ## Payload
