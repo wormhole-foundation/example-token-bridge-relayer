@@ -1,7 +1,7 @@
 #!/bin/bash
 
 export NETWORK=devnet
-export TOKEN_BRIDGE_RELAYER_PROGRAM_ID=554qGaQhwRBDbXoUE6VYpGff6zCZW57UVPTMuzvawo2V
+export TOKEN_BRIDGE_RELAYER_PROGRAM_ID=88LJdNKRZ2eahYaMt2ijtXrjnGBk11V9bH5KXcNfeg2t
 
 ### maybe a validator is already running
 pgrep -f solana-test-validator

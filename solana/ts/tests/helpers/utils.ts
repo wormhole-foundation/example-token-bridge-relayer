@@ -1,6 +1,6 @@
-import {expect, use as chaiUse, config} from "chai";
+import { expect, use as chaiUse, config } from "chai";
 import chaiAsPromised from "chai-as-promised";
-import {ethers} from "ethers";
+import { ethers } from "ethers";
 chaiUse(chaiAsPromised);
 import {
   LAMPORTS_PER_SOL,
@@ -18,13 +18,8 @@ import {
   postVaaSolana,
   signSendAndConfirmTransaction,
 } from "@certusone/wormhole-sdk/lib/cjs/solana";
-import {
-  CORE_BRIDGE_PID,
-  MOCK_GUARDIANS,
-  MINTS_WITH_DECIMALS,
-  WETH_ADDRESS,
-} from "./consts";
-import {TOKEN_BRIDGE_PID} from "../helpers";
+import { CORE_BRIDGE_PID, MOCK_GUARDIANS, MINTS_WITH_DECIMALS, WETH_ADDRESS } from "./consts";
+import { TOKEN_BRIDGE_PID } from "../helpers";
 import {
   tryNativeToHexString,
   CHAIN_ID_ETH,
@@ -32,13 +27,11 @@ import {
   ChainId,
 } from "@certusone/wormhole-sdk";
 import * as tokenBridgeRelayer from "../../sdk";
-import {deriveWrappedMintKey} from "@certusone/wormhole-sdk/lib/cjs/solana/tokenBridge";
+import { deriveWrappedMintKey } from "@certusone/wormhole-sdk/lib/cjs/solana/tokenBridge";
 import * as wormhole from "@certusone/wormhole-sdk/lib/cjs/solana/wormhole";
-import {NATIVE_MINT, getAccount} from "@solana/spl-token";
+import { NATIVE_MINT, getAccount } from "@solana/spl-token";
 
-const TOKEN_BRIDGE_RELAYER_PID = programIdFromEnvVar(
-  "TOKEN_BRIDGE_RELAYER_PROGRAM_ID"
-);
+const TOKEN_BRIDGE_RELAYER_PID = programIdFromEnvVar("TOKEN_BRIDGE_RELAYER_PROGRAM_ID");
 
 export interface Balances {
   recipient: {
@@ -72,15 +65,9 @@ export async function getBalance(
   }
 }
 
-export function getDescription(
-  decimals: number,
-  isNative: boolean,
-  mint: PublicKey
-) {
+export function getDescription(decimals: number, isNative: boolean, mint: PublicKey) {
   // Create test description.
-  let description = `For ${
-    isNative ? "Native" : "Wrapped"
-  } With ${decimals} Decimals`;
+  let description = `For ${isNative ? "Native" : "Wrapped"} With ${decimals} Decimals`;
 
   if (mint == NATIVE_MINT) {
     description = "For Native SOL";
@@ -106,13 +93,7 @@ export function fetchTestTokens() {
       5000000000, // $50 swap rate
     ],
     ...Array.from(MINTS_WITH_DECIMALS.entries()).map(
-      ([decimals, {publicKey}]): [
-        boolean,
-        number,
-        string,
-        PublicKey,
-        number
-      ] => [
+      ([decimals, { publicKey }]): [boolean, number, string, PublicKey, number] => [
         true,
         decimals,
         publicKey.toBuffer().toString("hex"),
@@ -125,6 +106,7 @@ export function fetchTestTokens() {
 
 export async function verifyRelayerMessage(
   connection: Connection,
+  payer: PublicKey,
   sequence: bigint,
   normalizedAmount: number,
   normalizedRelayerFee: number,
@@ -135,10 +117,7 @@ export async function verifyRelayerMessage(
     (
       await wormhole.getPostedMessage(
         connection,
-        tokenBridgeRelayer.deriveTokenTransferMessageKey(
-          TOKEN_BRIDGE_RELAYER_PID,
-          sequence
-        )
+        tokenBridgeRelayer.deriveTokenTransferMessageKey(TOKEN_BRIDGE_RELAYER_PID, payer, sequence)
       )
     ).message.payload
   );
@@ -148,12 +127,8 @@ export async function verifyRelayerMessage(
   expect(Number(tokenBridgeTransfer.amount)).equals(normalizedAmount);
 
   // Parse the swap amount and relayer fees.
-  const relayerFeeInPayload = Number(
-    "0x" + payload.subarray(1, 33).toString("hex")
-  );
-  const swapAmountInPayload = Number(
-    "0x" + payload.subarray(33, 65).toString("hex")
-  );
+  const relayerFeeInPayload = Number("0x" + payload.subarray(1, 33).toString("hex"));
+  const swapAmountInPayload = Number("0x" + payload.subarray(33, 65).toString("hex"));
   const recipientInPayload = payload.subarray(65, 97);
 
   // Verify the payload.
@@ -203,8 +178,7 @@ export async function calculateRelayerFee(
 
   // Calculate the relayer fee.
   return Math.floor(
-    (relayerFee * 10 ** decimals * swapRatePrecision) /
-      (relayerFeePrecision * swapRate)
+    (relayerFee * 10 ** decimals * swapRatePrecision) / (relayerFeePrecision * swapRate)
   );
 }
 
@@ -217,10 +191,7 @@ export async function getSwapInputs(
   // Fetch the swap rate.
   const [swapRate, maxNativeSwapAmount] = await tokenBridgeRelayer
     .getRegisteredTokenData(connection, programId, mint)
-    .then((data) => [
-      data.swapRate.toNumber(),
-      data.maxNativeSwapAmount.toNumber(),
-    ]);
+    .then((data) => [data.swapRate.toNumber(), data.maxNativeSwapAmount.toNumber()]);
 
   // Fetch the SOL swap rate.
   const solSwapRate = await tokenBridgeRelayer
@@ -233,21 +204,17 @@ export async function getSwapInputs(
     .then((data) => data.swapRatePrecision);
 
   // Calculate the native swap rate.
-  const nativeSwapRate = Math.floor(
-    (swapRatePrecision * solSwapRate) / swapRate
-  );
+  const nativeSwapRate = Math.floor((swapRatePrecision * solSwapRate) / swapRate);
 
   // Calculate the max swap amount.
   let maxNativeSwapAmountInTokens;
   if (decimals > 9) {
     maxNativeSwapAmountInTokens = Math.floor(
-      (maxNativeSwapAmount * nativeSwapRate * 10 ** (decimals - 9)) /
-        swapRatePrecision
+      (maxNativeSwapAmount * nativeSwapRate * 10 ** (decimals - 9)) / swapRatePrecision
     );
   } else {
     maxNativeSwapAmountInTokens = Math.floor(
-      (maxNativeSwapAmount * nativeSwapRate) /
-        (10 ** (9 - decimals) * swapRatePrecision)
+      (maxNativeSwapAmount * nativeSwapRate) / (10 ** (9 - decimals) * swapRatePrecision)
     );
   }
 
@@ -262,8 +229,12 @@ export async function calculateSwapAmounts(
   toNativeTokenAmount: number
 ) {
   // Fetch the swap inputs.
-  const [maxNativeSwapAmount, nativeSwapRate, swapRatePrecision] =
-    await getSwapInputs(connection, programId, decimals, mint);
+  const [maxNativeSwapAmount, nativeSwapRate, swapRatePrecision] = await getSwapInputs(
+    connection,
+    programId,
+    decimals,
+    mint
+  );
 
   // Return if a swap is not possible.
   if (toNativeTokenAmount == 0 || maxNativeSwapAmount == 0) {
@@ -272,44 +243,32 @@ export async function calculateSwapAmounts(
 
   // Override the toNativeTokenAmount if it exceeds the maxNativeSwapAmount.
   toNativeTokenAmount =
-    toNativeTokenAmount > maxNativeSwapAmount
-      ? maxNativeSwapAmount
-      : toNativeTokenAmount;
+    toNativeTokenAmount > maxNativeSwapAmount ? maxNativeSwapAmount : toNativeTokenAmount;
 
   // Calculate the swap amount out.
   if (decimals > 9) {
     return [
       toNativeTokenAmount,
       Math.floor(
-        (swapRatePrecision * toNativeTokenAmount) /
-          (nativeSwapRate * 10 ** (decimals - 9))
+        (swapRatePrecision * toNativeTokenAmount) / (nativeSwapRate * 10 ** (decimals - 9))
       ),
     ];
   } else {
     return [
       toNativeTokenAmount,
-      Math.floor(
-        (swapRatePrecision * toNativeTokenAmount * 10 ** (9 - decimals)) /
-          nativeSwapRate
-      ),
+      Math.floor((swapRatePrecision * toNativeTokenAmount * 10 ** (9 - decimals)) / nativeSwapRate),
     ];
   }
 }
 
-export function tokenBridgeNormalizeAmount(
-  amount: number,
-  decimals: number
-): number {
+export function tokenBridgeNormalizeAmount(amount: number, decimals: number): number {
   if (decimals > 8) {
     amount = amount / 10 ** (decimals - 8);
   }
   return Math.floor(amount);
 }
 
-export function tokenBridgeDenormalizeAmount(
-  amount: number,
-  decimals: number
-): number {
+export function tokenBridgeDenormalizeAmount(amount: number, decimals: number): number {
   if (decimals > 8) {
     amount = amount * 10 ** (decimals - 8);
   }
@@ -317,10 +276,7 @@ export function tokenBridgeDenormalizeAmount(
 }
 
 export function tokenBridgeTransform(amount: number, decimals: number): number {
-  return tokenBridgeDenormalizeAmount(
-    tokenBridgeNormalizeAmount(amount, decimals),
-    decimals
-  );
+  return tokenBridgeDenormalizeAmount(tokenBridgeNormalizeAmount(amount, decimals), decimals);
 }
 
 export function getRandomInt(min: number, max: number) {
@@ -352,7 +308,7 @@ export function programIdFromEnvVar(envVar: string): PublicKey {
 class SendIxError extends Error {
   logs: string;
 
-  constructor(originalError: Error & {logs?: string[]}) {
+  constructor(originalError: Error & { logs?: string[] }) {
     // The newlines don't actually show up correctly in chai's assertion error, but at least
     // we have all the information and can just replace '\n' with a newline manually to see
     // what's happening without having to change the code.
@@ -363,10 +319,7 @@ class SendIxError extends Error {
   }
 }
 
-export const boilerPlateReduction = (
-  connection: Connection,
-  defaultSigner: Signer
-) => {
+export const boilerPlateReduction = (connection: Connection, defaultSigner: Signer) => {
   // for signing wormhole messages
   const defaultNodeWallet = NodeWallet.fromSecretKey(defaultSigner.secretKey);
 
@@ -380,13 +333,9 @@ export const boilerPlateReduction = (
       await connection.requestAirdrop(account, 1000 * LAMPORTS_PER_SOL)
     );
 
-  const guardianSign = (message: Buffer) =>
-    MOCK_GUARDIANS.addSignatures(message, [0]);
+  const guardianSign = (message: Buffer) => MOCK_GUARDIANS.addSignatures(message, [0]);
 
-  const postSignedMsgAsVaaOnSolana = async (
-    signedMsg: Buffer,
-    payer?: Signer
-  ) => {
+  const postSignedMsgAsVaaOnSolana = async (signedMsg: Buffer, payer?: Signer) => {
     const wallet = payerToWallet(payer);
     await postVaaSolana(
       connection,
@@ -404,12 +353,10 @@ export const boilerPlateReduction = (
     options?: ConfirmOptions
   ) => {
     let [signers, units] = (() => {
-      if (!signerOrSignersOrComputeUnits)
-        return [[defaultSigner], computeUnits];
+      if (!signerOrSignersOrComputeUnits) return [[defaultSigner], computeUnits];
 
       if (typeof signerOrSignersOrComputeUnits === "number") {
-        if (computeUnits !== undefined)
-          throw new Error("computeUnits can't be specified twice");
+        if (computeUnits !== undefined) throw new Error("computeUnits can't be specified twice");
         return [[defaultSigner], signerOrSignersOrComputeUnits];
       }
 
@@ -422,7 +369,7 @@ export const boilerPlateReduction = (
     })();
 
     const tx = new Transaction().add(await ix);
-    if (units) tx.add(ComputeBudgetProgram.setComputeUnitLimit({units}));
+    if (units) tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units }));
     try {
       return await sendAndConfirmTransaction(connection, tx, signers, options);
     } catch (error: any) {
@@ -436,9 +383,8 @@ export const boilerPlateReduction = (
     computeUnits?: number,
     options?: ConfirmOptions
   ) =>
-    expect(
-      sendAndConfirmIx(ix, signerOrSignersOrComputeUnits, computeUnits, options)
-    ).to.be.fulfilled;
+    expect(sendAndConfirmIx(ix, signerOrSignersOrComputeUnits, computeUnits, options)).to.be
+      .fulfilled;
 
   const expectIxToFailWithError = async (
     ix: TransactionInstruction | Promise<TransactionInstruction>,
@@ -455,18 +401,10 @@ export const boilerPlateReduction = (
     expect.fail("Expected transaction to fail");
   };
 
-  const expectTxToSucceed = async (
-    tx: Transaction | Promise<Transaction>,
-    payer?: Signer
-  ) => {
+  const expectTxToSucceed = async (tx: Transaction | Promise<Transaction>, payer?: Signer) => {
     const wallet = payerToWallet(payer);
     return expect(
-      signSendAndConfirmTransaction(
-        connection,
-        wallet.key(),
-        wallet.signTransaction,
-        await tx
-      )
+      signSendAndConfirmTransaction(connection, wallet.key(), wallet.signTransaction, await tx)
     ).to.be.fulfilled;
   };
 

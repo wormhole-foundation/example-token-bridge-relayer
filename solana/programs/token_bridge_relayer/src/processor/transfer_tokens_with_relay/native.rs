@@ -1,7 +1,7 @@
 use crate::{
     constants::{SEED_PREFIX_BRIDGED, SEED_PREFIX_TMP},
     error::TokenBridgeRelayerError,
-    state::{ForeignContract, RegisteredToken, RelayerFee, SenderConfig},
+    state::{ForeignContract, RegisteredToken, RelayerFee, SenderConfig, SignerSequence},
     token::{self, spl_token, Mint, Token, TokenAccount},
 };
 use anchor_lang::{
@@ -23,6 +23,16 @@ pub struct TransferNativeWithRelay<'info> {
     /// token account.
     #[account(mut)]
     pub payer: Signer<'info>,
+
+    /// Used to keep track of payer's Wormhole sequence number.
+    #[account(
+        init_if_needed,
+        payer = payer,
+        space = 8 + SignerSequence::INIT_SPACE,
+        seeds = [SignerSequence::SEED_PREFIX, payer.key().as_ref()],
+        bump,
+    )]
+    payer_sequence: Account<'info, SignerSequence>,
 
     #[account(
         seeds = [SenderConfig::SEED_PREFIX],
@@ -121,7 +131,8 @@ pub struct TransferNativeWithRelay<'info> {
         mut,
         seeds = [
             SEED_PREFIX_BRIDGED,
-            &token_bridge_sequence.value().to_le_bytes()[..]
+            &payer.key().as_ref(),
+            &payer_sequence.to_le_bytes()[..]
         ],
         bump,
     )]
@@ -132,12 +143,9 @@ pub struct TransferNativeWithRelay<'info> {
     /// CHECK: Token Bridge emitter.
     pub token_bridge_emitter: UncheckedAccount<'info>,
 
-    #[account(
-        mut,
-        address = config.token_bridge.sequence @ TokenBridgeRelayerError::InvalidTokenBridgeSequence
-    )]
-    /// CHECK: Token Bridge sequence. Mutable.
-    pub token_bridge_sequence: Box<Account<'info, wormhole::SequenceTracker>>,
+    /// CHECK: Token Bridge sequence.
+    #[account(mut)]
+    pub token_bridge_sequence: UncheckedAccount<'info>,
 
     #[account(mut)]
     /// CHECK: Wormhole fee collector. Mutable.
@@ -277,7 +285,8 @@ pub fn transfer_native_tokens_with_relay(
                 &config_seeds[..],
                 &[
                     SEED_PREFIX_BRIDGED,
-                    &ctx.accounts.token_bridge_sequence.value().to_le_bytes(),
+                    payer.key().as_ref(),
+                    &ctx.accounts.payer_sequence.take_and_uptick()[..],
                     &[ctx.bumps["wormhole_message"]],
                 ],
             ],

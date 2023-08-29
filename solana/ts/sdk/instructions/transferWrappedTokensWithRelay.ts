@@ -1,9 +1,4 @@
-import {
-  Connection,
-  PublicKey,
-  PublicKeyInitData,
-  TransactionInstruction,
-} from "@solana/web3.js";
+import { Connection, PublicKey, PublicKeyInitData, TransactionInstruction } from "@solana/web3.js";
 import { getTransferWrappedWithPayloadCpiAccounts } from "@certusone/wormhole-sdk/lib/cjs/solana";
 import { createTokenBridgeRelayerProgramInterface } from "../program";
 import {
@@ -13,9 +8,8 @@ import {
   deriveTmpTokenAccountKey,
   deriveRegisteredTokenKey,
   deriveRelayerFeeKey,
-  deriveTokenAccountKey,
+  deriveSignerSequence,
 } from "../accounts";
-import { getProgramSequenceTracker } from "@certusone/wormhole-sdk/lib/cjs/solana/wormhole";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { SendTokensParams } from "./types";
 import { getWrappedMeta } from "@certusone/wormhole-sdk/lib/cjs/solana/tokenBridge";
@@ -30,65 +24,52 @@ export async function createTransferWrappedTokensWithRelayInstruction(
   mint: PublicKeyInitData,
   params: SendTokensParams
 ): Promise<TransactionInstruction> {
-  const program = createTokenBridgeRelayerProgramInterface(
-    connection,
-    programId
+  const program = createTokenBridgeRelayerProgramInterface(connection, programId);
+
+  // Fetch the signer sequence.
+  const signerSequence = deriveSignerSequence(programId, payer);
+  const payerSequenceValue = await program.account.signerSequence
+    .fetch(signerSequence)
+    .then((acct) => acct.value)
+    .catch(() => new BN(0));
+
+  const message = deriveTokenTransferMessageKey(
+    programId,
+    payer,
+    BigInt(payerSequenceValue.toString())
+  );
+  const fromTokenAccount = getAssociatedTokenAddressSync(new PublicKey(mint), new PublicKey(payer));
+
+  const wrappedMeta = await getWrappedMeta(connection, tokenBridgeProgramId, mint);
+  const tmpTokenAccount = deriveTmpTokenAccountKey(programId, mint);
+  const tokenBridgeAccounts = getTransferWrappedWithPayloadCpiAccounts(
+    programId,
+    tokenBridgeProgramId,
+    wormholeProgramId,
+    payer,
+    message,
+    fromTokenAccount,
+    wrappedMeta.chain,
+    wrappedMeta.tokenAddress
   );
 
-  return getProgramSequenceTracker(
-    connection,
-    tokenBridgeProgramId,
-    wormholeProgramId
-  )
-    .then((tracker) =>
-      deriveTokenTransferMessageKey(programId, tracker.sequence)
+  return program.methods
+    .transferWrappedTokensWithRelay(
+      new BN(params.amount.toString()),
+      new BN(params.toNativeTokenAmount.toString()),
+      params.recipientChain,
+      [...params.recipientAddress],
+      params.batchId
     )
-    .then(async (message) => {
-      const fromTokenAccount = getAssociatedTokenAddressSync(
-        new PublicKey(mint),
-        new PublicKey(payer)
-      );
-
-      const wrappedMeta = await getWrappedMeta(
-        connection,
-        tokenBridgeProgramId,
-        mint
-      );
-      const tmpTokenAccount = deriveTmpTokenAccountKey(programId, mint);
-      const tokenBridgeAccounts = getTransferWrappedWithPayloadCpiAccounts(
-        programId,
-        tokenBridgeProgramId,
-        wormholeProgramId,
-        payer,
-        message,
-        fromTokenAccount,
-        wrappedMeta.chain,
-        wrappedMeta.tokenAddress
-      );
-
-      return program.methods
-        .transferWrappedTokensWithRelay(
-          new BN(params.amount.toString()),
-          new BN(params.toNativeTokenAmount.toString()),
-          params.recipientChain,
-          [...params.recipientAddress],
-          params.batchId
-        )
-        .accounts({
-          config: deriveSenderConfigKey(programId),
-          foreignContract: deriveForeignContractKey(
-            programId,
-            params.recipientChain
-          ),
-          registeredToken: deriveRegisteredTokenKey(
-            program.programId,
-            new PublicKey(mint)
-          ),
-          relayerFee: deriveRelayerFeeKey(programId, params.recipientChain),
-          tmpTokenAccount: tmpTokenAccount,
-          tokenBridgeProgram: new PublicKey(tokenBridgeProgramId),
-          ...tokenBridgeAccounts,
-        })
-        .instruction();
-    });
+    .accounts({
+      config: deriveSenderConfigKey(programId),
+      payerSequence: signerSequence,
+      foreignContract: deriveForeignContractKey(programId, params.recipientChain),
+      registeredToken: deriveRegisteredTokenKey(program.programId, new PublicKey(mint)),
+      relayerFee: deriveRelayerFeeKey(programId, params.recipientChain),
+      tmpTokenAccount: tmpTokenAccount,
+      tokenBridgeProgram: new PublicKey(tokenBridgeProgramId),
+      ...tokenBridgeAccounts,
+    })
+    .instruction();
 }

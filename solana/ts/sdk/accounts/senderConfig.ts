@@ -9,7 +9,6 @@ export interface SenderConfigData {
   owner: PublicKey;
   bump: number;
   tokenBridge: any;
-  finality: number;
   relayerFeePrecision: number;
   swapRatePrecision: number;
   paused: boolean;
