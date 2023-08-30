@@ -6,8 +6,7 @@ test: unit-test integration-test
 unit-test:
 	cargo clippy --features devnet -- --allow clippy::result_large_err
 	cargo test --features devnet
-
-### TODO: Perform another test by building w/o feature "devnet" to test immutability after initialize
+	
 integration-test:
 	anchor test --arch sbf
 
