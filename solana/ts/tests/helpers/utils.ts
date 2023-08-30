@@ -18,8 +18,14 @@ import {
   postVaaSolana,
   signSendAndConfirmTransaction,
 } from "@certusone/wormhole-sdk/lib/cjs/solana";
-import { CORE_BRIDGE_PID, MOCK_GUARDIANS, MINTS_WITH_DECIMALS, WETH_ADDRESS } from "./consts";
-import { TOKEN_BRIDGE_PID } from "../helpers";
+import {
+  CORE_BRIDGE_PID,
+  MOCK_GUARDIANS,
+  MINTS_WITH_DECIMALS,
+  WETH_ADDRESS,
+  TOKEN_BRIDGE_RELAYER_PID,
+} from "./consts";
+import {TOKEN_BRIDGE_PID} from "../helpers";
 import {
   tryNativeToHexString,
   CHAIN_ID_ETH,
@@ -31,7 +37,6 @@ import { deriveWrappedMintKey } from "@certusone/wormhole-sdk/lib/cjs/solana/tok
 import * as wormhole from "@certusone/wormhole-sdk/lib/cjs/solana/wormhole";
 import { NATIVE_MINT, getAccount } from "@solana/spl-token";
 
-const TOKEN_BRIDGE_RELAYER_PID = programIdFromEnvVar("TOKEN_BRIDGE_RELAYER_PROGRAM_ID");
 
 export interface Balances {
   recipient: {
@@ -350,7 +355,8 @@ export const boilerPlateReduction = (connection: Connection, defaultSigner: Sign
     ix: TransactionInstruction | Promise<TransactionInstruction>,
     signerOrSignersOrComputeUnits?: Signer | Signer[] | number,
     computeUnits?: number,
-    options?: ConfirmOptions
+    options?: ConfirmOptions,
+    logError: boolean = false,
   ) => {
     let [signers, units] = (() => {
       if (!signerOrSignersOrComputeUnits) return [[defaultSigner], computeUnits];
@@ -371,7 +377,12 @@ export const boilerPlateReduction = (connection: Connection, defaultSigner: Sign
     const tx = new Transaction().add(await ix);
     if (units) tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units }));
     try {
-      return await sendAndConfirmTransaction(connection, tx, signers, options);
+      return await sendAndConfirmTransaction(connection, tx, signers, options).catch((err) => {
+        if (logError) {
+          console.log(err);
+        }
+        throw err;
+      });
     } catch (error: any) {
       throw new SendIxError(error);
     }
@@ -383,8 +394,9 @@ export const boilerPlateReduction = (connection: Connection, defaultSigner: Sign
     computeUnits?: number,
     options?: ConfirmOptions
   ) =>
-    expect(sendAndConfirmIx(ix, signerOrSignersOrComputeUnits, computeUnits, options)).to.be
-      .fulfilled;
+    expect(
+      sendAndConfirmIx(ix, signerOrSignersOrComputeUnits, computeUnits, options, true)
+    ).to.be.fulfilled;
 
   const expectIxToFailWithError = async (
     ix: TransactionInstruction | Promise<TransactionInstruction>,

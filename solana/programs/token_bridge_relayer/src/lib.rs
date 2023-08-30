@@ -3,21 +3,25 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self};
 
+mod constants;
 pub use constants::*;
+
+mod error;
 pub use error::*;
+
+mod message;
 pub use message::*;
+
+mod native_program;
 pub use native_program::*;
+
+mod processor;
 pub(crate) use processor::*;
+
+mod state;
 pub use state::*;
 
-pub mod constants;
-pub mod error;
-pub mod message;
-pub mod native_program;
-mod processor;
-pub mod state;
-
-declare_id!("88LJdNKRZ2eahYaMt2ijtXrjnGBk11V9bH5KXcNfeg2t");
+declare_id!("Examp1eTokenBridgeRe1ayer1111111111111111111");
 
 #[program]
 pub mod token_bridge_relayer {

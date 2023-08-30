@@ -32,11 +32,11 @@ import {
   createTransferWithRelayPayload,
   calculateSwapAmounts,
   getSwapInputs,
+  TOKEN_BRIDGE_RELAYER_PID,
 } from "./helpers";
 
 // The default pecision value used in the token bridge relayer program.
 const CONTRACT_PRECISION = 100000000;
-const TOKEN_BRIDGE_RELAYER_PID = programIdFromEnvVar("TOKEN_BRIDGE_RELAYER_PROGRAM_ID");
 const ETHEREUM_TOKEN_BRIDGE_ADDRESS =
   "0x" + tryNativeToHexString(WORMHOLE_CONTRACTS.ethereum.token_bridge, "ethereum");
 
@@ -627,23 +627,13 @@ describe(" 1: Token Bridge Relayer", function () {
     });
 
     it("Cannot Update Relayer Fee for Unregistered Chain", async function () {
-      let result = false;
-      try {
-        await expectIxToSucceed(
-          await createUpdateRelayerFeeIx({
-            relayerFee: new BN(69),
-            chain: 69 as ChainId,
-          })
-        );
-      } catch (error: any) {
-        const expectedError =
-          "AnchorError caused by account: foreign_contract. Error Code: AccountNotInitialized.";
-        if (String(error).includes(expectedError)) {
-          result = true;
-        }
-      }
-
-      expect(result).is.true;
+      await expectIxToFailWithError(
+        await createUpdateRelayerFeeIx({
+          relayerFee: new BN(69),
+          chain: 69 as ChainId,
+        }),
+        "AnchorError caused by account: foreign_contract. Error Code: AccountNotInitialized."
+      );
     });
 
     it("Update Relayer Fee as Owner", async function () {
