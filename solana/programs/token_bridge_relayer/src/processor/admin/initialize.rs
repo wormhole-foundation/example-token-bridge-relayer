@@ -4,7 +4,6 @@ use crate::{
     BpfLoaderUpgradeable, ID,
 };
 use anchor_lang::prelude::*;
-use solana_program::{bpf_loader_upgradeable, program::invoke};
 use wormhole_anchor_sdk::{token_bridge, wormhole};
 
 #[derive(Accounts)]
@@ -148,11 +147,19 @@ pub fn initialize(
         pending_owner: None,
     });
 
-    // Make the contract immutable by setting the new program authority
-    // to `None`.
-    invoke(
-        &bpf_loader_upgradeable::set_upgrade_authority(&ID, &ctx.accounts.owner.key(), None),
-        &ctx.accounts.to_account_infos(),
-    )
-    .map_err(Into::into)
+    #[cfg(not(feature = "devnet"))]
+    {
+        // Make the contract immutable by setting the new program authority
+        // to `None`.
+        solana_program::program::invoke(
+            &solana_program::bpf_loader_upgradeable::set_upgrade_authority(
+                &ID,
+                &ctx.accounts.owner.key(),
+                None,
+            ),
+            &ctx.accounts.to_account_infos(),
+        )?;
+    }
+
+    Ok(())
 }

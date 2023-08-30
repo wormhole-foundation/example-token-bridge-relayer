@@ -24,7 +24,7 @@ impl AnchorSerialize for TokenBridgeRelayerMessage {
             TokenBridgeRelayerMessage::TransferWithRelay {
                 target_relayer_fee,
                 to_native_token_amount,
-                recipient
+                recipient,
             } => {
                 PAYLOAD_ID_TRANSFER_WITH_RELAY.serialize(writer)?;
                 [0u8; PAD_U64].serialize(writer)?;
@@ -89,10 +89,11 @@ impl AnchorDeserialize for TokenBridgeRelayerMessage {
     }
 }
 
-pub type PostedTokenBridgeRelayerMessage = token_bridge::PostedTransferWith<TokenBridgeRelayerMessage>;
+pub type PostedTokenBridgeRelayerMessage =
+    token_bridge::PostedTransferWith<TokenBridgeRelayerMessage>;
 
 #[cfg(test)]
-pub mod test {
+mod test {
     use super::*;
     use anchor_lang::prelude::{Pubkey, Result};
     use std::mem::size_of;
@@ -107,7 +108,7 @@ pub mod test {
         let msg = TokenBridgeRelayerMessage::TransferWithRelay {
             target_relayer_fee,
             to_native_token_amount,
-            recipient
+            recipient,
         };
 
         // Serialize program ID above.
@@ -123,7 +124,7 @@ pub mod test {
         let TokenBridgeRelayerMessage::TransferWithRelay {
             target_relayer_fee: decoded_target_relayer_fee,
             to_native_token_amount: decoded_to_native_token_amount,
-            recipient: decoded_recipient
+            recipient: decoded_recipient,
         } = TokenBridgeRelayerMessage::deserialize(&mut encoded.as_slice())?;
 
         // Verify results.
@@ -144,7 +145,7 @@ pub mod test {
         let msg = TokenBridgeRelayerMessage::TransferWithRelay {
             target_relayer_fee,
             to_native_token_amount,
-            recipient
+            recipient,
         };
 
         // Serialize program ID above.
@@ -157,8 +158,7 @@ pub mod test {
         encoded.extend_from_slice(&random_bytes);
 
         // Now deserialize the encoded message.
-        let result =
-            TokenBridgeRelayerMessage::deserialize(&mut encoded.as_slice());
+        let result = TokenBridgeRelayerMessage::deserialize(&mut encoded.as_slice());
 
         // Verify results.
         assert!(result.is_err());

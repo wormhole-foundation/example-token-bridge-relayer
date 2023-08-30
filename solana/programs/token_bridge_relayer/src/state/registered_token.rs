@@ -114,7 +114,7 @@ impl RegisteredToken {
 }
 
 #[cfg(test)]
-pub mod test {
+mod test {
     use super::*;
     use anchor_lang::prelude::Result;
 

@@ -125,7 +125,7 @@ pub struct TransferWrappedWithRelay<'info> {
         mut,
         seeds = [
             SEED_PREFIX_BRIDGED,
-            &payer.key().as_ref(),
+            payer.key().as_ref(),
             &payer_sequence.to_le_bytes()[..]
         ],
         bump,
