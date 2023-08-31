@@ -19,7 +19,6 @@ pub struct SenderConfig {
 
     /// Relayer fee and swap rate precision.
     pub relayer_fee_precision: u32,
-    pub swap_rate_precision: u32,
 
     /// Boolean indicating whether outbound transfers are paused.
     pub paused: bool,

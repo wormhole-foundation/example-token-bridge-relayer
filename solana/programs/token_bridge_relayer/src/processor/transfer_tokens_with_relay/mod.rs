@@ -56,12 +56,11 @@ fn prepare_transfer(
     );
 
     // Compute the relayer fee in terms of the native token being
-    // transfered.
+    // transferred.
     let relayer_fee = relayer_fee
         .checked_token_fee(
             mint.decimals,
             registered_token.swap_rate,
-            config.swap_rate_precision,
             config.relayer_fee_precision,
         )
         .ok_or(TokenBridgeRelayerError::FeeCalculationError)?;

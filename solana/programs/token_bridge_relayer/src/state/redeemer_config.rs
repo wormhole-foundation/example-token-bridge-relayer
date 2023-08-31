@@ -11,7 +11,6 @@ pub struct RedeemerConfig {
 
     /// Relayer fee and swap rate precision.
     pub relayer_fee_precision: u32,
-    pub swap_rate_precision: u32,
 
     /// Recipient of all relayer fees and swap proceeds.
     pub fee_recipient: Pubkey,

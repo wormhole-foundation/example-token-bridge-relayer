@@ -19,7 +19,6 @@ import {
   CORE_BRIDGE_PID,
   TOKEN_BRIDGE_PID,
   deriveMaliciousTokenBridgeEndpointKey,
-  programIdFromEnvVar,
   boilerPlateReduction,
   fetchTestTokens,
   getRandomInt,
@@ -131,7 +130,6 @@ describe(" 1: Token Bridge Relayer", function () {
       expect(redeemerConfigData.relayerFeePrecision.toString()).equals(
         newRelayerFeePrecision.toString()
       );
-      expect(redeemerConfigData.swapRatePrecision).equals(newSwapRatePrecision);
       expect(redeemerConfigData.feeRecipient.toString()).equals(feeRecipient.publicKey.toString());
     });
 
@@ -454,62 +452,6 @@ describe(" 1: Token Bridge Relayer", function () {
       await expectIxToSucceed(
         createUpdateRelayerFeePrecisionIx({
           relayerFeePrecision: CONTRACT_PRECISION,
-        })
-      );
-    });
-  });
-
-  describe("Update Swap Rate Precision", function () {
-    const swapRatePrecision = 1_000_000_000;
-
-    const createUpdateSwapRatePrecisionIx = (opts?: {
-      sender?: PublicKey;
-      swapRatePrecision?: number;
-    }) =>
-      tokenBridgeRelayer.createUpdateSwapRatePrecisionInstruction(
-        connection,
-        TOKEN_BRIDGE_RELAYER_PID,
-        opts?.sender ?? payer.publicKey,
-        opts?.swapRatePrecision ?? swapRatePrecision
-      );
-
-    it("Cannot Update as Non-Owner", async function () {
-      await expectIxToFailWithError(
-        await createUpdateSwapRatePrecisionIx({
-          sender: assistant.publicKey,
-        }),
-        "OwnerOnly",
-        assistant
-      );
-    });
-
-    it("Cannot Update With relayer_fee_precision == 0", async function () {
-      await expectIxToFailWithError(
-        await createUpdateSwapRatePrecisionIx({ swapRatePrecision: 0 }),
-        "InvalidPrecision"
-      );
-    });
-
-    it("Finally Update Swap Rate Precision", async function () {
-      await expectIxToSucceed(createUpdateSwapRatePrecisionIx());
-
-      // Verify state changes.
-      const redeemerConfigData = await tokenBridgeRelayer.getRedeemerConfigData(
-        connection,
-        TOKEN_BRIDGE_RELAYER_PID
-      );
-      expect(redeemerConfigData.swapRatePrecision).equals(swapRatePrecision);
-
-      const senderConfigData = await tokenBridgeRelayer.getSenderConfigData(
-        connection,
-        TOKEN_BRIDGE_RELAYER_PID
-      );
-      expect(senderConfigData.swapRatePrecision).equals(swapRatePrecision);
-
-      // Set the precision back to the default.
-      await expectIxToSucceed(
-        createUpdateSwapRatePrecisionIx({
-          swapRatePrecision: CONTRACT_PRECISION,
         })
       );
     });

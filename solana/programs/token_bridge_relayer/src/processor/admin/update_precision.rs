@@ -55,24 +55,3 @@ pub fn update_relayer_fee_precision(
     // Done.
     Ok(())
 }
-
-pub fn update_swap_rate_precision(
-    ctx: Context<UpdatePrecision>,
-    swap_rate_precision: u32,
-) -> Result<()> {
-    require!(
-        swap_rate_precision > 0,
-        TokenBridgeRelayerError::InvalidPrecision,
-    );
-
-    // Update redeemer config.
-    let redeemer_config = &mut ctx.accounts.redeemer_config;
-    redeemer_config.swap_rate_precision = swap_rate_precision;
-
-    // Update sender config.
-    let sender_config = &mut ctx.accounts.sender_config;
-    sender_config.swap_rate_precision = swap_rate_precision;
-
-    // Done.
-    Ok(())
-}

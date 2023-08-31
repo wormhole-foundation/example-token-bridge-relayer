@@ -139,23 +139,6 @@ pub mod token_bridge_relayer {
         processor::update_swap_rate(ctx, swap_rate)
     }
 
-    /// This instruction updates the `swap_rate_precision` in the
-    /// `SenderConfig` and `RedeemerConfig` accounts. The `swap_rate_precision`
-    /// is used to scale the `swap_rate`. This instruction is owner-only,
-    /// meaning that only the owner of the program (defined in the [Config]
-    /// account) can register a token.
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx` - `UpdatePrecision` context
-    /// * `swap_rate_precision` - Precision used to scale the `swap_rate`.
-    pub fn update_swap_rate_precision(
-        ctx: Context<UpdatePrecision>,
-        swap_rate_precision: u32,
-    ) -> Result<()> {
-        processor::update_swap_rate_precision(ctx, swap_rate_precision)
-    }
-
     /// This instruction updates the `max_native_swap_amount` in the
     /// `RegisteredToken` account. This instruction is owner-only,
     /// meaning that only the owner of the program (defined in the [Config]

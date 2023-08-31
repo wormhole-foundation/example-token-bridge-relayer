@@ -75,7 +75,6 @@ pub fn redeem_token(
             .calculate_native_swap_amounts(
                 mint.decimals,
                 native_registered_token.swap_rate,
-                config.swap_rate_precision,
                 denormalized_to_native_token_amount,
             )
             .ok_or(TokenBridgeRelayerError::InvalidSwapCalculation)?;
