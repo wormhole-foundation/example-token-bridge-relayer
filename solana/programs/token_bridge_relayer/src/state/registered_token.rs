@@ -8,9 +8,7 @@ pub struct RegisteredToken {
     /// Token swap rate. The swap rate is the USD conversion rate of the token.
     pub swap_rate: u64,
     /// Maximum amount of native SOL the contract will swap for each transfer.
-    pub max_native_swap_amount: u64,
-    /// Whether the token is registered.
-    pub is_registered: bool,
+    pub max_native_swap_amount: u64
 }
 
 impl RegisteredToken {
@@ -122,8 +120,7 @@ mod test {
         // Create test RegisteredToken struct.
         let mut registered_token = RegisteredToken {
             swap_rate: 1000000000,
-            max_native_swap_amount: 1000000000,
-            is_registered: true,
+            max_native_swap_amount: 1000000000
         };
 
         // Calculate the native swap rate.
@@ -167,8 +164,7 @@ mod test {
         // Create test RegisteredToken struct.
         let mut registered_token = RegisteredToken {
             swap_rate: 1000000000,              // $10.00
-            max_native_swap_amount: 1000000000, // 1 SOL
-            is_registered: true,
+            max_native_swap_amount: 1000000000 // 1 SOL
         };
 
         // Calculate the max swap amount in for decimals 10.
@@ -223,8 +219,7 @@ mod test {
         // Create test RegisteredToken struct.
         let mut registered_token = RegisteredToken {
             swap_rate: 1000000000,               // $10.00
-            max_native_swap_amount: 10000000000, // 10 SOL
-            is_registered: true,
+            max_native_swap_amount: 10000000000 // 10 SOL
         };
 
         // Calculate the native swap amounts for decimals 10.

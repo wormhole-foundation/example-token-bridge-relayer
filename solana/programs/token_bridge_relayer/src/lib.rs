@@ -85,11 +85,10 @@ pub mod token_bridge_relayer {
         processor::register_token(ctx, swap_rate, max_native_swap_amount)
     }
 
-    /// This instruction deregisters a token by setting the `is_registered`
-    /// field in the `RegisteredToken` account to `false`. It also sets the
-    /// `swap_rate` and `max_native_swap_amount` to zero. This instruction
-    /// is owner-only, meaning that only the owner of the program (defined
-    /// in the [Config] account) can register a token.
+    /// This instruction deregisters a token by closing the existing
+    /// `RegisteredToken` account for a particular mint. This instruction is
+    /// owner-only, meaning that only the owner of the program (defined in the
+    /// [Config] account) can deregister a token. 
     pub fn deregister_token(ctx: Context<DeregisterToken>) -> Result<()> {
         processor::deregister_token(ctx)
     }

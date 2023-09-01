@@ -40,11 +40,6 @@ pub fn update_max_native_swap_amount(
     ctx: Context<UpdateMaxNativeSwapAmount>,
     max_native_swap_amount: u64,
 ) -> Result<()> {
-    require!(
-        ctx.accounts.registered_token.is_registered,
-        TokenBridgeRelayerError::TokenNotRegistered
-    );
-
     // The max_native_swap_amount must be set to zero for the native mint.
     require!(
         ctx.accounts.mint.key() != spl_token::native_mint::ID || max_native_swap_amount == 0,

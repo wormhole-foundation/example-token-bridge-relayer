@@ -22,7 +22,7 @@ pub struct RegisterToken<'info> {
     pub config: Box<Account<'info, SenderConfig>>,
 
     #[account(
-        init_if_needed,
+        init,
         payer = owner,
         space = 8 + RegisteredToken::INIT_SPACE,
         seeds = [RegisteredToken::SEED_PREFIX, mint.key().as_ref()],
@@ -49,10 +49,6 @@ pub fn register_token(
     swap_rate: u64,
     max_native_swap_amount: u64,
 ) -> Result<()> {
-    require!(
-        !ctx.accounts.registered_token.is_registered,
-        TokenBridgeRelayerError::TokenAlreadyRegistered
-    );
     require!(swap_rate > 0, TokenBridgeRelayerError::ZeroSwapRate);
 
     // The max_native_swap_amount must be set to zero for the native mint.
@@ -64,8 +60,7 @@ pub fn register_token(
     // Register the token by setting the swap_rate and max_native_swap_amount.
     ctx.accounts.registered_token.set_inner(RegisteredToken {
         swap_rate,
-        max_native_swap_amount,
-        is_registered: true,
+        max_native_swap_amount
     });
 
     Ok(())

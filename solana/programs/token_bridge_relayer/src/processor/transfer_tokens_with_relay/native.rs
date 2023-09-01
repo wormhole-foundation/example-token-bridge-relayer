@@ -73,8 +73,7 @@ pub struct TransferNativeWithRelay<'info> {
 
     #[account(
         seeds = [RegisteredToken::SEED_PREFIX, mint.key().as_ref()],
-        bump,
-        constraint = registered_token.is_registered @ TokenBridgeRelayerError::TokenNotRegistered
+        bump
     )]
     // Registered token account for the specified mint. This account stores
     // information about the token. Read-only.

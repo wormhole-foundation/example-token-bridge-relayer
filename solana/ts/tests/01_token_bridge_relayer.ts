@@ -753,11 +753,10 @@ describe(" 1: Token Bridge Relayer", function () {
           expect(registeredTokenData.maxNativeSwapAmount.toNumber()).equals(
             mint === NATIVE_MINT ? 0 : maxNative
           );
-          expect(registeredTokenData.isRegistered).equals(true);
         });
 
         it("Cannot Register Token Again", async function () {
-          await expectIxToFailWithError(createRegisterTokenIx(), "TokenAlreadyRegistered", payer);
+          await expectIxToFailWithError(createRegisterTokenIx(), "already in use", payer);
         });
       });
 
@@ -773,22 +772,21 @@ describe(" 1: Token Bridge Relayer", function () {
         it("Deregister Token as Owner", async function () {
           await expectIxToSucceed(createDeregisterTokenIx());
 
-          // Validate the account changes.
-          const registeredTokenData = await tokenBridgeRelayer.getRegisteredTokenData(
-            connection,
-            program.programId,
-            mint
-          );
-
-          expect(registeredTokenData.swapRate.toNumber()).equals(0);
-          expect(registeredTokenData.maxNativeSwapAmount.toNumber()).equals(0);
-          expect(registeredTokenData.isRegistered).equals(false);
+          // Validate that the account no longer exists.
+          let failed = false;
+          try {
+            await tokenBridgeRelayer.getRegisteredTokenData(connection, program.programId, mint);
+          } catch (e: any) {
+            expect(e.message.includes("Account does not exist")).is.true;
+            failed = true;
+          }
+          expect(failed).is.true;
         });
 
         it("Cannot Deregister Unregistered Token", async function () {
           await expectIxToFailWithError(
             await createDeregisterTokenIx(),
-            "TokenAlreadyRegistered",
+            "AccountNotInitialized",
             payer
           );
         });
@@ -807,7 +805,6 @@ describe(" 1: Token Bridge Relayer", function () {
           expect(registeredTokenData.maxNativeSwapAmount.toNumber()).equals(
             mint === NATIVE_MINT ? 0 : maxNative
           );
-          expect(registeredTokenData.isRegistered).equals(true);
         });
       });
 
@@ -827,7 +824,7 @@ describe(" 1: Token Bridge Relayer", function () {
           // Confirm the swap rate update fails.
           await expectIxToFailWithError(
             await createUpdateSwapRateIx(),
-            "TokenNotRegistered",
+            "AccountNotInitialized",
             payer
           );
 
@@ -902,7 +899,7 @@ describe(" 1: Token Bridge Relayer", function () {
           // Confirm the max native amount update fails.
           await expectIxToFailWithError(
             await createUpdateMaxNativeSwapAmountIx(),
-            "TokenNotRegistered",
+            "AccountNotInitialized",
             payer
           );
 
@@ -1086,7 +1083,7 @@ describe(" 1: Token Bridge Relayer", function () {
             // Attempt to do the transfer.
             await expectIxToFailWithError(
               await createSendTokensWithPayloadIx(),
-              "TokenNotRegistered"
+              "AccountNotInitialized"
             );
 
             // Register the token again.
@@ -1372,7 +1369,7 @@ describe(" 1: Token Bridge Relayer", function () {
             // Attempt to redeem the transfer.
             await expectIxToFailWithError(
               await createRedeemTransferWithPayloadIx(payer.publicKey, signedMsg, payer.publicKey),
-              "TokenNotRegistered"
+              "AccountNotInitialized"
             );
 
             // Register the token again.
