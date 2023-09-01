@@ -13,8 +13,5 @@ pub use owner_config::*;
 mod registered_token;
 pub use registered_token::*;
 
-mod relayer_fee;
-pub use relayer_fee::*;
-
 mod signer_sequence;
 pub use signer_sequence::*;

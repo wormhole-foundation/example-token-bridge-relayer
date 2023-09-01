@@ -6,5 +6,4 @@ export * from "./wormhole";
 export * from "./ownerConfig";
 export * from "./registeredToken";
 export * from "./tokenAccount";
-export * from "./relayerFee";
 export * from "./signerSequence";

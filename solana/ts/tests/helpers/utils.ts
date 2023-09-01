@@ -168,7 +168,7 @@ export async function calculateRelayerFee(
 ) {
   // Fetch the relayer fee.
   const relayerFee = await tokenBridgeRelayer
-    .getRelayerFeeData(connection, programId, targetChain)
+    .getForeignContractData(connection, programId, targetChain)
     .then((data) => data.fee.toNumber());
 
   // Fetch the swap rate.

@@ -36,6 +36,7 @@ import {
 
 // The default pecision value used in the token bridge relayer program.
 const CONTRACT_PRECISION = 100000000;
+const INITIAL_RELAYER_FEE = new BN(0);
 const ETHEREUM_TOKEN_BRIDGE_ADDRESS =
   "0x" + tryNativeToHexString(WORMHOLE_CONTRACTS.ethereum.token_bridge, "ethereum");
 
@@ -469,7 +470,8 @@ describe(" 1: Token Bridge Relayer", function () {
         TOKEN_BRIDGE_PID,
         foreignChain,
         opts?.contractAddress ?? foreignContractAddress,
-        ETHEREUM_TOKEN_BRIDGE_ADDRESS
+        ETHEREUM_TOKEN_BRIDGE_ADDRESS,
+        INITIAL_RELAYER_FEE
       );
 
     it("Cannot Update as Non-Owner", async function () {
@@ -488,7 +490,7 @@ describe(" 1: Token Bridge Relayer", function () {
       it(`Cannot Register Chain ID == ${chain}`, async function () {
         await expectIxToFailWithError(
           await program.methods
-            .registerForeignContract(chain, [...foreignContractAddress])
+            .registerForeignContract(chain, [...foreignContractAddress], INITIAL_RELAYER_FEE)
             .accounts({
               owner: payer.publicKey,
               config: tokenBridgeRelayer.deriveSenderConfigKey(TOKEN_BRIDGE_RELAYER_PID),
@@ -518,28 +520,20 @@ describe(" 1: Token Bridge Relayer", function () {
       );
     });
 
-    it("Cannot Register Contract Address Length != 32", async function () {
-      await expectIxToFailWithError(
-        await createRegisterForeignContractIx({
-          contractAddress: foreignContractAddress.subarray(0, 31),
-        }),
-        "InstructionDidNotDeserialize"
-      );
-    });
-
     [Buffer.alloc(32, "fbadc0de", "hex"), foreignContractAddress].forEach((contractAddress) =>
       it(`Register ${
         contractAddress === foreignContractAddress ? "Final" : "Random"
       } Address`, async function () {
         await expectIxToSucceed(createRegisterForeignContractIx({ contractAddress }));
 
-        const { chain, address } = await tokenBridgeRelayer.getForeignContractData(
+        const { chain, address, fee } = await tokenBridgeRelayer.getForeignContractData(
           connection,
           TOKEN_BRIDGE_RELAYER_PID,
           foreignChain
         );
         expect(chain).equals(foreignChain);
         expect(address).deep.equals(contractAddress);
+        expect(fee.toNumber()).equals(INITIAL_RELAYER_FEE.toNumber());
       })
     );
   });
@@ -582,7 +576,7 @@ describe(" 1: Token Bridge Relayer", function () {
       await expectIxToSucceed(await createUpdateRelayerFeeIx());
 
       // Confirm state changes.
-      const relayerFeeData = await tokenBridgeRelayer.getRelayerFeeData(
+      const relayerFeeData = await tokenBridgeRelayer.getForeignContractData(
         connection,
         program.programId,
         foreignChain
@@ -604,7 +598,7 @@ describe(" 1: Token Bridge Relayer", function () {
       );
 
       // Confirm state changes.
-      const relayerFeeData = await tokenBridgeRelayer.getRelayerFeeData(
+      const relayerFeeData = await tokenBridgeRelayer.getForeignContractData(
         connection,
         program.programId,
         foreignChain

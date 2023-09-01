@@ -1,7 +1,7 @@
 use crate::{
     constants::{SEED_PREFIX_BRIDGED, SEED_PREFIX_TMP},
     error::TokenBridgeRelayerError,
-    state::{ForeignContract, RegisteredToken, RelayerFee, SenderConfig, SignerSequence},
+    state::{ForeignContract, RegisteredToken, SenderConfig, SignerSequence},
     token::{self, spl_token, Mint, Token, TokenAccount},
 };
 use anchor_lang::{
@@ -78,16 +78,6 @@ pub struct TransferNativeWithRelay<'info> {
     // Registered token account for the specified mint. This account stores
     // information about the token. Read-only.
     pub registered_token: Box<Account<'info, RegisteredToken>>,
-
-    #[account(
-        seeds = [
-            RelayerFee::SEED_PREFIX,
-            &recipient_chain.to_le_bytes()
-        ],
-        bump
-    )]
-    // Relayer fee account for the specified recipient chain. Read-only.
-    pub relayer_fee: Box<Account<'info, RelayerFee>>,
 
     #[account(
         init,
@@ -245,7 +235,7 @@ pub fn transfer_native_tokens_with_relay(
             config,
             mint,
             registered_token: &ctx.accounts.registered_token,
-            relayer_fee: &ctx.accounts.relayer_fee,
+            foreign_contract: &ctx.accounts.foreign_contract,
             tmp_token_account,
             token_bridge_authority_signer,
             token_program,

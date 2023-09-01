@@ -7,7 +7,6 @@ import {
   deriveTokenTransferMessageKey,
   deriveTmpTokenAccountKey,
   deriveRegisteredTokenKey,
-  deriveRelayerFeeKey,
   deriveSignerSequence,
 } from "../accounts";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
@@ -66,7 +65,6 @@ export async function createTransferWrappedTokensWithRelayInstruction(
       payerSequence: signerSequence,
       foreignContract: deriveForeignContractKey(programId, params.recipientChain),
       registeredToken: deriveRegisteredTokenKey(program.programId, new PublicKey(mint)),
-      relayerFee: deriveRelayerFeeKey(programId, params.recipientChain),
       tmpTokenAccount: tmpTokenAccount,
       tokenBridgeProgram: new PublicKey(tokenBridgeProgramId),
       ...tokenBridgeAccounts,

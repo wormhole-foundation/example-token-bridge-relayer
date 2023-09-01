@@ -54,12 +54,14 @@ pub mod token_bridge_relayer {
     /// * `ctx`     - `RegisterForeignContract` context
     /// * `chain`   - Wormhole Chain ID
     /// * `address` - Wormhole Emitter Address
+    /// * `relayer_fee` - Relayer fee scaled by the `relayer_fee_precision`
     pub fn register_foreign_contract(
         ctx: Context<RegisterForeignContract>,
         chain: u16,
         address: [u8; 32],
+        relayer_fee: u64,
     ) -> Result<()> {
-        processor::register_foreign_contract(ctx, chain, address)
+        processor::register_foreign_contract(ctx, chain, address, relayer_fee)
     }
 
     /// This instruction registers a new token and saves the initial `swap_rate`
@@ -93,7 +95,7 @@ pub mod token_bridge_relayer {
         processor::deregister_token(ctx)
     }
 
-    /// This instruction updates the `relayer_fee` in the `RelayerFee` account.
+    /// This instruction updates the `relayer_fee` in the `ForeignContract` account.
     /// The `relayer_fee` is scaled by the `relayer_fee_precision`. For example,
     /// if the `relayer_fee` is $15 and the `relayer_fee_precision` is 1000000,
     /// the `relayer_fee` should be set to 15000000. This instruction can

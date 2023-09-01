@@ -1,6 +1,6 @@
 use crate::{
     error::TokenBridgeRelayerError,
-    state::{ForeignContract, OwnerConfig, RelayerFee}
+    state::{ForeignContract, OwnerConfig}
 };
 use anchor_lang::prelude::*;
 
@@ -21,37 +21,24 @@ pub struct UpdateRelayerFee<'info> {
     pub owner_config: Account<'info, OwnerConfig>,
 
     #[account(
-        init_if_needed,
-        payer = payer,
-        seeds = [
-            RelayerFee::SEED_PREFIX,
-            &chain.to_le_bytes()[..]
-        ],
-        bump,
-        space = 8 + RelayerFee::INIT_SPACE
-    )]
-    /// Relayer Fee account. This account holds the USD denominated relayer fee
-    /// for the specified `chain`. This account is used to determine the cost of
-    /// relaying a transfer to a target chain. If there already is a relayer
-    /// fee saved in this account, overwrite it.
-    pub relayer_fee: Box<Account<'info, RelayerFee>>,
-
-    #[account(
+        mut,
         seeds = [
             ForeignContract::SEED_PREFIX,
             &chain.to_le_bytes()[..]
         ],
         bump
     )]
-    /// Pass this account to verify that the specified Chain ID has a
-    /// corresponding registered foreign contract.
+    /// This account holds the USD denominated relayer fee for the specified
+    /// `chain`. This account is used to determine the cost of relaying
+    /// a transfer to a target chain. If there already is a relayer fee
+    /// saved in this account, overwrite it.
     pub foreign_contract: Box<Account<'info, ForeignContract>>,
 
     /// System program.
     pub system_program: Program<'info, System>,
 }
 
-pub fn update_relayer_fee(ctx: Context<UpdateRelayerFee>, chain: u16, fee: u64) -> Result<()> {
+pub fn update_relayer_fee(ctx: Context<UpdateRelayerFee>, _chain: u16, fee: u64) -> Result<()> {
     // Check that the signer is the owner or assistant.
     require!(
         ctx.accounts
@@ -60,15 +47,14 @@ pub fn update_relayer_fee(ctx: Context<UpdateRelayerFee>, chain: u16, fee: u64) 
         TokenBridgeRelayerError::OwnerOrAssistantOnly
     );
 
-    // NOTE: We do not have to check if the chainId is valid, or if a chainId
-    // has been registered with a foreign emitter. Since the ForeignContract
-    // account is required, this means the account has been created and
-    // passed the checks required for successfully registering an emitter.
+    // NOTE: We do not have to check if the chain ID is valid Since the
+    // ForeignContract account is required, this means the account has been
+    // created and passed the checks required for successfully registering
+    // an emitter.
 
     // Save the chain and fee information in the RelayerFee account.
-    let relayer_fee = &mut ctx.accounts.relayer_fee;
-    relayer_fee.chain = chain;
-    relayer_fee.fee = fee;
+    let foreign_contract = &mut ctx.accounts.foreign_contract;
+    foreign_contract.fee = fee;
 
     Ok(())
 }

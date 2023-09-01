@@ -6,7 +6,6 @@ import {
   deriveSenderConfigKey,
   deriveTokenTransferMessageKey,
   deriveRegisteredTokenKey,
-  deriveRelayerFeeKey,
   deriveTmpTokenAccountKey,
   deriveSignerSequence,
 } from "../accounts";
@@ -63,7 +62,6 @@ export async function createTransferNativeTokensWithRelayInstruction(
       payerSequence: signerSequence,
       foreignContract: deriveForeignContractKey(programId, params.recipientChain),
       registeredToken: deriveRegisteredTokenKey(program.programId, new PublicKey(mint)),
-      relayerFee: deriveRelayerFeeKey(programId, params.recipientChain),
       tmpTokenAccount: tmpTokenAccount,
       tokenBridgeProgram: new PublicKey(tokenBridgeProgramId),
       ...tokenBridgeAccounts,

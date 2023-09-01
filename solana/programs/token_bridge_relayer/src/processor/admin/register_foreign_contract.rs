@@ -62,6 +62,7 @@ pub fn register_foreign_contract(
     ctx: Context<RegisterForeignContract>,
     chain: u16,
     address: [u8; 32],
+    fee: u64,
 ) -> Result<()> {
     // Foreign emitter cannot share the same Wormhole Chain ID as the
     // Solana Wormhole program's. And cannot register a zero address.
@@ -75,6 +76,7 @@ pub fn register_foreign_contract(
     emitter.chain = chain;
     emitter.address = address;
     emitter.token_bridge_foreign_endpoint = ctx.accounts.token_bridge_foreign_endpoint.key();
+    emitter.fee = fee;
 
     // Done.
     Ok(())

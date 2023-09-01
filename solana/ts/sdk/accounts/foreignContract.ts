@@ -1,12 +1,10 @@
-import {ChainId} from "@certusone/wormhole-sdk";
-import {deriveAddress} from "@certusone/wormhole-sdk/lib/cjs/solana";
-import {Connection, PublicKeyInitData} from "@solana/web3.js";
-import {createTokenBridgeRelayerProgramInterface} from "../program";
+import { ChainId } from "@certusone/wormhole-sdk";
+import { deriveAddress } from "@certusone/wormhole-sdk/lib/cjs/solana";
+import { Connection, PublicKeyInitData } from "@solana/web3.js";
+import { createTokenBridgeRelayerProgramInterface } from "../program";
+import { BN } from "@coral-xyz/anchor";
 
-export function deriveForeignContractKey(
-  programId: PublicKeyInitData,
-  chain: ChainId
-) {
+export function deriveForeignContractKey(programId: PublicKeyInitData, chain: ChainId) {
   return deriveAddress(
     [
       Buffer.from("foreign_contract"),
@@ -23,6 +21,7 @@ export function deriveForeignContractKey(
 export interface ForeignEmitter {
   chain: ChainId;
   address: Buffer;
+  fee: BN;
 }
 
 export async function getForeignContractData(
@@ -30,7 +29,7 @@ export async function getForeignContractData(
   programId: PublicKeyInitData,
   chain: ChainId
 ): Promise<ForeignEmitter> {
-  const {address} = await createTokenBridgeRelayerProgramInterface(
+  const { address, fee } = await createTokenBridgeRelayerProgramInterface(
     connection,
     programId
   ).account.foreignContract.fetch(deriveForeignContractKey(programId, chain));
@@ -38,5 +37,6 @@ export async function getForeignContractData(
   return {
     chain,
     address: Buffer.from(address),
+    fee,
   };
 }
