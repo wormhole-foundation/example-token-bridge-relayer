@@ -8,7 +8,7 @@ use anchor_lang::prelude::*;
 #[derive(Accounts)]
 pub struct DeregisterToken<'info> {
     /// Owner of the program set in the [`SenderConfig`] account. Signer for
-    /// creating [`ForeignContract`] account.
+    /// closing [`RegisteredToken`] account.
     pub owner: Signer<'info>,
 
     #[account(
@@ -26,6 +26,7 @@ pub struct DeregisterToken<'info> {
 
     #[account(
         mut,
+        close = owner,
         seeds = [RegisteredToken::SEED_PREFIX, mint.key().as_ref()],
         bump
     )]
@@ -35,18 +36,6 @@ pub struct DeregisterToken<'info> {
     pub registered_token: Account<'info, RegisteredToken>,
 }
 
-pub fn deregister_token(ctx: Context<DeregisterToken>) -> Result<()> {
-    require!(
-        ctx.accounts.registered_token.is_registered,
-        TokenBridgeRelayerError::TokenAlreadyRegistered
-    );
-
-    // Register the token by setting the swap_rate and max_native_swap_amount.
-    ctx.accounts.registered_token.set_inner(RegisteredToken {
-        swap_rate: 0,
-        max_native_swap_amount: 0,
-        is_registered: false,
-    });
-
+pub fn deregister_token(_ctx: Context<DeregisterToken>) -> Result<()> {
     Ok(())
 }

@@ -1,12 +1,9 @@
-import {Keypair, Connection} from "@solana/web3.js";
-import {ChainId} from "@certusone/wormhole-sdk";
+import { Keypair, Connection } from "@solana/web3.js";
+import { ChainId } from "@certusone/wormhole-sdk";
 import * as tokenBridgeRelayer from "../sdk/";
-import {
-  RPC,
-  TOKEN_BRIDGE_RELAYER_PID,
-  TOKEN_BRIDGE_PID,
-} from "./helpers/consts";
-import {sendAndConfirmIx} from "./helpers/utils";
+import { RPC, TOKEN_BRIDGE_RELAYER_PID, TOKEN_BRIDGE_PID } from "./helpers/consts";
+import { sendAndConfirmIx } from "./helpers/utils";
+import { BN } from "@coral-xyz/anchor";
 import yargs from "yargs";
 import * as fs from "fs";
 
@@ -65,18 +62,15 @@ async function register_foreign_contract(
         TOKEN_BRIDGE_PID,
         contract.chain,
         Buffer.from(contract.relayerAddress, "hex"),
-        "0x" + contract.tokenBridgeAddress
+        "0x" + contract.tokenBridgeAddress,
+        contract.relayerFee
       );
 
     console.log("\n Registering foreign contract:");
     console.log(contract);
 
     // Send the transaction.
-    const tx = await sendAndConfirmIx(
-      connection,
-      registerForeignContractIx,
-      payer
-    );
+    const tx = await sendAndConfirmIx(connection, registerForeignContractIx, payer);
 
     if (tx === undefined) {
       console.log("Transaction failed");
@@ -90,16 +84,18 @@ interface ForeignContract {
   chain: ChainId;
   relayerAddress: string;
   tokenBridgeAddress: string;
+  relayerFee: BN;
 }
 
-function createConfig(object: any): ForeignContract[] {
+function createConfig(contracts: any, fees: any): ForeignContract[] {
   let config = [] as ForeignContract[];
 
-  for (let key of Object.keys(object)) {
+  for (let key of Object.keys(contracts)) {
     let member = {
       chain: Number(key) as ChainId,
-      relayerAddress: object[key]["relayer"],
-      tokenBridgeAddress: object[key]["tokenBridge"],
+      relayerAddress: contracts[key]["relayer"],
+      tokenBridgeAddress: contracts[key]["tokenBridge"],
+      relayerFee: new BN(fees[key]),
     };
     config.push(member);
   }
@@ -112,7 +108,7 @@ async function main() {
   const connection = new Connection(RPC, "confirmed");
 
   // Owner wallet.
-  const {keyPair, network} = getArgs();
+  const { keyPair, network } = getArgs();
   const payer = Keypair.fromSecretKey(Uint8Array.from(keyPair));
 
   // Read in config file.
@@ -121,7 +117,10 @@ async function main() {
   );
 
   // Convert to Config type.
-  const config = createConfig(deploymentConfig["deployedContracts"]);
+  const config = createConfig(
+    deploymentConfig["deployedContracts"],
+    deploymentConfig["relayerFeesInUsd"]
+  );
   if (config.length == undefined) {
     throw Error("Deployed contracts not found");
   }

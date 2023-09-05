@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use crate::constants::SWAP_RATE_PRECISION;
 
 #[account]
 #[derive(InitSpace)]
@@ -7,9 +8,7 @@ pub struct RegisteredToken {
     /// Token swap rate. The swap rate is the USD conversion rate of the token.
     pub swap_rate: u64,
     /// Maximum amount of native SOL the contract will swap for each transfer.
-    pub max_native_swap_amount: u64,
-    /// Whether the token is registered.
-    pub is_registered: bool,
+    pub max_native_swap_amount: u64
 }
 
 impl RegisteredToken {
@@ -17,8 +16,8 @@ impl RegisteredToken {
     pub const SEED_PREFIX: &'static [u8] = b"mint";
     pub const NATIVE_DECIMALS: u8 = 9;
 
-    fn native_swap_rate(&self, sol_swap_rate: u64, swap_rate_precision: u32) -> Option<u64> {
-        let native_swap_rate = u128::from(swap_rate_precision)
+    fn native_swap_rate(&self, sol_swap_rate: u64) -> Option<u64> {
+        let native_swap_rate = u128::from(SWAP_RATE_PRECISION)
             .checked_mul(sol_swap_rate.into())?
             .checked_div(self.swap_rate.into())?;
 
@@ -35,20 +34,19 @@ impl RegisteredToken {
     fn calculate_max_swap_amount_in(
         &self,
         decimals: u8,
-        native_swap_rate: u64,
-        swap_rate_precision: u32,
+        native_swap_rate: u64
     ) -> Option<u64> {
         let max_swap_amount_in = if decimals > Self::NATIVE_DECIMALS {
             u128::from(self.max_native_swap_amount)
                 .checked_mul(native_swap_rate.into())?
                 .checked_mul(u128::pow(10, (decimals - Self::NATIVE_DECIMALS).into()))?
-                .checked_div(swap_rate_precision.into())?
+                .checked_div(SWAP_RATE_PRECISION.into())?
         } else {
             u128::from(self.max_native_swap_amount)
                 .checked_mul(native_swap_rate.into())?
                 .checked_div(
                     u128::pow(10, (Self::NATIVE_DECIMALS - decimals).into())
-                        .checked_mul(u128::from(swap_rate_precision))?,
+                        .checked_mul(u128::from(SWAP_RATE_PRECISION))?,
                 )?
         };
 
@@ -62,7 +60,6 @@ impl RegisteredToken {
         &self,
         decimals: u8,
         sol_swap_rate: u64,
-        swap_rate_precision: u32,
         to_native_token_amount: u64,
     ) -> Option<(u64, u64)> {
         // Return if the to_native_token_amount is zero.
@@ -71,11 +68,11 @@ impl RegisteredToken {
         }
 
         // Calculate the native swap rate.
-        let native_swap_rate = self.native_swap_rate(sol_swap_rate, swap_rate_precision)?;
+        let native_swap_rate = self.native_swap_rate(sol_swap_rate)?;
 
         // Calculate the maximum amount of native tokens that can be swapped in.
         let max_native_swap_amount_in =
-            self.calculate_max_swap_amount_in(decimals, native_swap_rate, swap_rate_precision)?;
+            self.calculate_max_swap_amount_in(decimals, native_swap_rate)?;
 
         // Override the to_native_token_amout if it's value is larger than the
         // maximum amount of native tokens that can be swapped in.
@@ -87,14 +84,14 @@ impl RegisteredToken {
 
         // Calculate the native_swap_amount_out.
         let native_swap_amount_out = if decimals > Self::NATIVE_DECIMALS {
-            u128::from(swap_rate_precision)
+            u128::from(SWAP_RATE_PRECISION)
                 .checked_mul(to_native_token_amount.into())?
                 .checked_div(
                     u128::from(native_swap_rate)
                         .checked_mul(u128::pow(10, (decimals - Self::NATIVE_DECIMALS).into()))?,
                 )?
         } else {
-            u128::from(swap_rate_precision)
+            u128::from(SWAP_RATE_PRECISION)
                 .checked_mul(to_native_token_amount.into())?
                 .checked_mul(u128::pow(10, (Self::NATIVE_DECIMALS - decimals).into()))?
                 .checked_div(native_swap_rate.into())?
@@ -120,21 +117,16 @@ mod test {
 
     #[test]
     fn test_native_swap_rate() -> Result<()> {
-        // Test variables.
-        let swap_rate_precision: u32 = 100000000;
-
         // Create test RegisteredToken struct.
         let mut registered_token = RegisteredToken {
             swap_rate: 1000000000,
-            max_native_swap_amount: 1000000000,
-            is_registered: true,
+            max_native_swap_amount: 1000000000
         };
 
         // Calculate the native swap rate.
         let expected_native_swap_rate: u64 = 42000000000;
         let native_swap_rate = registered_token.native_swap_rate(
             420000000000, // sol swap rate
-            swap_rate_precision,
         );
         assert_eq!(expected_native_swap_rate, native_swap_rate.unwrap());
 
@@ -142,15 +134,13 @@ mod test {
         registered_token.swap_rate = 6900000000;
         let expected_native_swap_rate: u64 = 6086956521;
         let native_swap_rate = registered_token.native_swap_rate(
-            420000000000, // sol swap rate
-            swap_rate_precision,
+            420000000000 // sol swap rate
         );
         assert_eq!(expected_native_swap_rate, native_swap_rate.unwrap());
 
         // Set the sol swap rate to 1, which should cause the function to return None.
         let native_swap_rate = registered_token.native_swap_rate(
-            1, // sol swap rate
-            swap_rate_precision,
+            1 // sol swap rate
         );
         assert_eq!(None, native_swap_rate);
 
@@ -159,8 +149,7 @@ mod test {
         // return None.
         registered_token.swap_rate = 1;
         let native_swap_rate = registered_token.native_swap_rate(
-            u64::MAX, // sol swap rate
-            swap_rate_precision,
+            u64::MAX // sol swap rate
         );
         assert_eq!(None, native_swap_rate);
 
@@ -170,22 +159,19 @@ mod test {
     #[test]
     fn test_calculate_max_swap_amount_in() -> Result<()> {
         // Test variables.
-        let swap_rate_precision: u32 = 100000000;
         let native_swap_rate: u64 = 42000000000;
 
         // Create test RegisteredToken struct.
         let mut registered_token = RegisteredToken {
             swap_rate: 1000000000,              // $10.00
-            max_native_swap_amount: 1000000000, // 1 SOL
-            is_registered: true,
+            max_native_swap_amount: 1000000000 // 1 SOL
         };
 
         // Calculate the max swap amount in for decimals 10.
         let expected_max_swap_amount_in: u64 = 4200000000000;
         let max_swap_amount_in = registered_token.calculate_max_swap_amount_in(
             10, // decimals
-            native_swap_rate,
-            swap_rate_precision,
+            native_swap_rate
         );
         assert_eq!(expected_max_swap_amount_in, max_swap_amount_in.unwrap());
 
@@ -193,8 +179,7 @@ mod test {
         let expected_max_swap_amount_in: u64 = 420000000000;
         let max_swap_amount_in = registered_token.calculate_max_swap_amount_in(
             9, // decimals
-            native_swap_rate,
-            swap_rate_precision,
+            native_swap_rate
         );
         assert_eq!(expected_max_swap_amount_in, max_swap_amount_in.unwrap());
 
@@ -202,8 +187,7 @@ mod test {
         let expected_max_swap_amount_in: u64 = 42000000000;
         let max_swap_amount_in = registered_token.calculate_max_swap_amount_in(
             8, // decimals
-            native_swap_rate,
-            swap_rate_precision,
+            native_swap_rate
         );
         assert_eq!(expected_max_swap_amount_in, max_swap_amount_in.unwrap());
 
@@ -211,8 +195,7 @@ mod test {
         let expected_max_swap_amount_in: u64 = 6900000000000000;
         let max_swap_amount_in = registered_token.calculate_max_swap_amount_in(
             9, // decimals
-            690000000000000,
-            swap_rate_precision,
+            690000000000000
         );
         assert_eq!(expected_max_swap_amount_in, max_swap_amount_in.unwrap());
 
@@ -221,18 +204,9 @@ mod test {
         let expected_max_swap_amount_in: u64 = 420000000;
         let max_swap_amount_in = registered_token.calculate_max_swap_amount_in(
             9, // decimals
-            native_swap_rate,
-            swap_rate_precision,
+            native_swap_rate
         );
         assert_eq!(expected_max_swap_amount_in, max_swap_amount_in.unwrap());
-
-        // Cause an overflow.
-        let max_swap_amount_in = registered_token.calculate_max_swap_amount_in(
-            9,        // decimals
-            u64::MAX, // native_swap_rate
-            1,
-        );
-        assert_eq!(None, max_swap_amount_in);
 
         Ok(())
     }
@@ -240,14 +214,12 @@ mod test {
     #[test]
     fn test_calculate_native_swap_amounts() -> Result<()> {
         // Test variables.
-        let swap_rate_precision: u32 = 100000000; // 1e8
         let sol_swap_rate: u64 = 42000000000; // $42.00
 
         // Create test RegisteredToken struct.
         let mut registered_token = RegisteredToken {
             swap_rate: 1000000000,               // $10.00
-            max_native_swap_amount: 10000000000, // 10 SOL
-            is_registered: true,
+            max_native_swap_amount: 10000000000 // 10 SOL
         };
 
         // Calculate the native swap amounts for decimals 10.
@@ -256,8 +228,7 @@ mod test {
         let native_swap_amounts = registered_token.calculate_native_swap_amounts(
             10, // decimals
             sol_swap_rate,
-            swap_rate_precision,
-            to_native_token_amount,
+            to_native_token_amount
         );
         assert_eq!(to_native_token_amount, native_swap_amounts.unwrap().0);
         assert_eq!(expected_swap_amount, native_swap_amounts.unwrap().1);
@@ -268,8 +239,7 @@ mod test {
         let native_swap_amounts = registered_token.calculate_native_swap_amounts(
             9, // decimals
             sol_swap_rate,
-            swap_rate_precision,
-            to_native_token_amount,
+            to_native_token_amount
         );
         assert_eq!(to_native_token_amount, native_swap_amounts.unwrap().0);
         assert_eq!(expected_swap_amount, native_swap_amounts.unwrap().1);
@@ -280,8 +250,7 @@ mod test {
         let native_swap_amounts = registered_token.calculate_native_swap_amounts(
             8, // decimals
             sol_swap_rate,
-            swap_rate_precision,
-            to_native_token_amount,
+            to_native_token_amount
         );
         assert_eq!(to_native_token_amount, native_swap_amounts.unwrap().0);
         assert_eq!(expected_swap_amount, native_swap_amounts.unwrap().1);
@@ -293,8 +262,7 @@ mod test {
         let native_swap_amounts = registered_token.calculate_native_swap_amounts(
             10, // decimals
             sol_swap_rate,
-            swap_rate_precision,
-            to_native_token_amount,
+            to_native_token_amount
         );
         assert_eq!(to_native_token_amount, native_swap_amounts.unwrap().0);
         assert_eq!(expected_swap_amount, native_swap_amounts.unwrap().1);
@@ -306,8 +274,7 @@ mod test {
         let native_swap_amounts = registered_token.calculate_native_swap_amounts(
             10, // decimals
             sol_swap_rate,
-            swap_rate_precision,
-            10000000000, // to native token amount is nonzero
+            10000000000 // to native token amount is nonzero
         );
         assert_eq!(expected_swap_amount_in, native_swap_amounts.unwrap().0);
         assert_eq!(expected_swap_amount_out, native_swap_amounts.unwrap().1);
@@ -322,8 +289,7 @@ mod test {
         let native_swap_amounts = registered_token.calculate_native_swap_amounts(
             10, // decimals
             sol_swap_rate,
-            swap_rate_precision,
-            to_native_token_amount,
+            to_native_token_amount
         );
         assert_eq!(expected_swap_amount_in, native_swap_amounts.unwrap().0);
         assert_eq!(expected_swap_amount_out, native_swap_amounts.unwrap().1);
@@ -337,8 +303,7 @@ mod test {
         let native_swap_amounts = registered_token.calculate_native_swap_amounts(
             10, // decimals
             sol_swap_rate,
-            swap_rate_precision,
-            to_native_token_amount,
+            to_native_token_amount
         );
         assert_eq!(expected_swap_amount_in, native_swap_amounts.unwrap().0);
         assert_eq!(expected_swap_amount_out, native_swap_amounts.unwrap().1);
@@ -350,20 +315,17 @@ mod test {
         let native_swap_amounts = registered_token.calculate_native_swap_amounts(
             10, // decimals
             sol_swap_rate,
-            swap_rate_precision,
-            u64::MAX, // to_native_token_amount
+            u64::MAX // to_native_token_amount
         );
         assert_eq!(None, native_swap_amounts);
 
         // Cause an overflow for a token with 8 decimals by setting the
         // swap_rate_precision to the minimum.
         let sol_swap_rate = u64::MAX;
-        let swap_rate_precision = 1; // minimum
         let native_swap_amounts = registered_token.calculate_native_swap_amounts(
             8, // decimals
             sol_swap_rate,
-            swap_rate_precision,
-            u64::MAX, // to_native_token_amount
+            u64::MAX // to_native_token_amount
         );
         assert_eq!(None, native_swap_amounts);
 

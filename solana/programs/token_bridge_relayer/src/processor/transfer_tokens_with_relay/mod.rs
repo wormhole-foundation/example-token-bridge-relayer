@@ -7,7 +7,7 @@ pub use wrapped::*;
 use crate::{
     error::TokenBridgeRelayerError,
     message::TokenBridgeRelayerMessage,
-    state::{RegisteredToken, RelayerFee, SenderConfig},
+    state::{RegisteredToken, SenderConfig, ForeignContract},
 };
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, Token, TokenAccount};
@@ -17,7 +17,7 @@ struct PrepareTransfer<'ctx, 'info> {
     pub config: &'ctx Account<'info, SenderConfig>,
     pub mint: &'ctx Account<'info, Mint>,
     pub registered_token: &'ctx Account<'info, RegisteredToken>,
-    pub relayer_fee: &'ctx Account<'info, RelayerFee>,
+    pub foreign_contract: &'ctx Account<'info, ForeignContract>,
     pub tmp_token_account: &'ctx Account<'info, TokenAccount>,
     pub token_bridge_authority_signer: &'ctx UncheckedAccount<'info>,
     pub token_program: &'ctx Program<'info, Token>,
@@ -34,7 +34,7 @@ fn prepare_transfer(
         config,
         mint,
         registered_token,
-        relayer_fee,
+        foreign_contract,
         tmp_token_account,
         token_bridge_authority_signer,
         token_program,
@@ -56,12 +56,11 @@ fn prepare_transfer(
     );
 
     // Compute the relayer fee in terms of the native token being
-    // transfered.
-    let relayer_fee = relayer_fee
+    // transferred.
+    let relayer_fee = foreign_contract
         .checked_token_fee(
             mint.decimals,
             registered_token.swap_rate,
-            config.swap_rate_precision,
             config.relayer_fee_precision,
         )
         .ok_or(TokenBridgeRelayerError::FeeCalculationError)?;

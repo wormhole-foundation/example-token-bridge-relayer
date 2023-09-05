@@ -44,10 +44,6 @@ pub fn update_swap_rate(ctx: Context<UpdateSwapRate>, swap_rate: u64) -> Result<
 
     // Confirm that the token is registered and the new swap rate
     // is nonzero.
-    require!(
-        ctx.accounts.registered_token.is_registered,
-        TokenBridgeRelayerError::TokenNotRegistered
-    );
     require!(swap_rate > 0, TokenBridgeRelayerError::ZeroSwapRate);
 
     // Set the new swap rate.

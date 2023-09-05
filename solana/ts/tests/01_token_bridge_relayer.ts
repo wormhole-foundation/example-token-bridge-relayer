@@ -19,7 +19,6 @@ import {
   CORE_BRIDGE_PID,
   TOKEN_BRIDGE_PID,
   deriveMaliciousTokenBridgeEndpointKey,
-  programIdFromEnvVar,
   boilerPlateReduction,
   fetchTestTokens,
   getRandomInt,
@@ -37,6 +36,7 @@ import {
 
 // The default pecision value used in the token bridge relayer program.
 const CONTRACT_PRECISION = 100000000;
+const INITIAL_RELAYER_FEE = new BN(0);
 const ETHEREUM_TOKEN_BRIDGE_ADDRESS =
   "0x" + tryNativeToHexString(WORMHOLE_CONTRACTS.ethereum.token_bridge, "ethereum");
 
@@ -131,7 +131,6 @@ describe(" 1: Token Bridge Relayer", function () {
       expect(redeemerConfigData.relayerFeePrecision.toString()).equals(
         newRelayerFeePrecision.toString()
       );
-      expect(redeemerConfigData.swapRatePrecision).equals(newSwapRatePrecision);
       expect(redeemerConfigData.feeRecipient.toString()).equals(feeRecipient.publicKey.toString());
     });
 
@@ -459,62 +458,6 @@ describe(" 1: Token Bridge Relayer", function () {
     });
   });
 
-  describe("Update Swap Rate Precision", function () {
-    const swapRatePrecision = 1_000_000_000;
-
-    const createUpdateSwapRatePrecisionIx = (opts?: {
-      sender?: PublicKey;
-      swapRatePrecision?: number;
-    }) =>
-      tokenBridgeRelayer.createUpdateSwapRatePrecisionInstruction(
-        connection,
-        TOKEN_BRIDGE_RELAYER_PID,
-        opts?.sender ?? payer.publicKey,
-        opts?.swapRatePrecision ?? swapRatePrecision
-      );
-
-    it("Cannot Update as Non-Owner", async function () {
-      await expectIxToFailWithError(
-        await createUpdateSwapRatePrecisionIx({
-          sender: assistant.publicKey,
-        }),
-        "OwnerOnly",
-        assistant
-      );
-    });
-
-    it("Cannot Update With relayer_fee_precision == 0", async function () {
-      await expectIxToFailWithError(
-        await createUpdateSwapRatePrecisionIx({ swapRatePrecision: 0 }),
-        "InvalidPrecision"
-      );
-    });
-
-    it("Finally Update Swap Rate Precision", async function () {
-      await expectIxToSucceed(createUpdateSwapRatePrecisionIx());
-
-      // Verify state changes.
-      const redeemerConfigData = await tokenBridgeRelayer.getRedeemerConfigData(
-        connection,
-        TOKEN_BRIDGE_RELAYER_PID
-      );
-      expect(redeemerConfigData.swapRatePrecision).equals(swapRatePrecision);
-
-      const senderConfigData = await tokenBridgeRelayer.getSenderConfigData(
-        connection,
-        TOKEN_BRIDGE_RELAYER_PID
-      );
-      expect(senderConfigData.swapRatePrecision).equals(swapRatePrecision);
-
-      // Set the precision back to the default.
-      await expectIxToSucceed(
-        createUpdateSwapRatePrecisionIx({
-          swapRatePrecision: CONTRACT_PRECISION,
-        })
-      );
-    });
-  });
-
   describe("Register Foreign Emitter", function () {
     const createRegisterForeignContractIx = (opts?: {
       sender?: PublicKey;
@@ -527,7 +470,8 @@ describe(" 1: Token Bridge Relayer", function () {
         TOKEN_BRIDGE_PID,
         foreignChain,
         opts?.contractAddress ?? foreignContractAddress,
-        ETHEREUM_TOKEN_BRIDGE_ADDRESS
+        ETHEREUM_TOKEN_BRIDGE_ADDRESS,
+        INITIAL_RELAYER_FEE
       );
 
     it("Cannot Update as Non-Owner", async function () {
@@ -546,7 +490,7 @@ describe(" 1: Token Bridge Relayer", function () {
       it(`Cannot Register Chain ID == ${chain}`, async function () {
         await expectIxToFailWithError(
           await program.methods
-            .registerForeignContract(chain, [...foreignContractAddress])
+            .registerForeignContract(chain, [...foreignContractAddress], INITIAL_RELAYER_FEE)
             .accounts({
               owner: payer.publicKey,
               config: tokenBridgeRelayer.deriveSenderConfigKey(TOKEN_BRIDGE_RELAYER_PID),
@@ -576,28 +520,20 @@ describe(" 1: Token Bridge Relayer", function () {
       );
     });
 
-    it("Cannot Register Contract Address Length != 32", async function () {
-      await expectIxToFailWithError(
-        await createRegisterForeignContractIx({
-          contractAddress: foreignContractAddress.subarray(0, 31),
-        }),
-        "InstructionDidNotDeserialize"
-      );
-    });
-
     [Buffer.alloc(32, "fbadc0de", "hex"), foreignContractAddress].forEach((contractAddress) =>
       it(`Register ${
         contractAddress === foreignContractAddress ? "Final" : "Random"
       } Address`, async function () {
         await expectIxToSucceed(createRegisterForeignContractIx({ contractAddress }));
 
-        const { chain, address } = await tokenBridgeRelayer.getForeignContractData(
+        const { chain, address, fee } = await tokenBridgeRelayer.getForeignContractData(
           connection,
           TOKEN_BRIDGE_RELAYER_PID,
           foreignChain
         );
         expect(chain).equals(foreignChain);
         expect(address).deep.equals(contractAddress);
+        expect(fee.toNumber()).equals(INITIAL_RELAYER_FEE.toNumber());
       })
     );
   });
@@ -640,7 +576,7 @@ describe(" 1: Token Bridge Relayer", function () {
       await expectIxToSucceed(await createUpdateRelayerFeeIx());
 
       // Confirm state changes.
-      const relayerFeeData = await tokenBridgeRelayer.getRelayerFeeData(
+      const relayerFeeData = await tokenBridgeRelayer.getForeignContractData(
         connection,
         program.programId,
         foreignChain
@@ -662,7 +598,7 @@ describe(" 1: Token Bridge Relayer", function () {
       );
 
       // Confirm state changes.
-      const relayerFeeData = await tokenBridgeRelayer.getRelayerFeeData(
+      const relayerFeeData = await tokenBridgeRelayer.getForeignContractData(
         connection,
         program.programId,
         foreignChain
@@ -811,11 +747,10 @@ describe(" 1: Token Bridge Relayer", function () {
           expect(registeredTokenData.maxNativeSwapAmount.toNumber()).equals(
             mint === NATIVE_MINT ? 0 : maxNative
           );
-          expect(registeredTokenData.isRegistered).equals(true);
         });
 
         it("Cannot Register Token Again", async function () {
-          await expectIxToFailWithError(createRegisterTokenIx(), "TokenAlreadyRegistered", payer);
+          await expectIxToFailWithError(createRegisterTokenIx(), "already in use", payer);
         });
       });
 
@@ -831,22 +766,21 @@ describe(" 1: Token Bridge Relayer", function () {
         it("Deregister Token as Owner", async function () {
           await expectIxToSucceed(createDeregisterTokenIx());
 
-          // Validate the account changes.
-          const registeredTokenData = await tokenBridgeRelayer.getRegisteredTokenData(
-            connection,
-            program.programId,
-            mint
-          );
-
-          expect(registeredTokenData.swapRate.toNumber()).equals(0);
-          expect(registeredTokenData.maxNativeSwapAmount.toNumber()).equals(0);
-          expect(registeredTokenData.isRegistered).equals(false);
+          // Validate that the account no longer exists.
+          let failed = false;
+          try {
+            await tokenBridgeRelayer.getRegisteredTokenData(connection, program.programId, mint);
+          } catch (e: any) {
+            expect(e.message.includes("Account does not exist")).is.true;
+            failed = true;
+          }
+          expect(failed).is.true;
         });
 
         it("Cannot Deregister Unregistered Token", async function () {
           await expectIxToFailWithError(
             await createDeregisterTokenIx(),
-            "TokenAlreadyRegistered",
+            "AccountNotInitialized",
             payer
           );
         });
@@ -865,7 +799,6 @@ describe(" 1: Token Bridge Relayer", function () {
           expect(registeredTokenData.maxNativeSwapAmount.toNumber()).equals(
             mint === NATIVE_MINT ? 0 : maxNative
           );
-          expect(registeredTokenData.isRegistered).equals(true);
         });
       });
 
@@ -885,7 +818,7 @@ describe(" 1: Token Bridge Relayer", function () {
           // Confirm the swap rate update fails.
           await expectIxToFailWithError(
             await createUpdateSwapRateIx(),
-            "TokenNotRegistered",
+            "AccountNotInitialized",
             payer
           );
 
@@ -960,7 +893,7 @@ describe(" 1: Token Bridge Relayer", function () {
           // Confirm the max native amount update fails.
           await expectIxToFailWithError(
             await createUpdateMaxNativeSwapAmountIx(),
-            "TokenNotRegistered",
+            "AccountNotInitialized",
             payer
           );
 
@@ -1144,7 +1077,7 @@ describe(" 1: Token Bridge Relayer", function () {
             // Attempt to do the transfer.
             await expectIxToFailWithError(
               await createSendTokensWithPayloadIx(),
-              "TokenNotRegistered"
+              "AccountNotInitialized"
             );
 
             // Register the token again.
@@ -1430,7 +1363,7 @@ describe(" 1: Token Bridge Relayer", function () {
             // Attempt to redeem the transfer.
             await expectIxToFailWithError(
               await createRedeemTransferWithPayloadIx(payer.publicKey, signedMsg, payer.publicKey),
-              "TokenNotRegistered"
+              "AccountNotInitialized"
             );
 
             // Register the token again.

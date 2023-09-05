@@ -25,6 +25,6 @@ impl OwnerConfig {
         self.pending_owner == Some(*key)
     }
 
-    /// AKA `b"redeemer"`.
+    /// AKA `b"owner"`.
     pub const SEED_PREFIX: &'static [u8; 5] = b"owner";
 }

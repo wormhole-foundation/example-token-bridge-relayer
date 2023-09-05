@@ -1,6 +1,6 @@
-import {deriveAddress} from "@certusone/wormhole-sdk/lib/cjs/solana";
-import {Connection, PublicKey, PublicKeyInitData} from "@solana/web3.js";
-import {createTokenBridgeRelayerProgramInterface} from "../program";
+import { deriveAddress } from "@certusone/wormhole-sdk/lib/cjs/solana";
+import { Connection, PublicKey, PublicKeyInitData } from "@solana/web3.js";
+import { createTokenBridgeRelayerProgramInterface } from "../program";
 
 export function deriveRedeemerConfigKey(programId: PublicKeyInitData) {
   return deriveAddress([Buffer.from("redeemer")], programId);
@@ -11,7 +11,6 @@ export interface RedeemerConfigData {
   bump: number;
   tokenBridge: any;
   relayerFeePrecision: number;
-  swapRatePrecision: number;
   feeRecipient: PublicKey;
 }
 

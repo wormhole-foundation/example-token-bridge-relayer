@@ -105,14 +105,14 @@ pub fn initialize(
         TokenBridgeRelayerError::InvalidPublicKey
     );
 
-    // Initial precision value for both relayer fees and swap rates.
-    let initial_precision: u32 = 100000000;
+    // Initial precision value for the relayer fee.
+    let initial_relayer_fee_precision: u32 = 100000000;
 
     let owner = ctx.accounts.owner.key();
 
     // Initialize program's sender config.
     // * Set the owner of the sender config (effectively the owner of the program).
-    // * Set the initial precision values.
+    // * Set the initial relayer fee precision value.
     // * Set the paused boolean to false. This value controls whether the program will allow
     //   outbound transfers.
     // * Set Token Bridge related addresses.
@@ -122,20 +122,18 @@ pub fn initialize(
         token_bridge: crate::OutboundTokenBridgeAddresses {
             sequence: ctx.accounts.token_bridge_sequence.key(),
         },
-        relayer_fee_precision: initial_precision,
-        swap_rate_precision: initial_precision,
+        relayer_fee_precision: initial_relayer_fee_precision,
         paused: false,
     });
 
     // Initialize program's redeemer config.
     // * Set the owner of the redeemer config (effectively the owner of the program).
-    // * Set the initial precision values.
+    // * Set the initial relayer fee precision value.
     // * Set the fee recipient.
     ctx.accounts.redeemer_config.set_inner(RedeemerConfig {
         owner,
         bump: ctx.bumps["redeemer_config"],
-        relayer_fee_precision: initial_precision,
-        swap_rate_precision: initial_precision,
+        relayer_fee_precision: initial_relayer_fee_precision,
         fee_recipient,
     });
 

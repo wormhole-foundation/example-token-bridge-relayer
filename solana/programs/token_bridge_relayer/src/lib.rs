@@ -54,12 +54,14 @@ pub mod token_bridge_relayer {
     /// * `ctx`     - `RegisterForeignContract` context
     /// * `chain`   - Wormhole Chain ID
     /// * `address` - Wormhole Emitter Address
+    /// * `relayer_fee` - Relayer fee scaled by the `relayer_fee_precision`
     pub fn register_foreign_contract(
         ctx: Context<RegisterForeignContract>,
         chain: u16,
         address: [u8; 32],
+        relayer_fee: u64,
     ) -> Result<()> {
-        processor::register_foreign_contract(ctx, chain, address)
+        processor::register_foreign_contract(ctx, chain, address, relayer_fee)
     }
 
     /// This instruction registers a new token and saves the initial `swap_rate`
@@ -85,16 +87,15 @@ pub mod token_bridge_relayer {
         processor::register_token(ctx, swap_rate, max_native_swap_amount)
     }
 
-    /// This instruction deregisters a token by setting the `is_registered`
-    /// field in the `RegisteredToken` account to `false`. It also sets the
-    /// `swap_rate` and `max_native_swap_amount` to zero. This instruction
-    /// is owner-only, meaning that only the owner of the program (defined
-    /// in the [Config] account) can register a token.
+    /// This instruction deregisters a token by closing the existing
+    /// `RegisteredToken` account for a particular mint. This instruction is
+    /// owner-only, meaning that only the owner of the program (defined in the
+    /// [Config] account) can deregister a token. 
     pub fn deregister_token(ctx: Context<DeregisterToken>) -> Result<()> {
         processor::deregister_token(ctx)
     }
 
-    /// This instruction updates the `relayer_fee` in the `RelayerFee` account.
+    /// This instruction updates the `relayer_fee` in the `ForeignContract` account.
     /// The `relayer_fee` is scaled by the `relayer_fee_precision`. For example,
     /// if the `relayer_fee` is $15 and the `relayer_fee_precision` is 1000000,
     /// the `relayer_fee` should be set to 15000000. This instruction can
@@ -137,23 +138,6 @@ pub mod token_bridge_relayer {
     /// * `swap_rate` - USD conversion rate for the specified token.
     pub fn update_swap_rate(ctx: Context<UpdateSwapRate>, swap_rate: u64) -> Result<()> {
         processor::update_swap_rate(ctx, swap_rate)
-    }
-
-    /// This instruction updates the `swap_rate_precision` in the
-    /// `SenderConfig` and `RedeemerConfig` accounts. The `swap_rate_precision`
-    /// is used to scale the `swap_rate`. This instruction is owner-only,
-    /// meaning that only the owner of the program (defined in the [Config]
-    /// account) can register a token.
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx` - `UpdatePrecision` context
-    /// * `swap_rate_precision` - Precision used to scale the `swap_rate`.
-    pub fn update_swap_rate_precision(
-        ctx: Context<UpdatePrecision>,
-        swap_rate_precision: u32,
-    ) -> Result<()> {
-        processor::update_swap_rate_precision(ctx, swap_rate_precision)
     }
 
     /// This instruction updates the `max_native_swap_amount` in the

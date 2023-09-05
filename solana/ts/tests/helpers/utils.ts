@@ -24,8 +24,9 @@ import {
   MINTS_WITH_DECIMALS,
   WETH_ADDRESS,
   TOKEN_BRIDGE_RELAYER_PID,
+  SWAP_RATE_PRECISION,
 } from "./consts";
-import {TOKEN_BRIDGE_PID} from "../helpers";
+import { TOKEN_BRIDGE_PID } from "../helpers";
 import {
   tryNativeToHexString,
   CHAIN_ID_ETH,
@@ -36,7 +37,6 @@ import * as tokenBridgeRelayer from "../../sdk";
 import { deriveWrappedMintKey } from "@certusone/wormhole-sdk/lib/cjs/solana/tokenBridge";
 import * as wormhole from "@certusone/wormhole-sdk/lib/cjs/solana/wormhole";
 import { NATIVE_MINT, getAccount } from "@solana/spl-token";
-
 
 export interface Balances {
   recipient: {
@@ -168,7 +168,7 @@ export async function calculateRelayerFee(
 ) {
   // Fetch the relayer fee.
   const relayerFee = await tokenBridgeRelayer
-    .getRelayerFeeData(connection, programId, targetChain)
+    .getForeignContractData(connection, programId, targetChain)
     .then((data) => data.fee.toNumber());
 
   // Fetch the swap rate.
@@ -177,13 +177,13 @@ export async function calculateRelayerFee(
     .then((data) => data.swapRate.toNumber());
 
   // Fetch the precision values.
-  const [relayerFeePrecision, swapRatePrecision] = await tokenBridgeRelayer
+  const relayerFeePrecision = await tokenBridgeRelayer
     .getRedeemerConfigData(connection, TOKEN_BRIDGE_RELAYER_PID)
-    .then((data) => [data.relayerFeePrecision, data.swapRatePrecision]);
+    .then((data) => data.relayerFeePrecision);
 
   // Calculate the relayer fee.
   return Math.floor(
-    (relayerFee * 10 ** decimals * swapRatePrecision) / (relayerFeePrecision * swapRate)
+    (relayerFee * 10 ** decimals * SWAP_RATE_PRECISION) / (relayerFeePrecision * swapRate)
   );
 }
 
@@ -203,27 +203,22 @@ export async function getSwapInputs(
     .getRegisteredTokenData(connection, programId, NATIVE_MINT)
     .then((data) => data.swapRate.toNumber());
 
-  // Fetch the precision values.
-  const swapRatePrecision = await tokenBridgeRelayer
-    .getRedeemerConfigData(connection, TOKEN_BRIDGE_RELAYER_PID)
-    .then((data) => data.swapRatePrecision);
-
   // Calculate the native swap rate.
-  const nativeSwapRate = Math.floor((swapRatePrecision * solSwapRate) / swapRate);
+  const nativeSwapRate = Math.floor((SWAP_RATE_PRECISION * solSwapRate) / swapRate);
 
   // Calculate the max swap amount.
   let maxNativeSwapAmountInTokens;
   if (decimals > 9) {
     maxNativeSwapAmountInTokens = Math.floor(
-      (maxNativeSwapAmount * nativeSwapRate * 10 ** (decimals - 9)) / swapRatePrecision
+      (maxNativeSwapAmount * nativeSwapRate * 10 ** (decimals - 9)) / SWAP_RATE_PRECISION
     );
   } else {
     maxNativeSwapAmountInTokens = Math.floor(
-      (maxNativeSwapAmount * nativeSwapRate) / (10 ** (9 - decimals) * swapRatePrecision)
+      (maxNativeSwapAmount * nativeSwapRate) / (10 ** (9 - decimals) * SWAP_RATE_PRECISION)
     );
   }
 
-  return [maxNativeSwapAmountInTokens, nativeSwapRate, swapRatePrecision];
+  return [maxNativeSwapAmountInTokens, nativeSwapRate, SWAP_RATE_PRECISION];
 }
 
 export async function calculateSwapAmounts(
@@ -356,7 +351,7 @@ export const boilerPlateReduction = (connection: Connection, defaultSigner: Sign
     signerOrSignersOrComputeUnits?: Signer | Signer[] | number,
     computeUnits?: number,
     options?: ConfirmOptions,
-    logError: boolean = false,
+    logError: boolean = false
   ) => {
     let [signers, units] = (() => {
       if (!signerOrSignersOrComputeUnits) return [[defaultSigner], computeUnits];
@@ -394,9 +389,8 @@ export const boilerPlateReduction = (connection: Connection, defaultSigner: Sign
     computeUnits?: number,
     options?: ConfirmOptions
   ) =>
-    expect(
-      sendAndConfirmIx(ix, signerOrSignersOrComputeUnits, computeUnits, options, true)
-    ).to.be.fulfilled;
+    expect(sendAndConfirmIx(ix, signerOrSignersOrComputeUnits, computeUnits, options, true)).to.be
+      .fulfilled;
 
   const expectIxToFailWithError = async (
     ix: TransactionInstruction | Promise<TransactionInstruction>,
