@@ -16,7 +16,7 @@ export function deriveTokenTransferMessageKey(
       new PublicKey(payer).toBuffer(),
       (() => {
         const buf = Buffer.alloc(8);
-        buf.writeBigUInt64LE(sequence);
+        buf.writeBigUInt64BE(sequence);
         return buf;
       })(),
     ],
