@@ -1,7 +1,7 @@
 use crate::{
     error::TokenBridgeRelayerError,
     state::{OwnerConfig, RedeemerConfig, SenderConfig},
-    BpfLoaderUpgradeable, ID,
+    BpfLoaderUpgradeable, ID, SWAP_RATE_PRECISION
 };
 use anchor_lang::prelude::*;
 use wormhole_anchor_sdk::{token_bridge, wormhole};
@@ -9,9 +9,7 @@ use wormhole_anchor_sdk::{token_bridge, wormhole};
 #[derive(Accounts)]
 pub struct Initialize<'info> {
     #[account(mut)]
-    /// Whoever initializes the config will be the owner of the program. Signer
-    /// for creating the [`SenderConfig`], [`RedeemerConfig`] and [`OwnerConfig`]
-    /// accounts.
+    /// Deployer of the program.
     pub owner: Signer<'info>,
 
     #[account(
@@ -105,8 +103,11 @@ pub fn initialize(
         TokenBridgeRelayerError::InvalidPublicKey
     );
 
-    // Initial precision value for the relayer fee.
-    let initial_relayer_fee_precision: u32 = 100000000;
+    // Initial precision value for the relayer fee. We use the 
+    // `SWAP_RATE_PRECISION` const value here, because the initial
+    // value is the same as the swap rate precision. Unlike the 
+    // swap rate precision, the relayer fee precision can be changed. 
+    let initial_relayer_fee_precision: u32 = SWAP_RATE_PRECISION;
 
     let owner = ctx.accounts.owner.key();
 
