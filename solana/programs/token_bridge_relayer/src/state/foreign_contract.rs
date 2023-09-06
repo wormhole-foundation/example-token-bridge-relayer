@@ -36,7 +36,7 @@ impl ForeignContract {
     ) -> Option<u64> {
         // Compute the numerator.
         let numerator = u128::from(self.fee)
-            .checked_mul(u128::pow(10, decimals.into()))?
+            .checked_mul(u128::checked_pow(10, decimals.into())?)?
             .checked_mul(SWAP_RATE_PRECISION.into())?;
 
         // Compute the denominator.

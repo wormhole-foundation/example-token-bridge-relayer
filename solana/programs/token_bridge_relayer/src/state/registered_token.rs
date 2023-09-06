@@ -39,13 +39,13 @@ impl RegisteredToken {
         let max_swap_amount_in = if decimals > Self::NATIVE_DECIMALS {
             u128::from(self.max_native_swap_amount)
                 .checked_mul(native_swap_rate.into())?
-                .checked_mul(u128::pow(10, (decimals - Self::NATIVE_DECIMALS).into()))?
+                .checked_mul(u128::checked_pow(10, (decimals - Self::NATIVE_DECIMALS).into())?)?
                 .checked_div(SWAP_RATE_PRECISION.into())?
         } else {
             u128::from(self.max_native_swap_amount)
                 .checked_mul(native_swap_rate.into())?
                 .checked_div(
-                    u128::pow(10, (Self::NATIVE_DECIMALS - decimals).into())
+                    u128::checked_pow(10, (Self::NATIVE_DECIMALS - decimals).into())?
                         .checked_mul(u128::from(SWAP_RATE_PRECISION))?,
                 )?
         };
@@ -88,12 +88,12 @@ impl RegisteredToken {
                 .checked_mul(to_native_token_amount.into())?
                 .checked_div(
                     u128::from(native_swap_rate)
-                        .checked_mul(u128::pow(10, (decimals - Self::NATIVE_DECIMALS).into()))?,
+                        .checked_mul(u128::checked_pow(10, (decimals - Self::NATIVE_DECIMALS).into())?)?,
                 )?
         } else {
             u128::from(SWAP_RATE_PRECISION)
                 .checked_mul(to_native_token_amount.into())?
-                .checked_mul(u128::pow(10, (Self::NATIVE_DECIMALS - decimals).into()))?
+                .checked_mul(u128::checked_pow(10, (Self::NATIVE_DECIMALS - decimals).into())?)?
                 .checked_div(native_swap_rate.into())?
         };
 
