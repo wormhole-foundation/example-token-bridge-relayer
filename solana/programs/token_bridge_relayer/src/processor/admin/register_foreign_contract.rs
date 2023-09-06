@@ -1,9 +1,10 @@
 use crate::{
     error::TokenBridgeRelayerError,
-    state::{SenderConfig, ForeignContract},
+    utils::valid_foreign_address,
+    state::{SenderConfig, ForeignContract}
 };
 use anchor_lang::prelude::*;
-use wormhole_anchor_sdk::{token_bridge, wormhole};
+use wormhole_anchor_sdk::token_bridge;
 
 #[derive(Accounts)]
 #[instruction(chain: u16)]
@@ -56,10 +57,6 @@ pub struct RegisterForeignContract<'info> {
 
     /// System program.
     pub system_program: Program<'info, System>,
-}
-
-fn valid_foreign_address(chain: u16, address: &[u8; 32]) -> bool {
-    chain != 0 && chain != wormhole::CHAIN_ID_SOLANA && *address != [0; 32]
 }
 
 pub fn register_foreign_contract(
