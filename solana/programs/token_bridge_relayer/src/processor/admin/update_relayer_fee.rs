@@ -24,7 +24,7 @@ pub struct UpdateRelayerFee<'info> {
         mut,
         seeds = [
             ForeignContract::SEED_PREFIX,
-            &chain.to_le_bytes()[..]
+            &chain.to_be_bytes()[..]
         ],
         bump
     )]

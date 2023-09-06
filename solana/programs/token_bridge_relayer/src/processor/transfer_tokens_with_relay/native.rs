@@ -46,7 +46,7 @@ pub struct TransferNativeWithRelay<'info> {
     #[account(
         seeds = [
             ForeignContract::SEED_PREFIX,
-            &recipient_chain.to_le_bytes()
+            &recipient_chain.to_be_bytes()
         ],
         bump,
     )]

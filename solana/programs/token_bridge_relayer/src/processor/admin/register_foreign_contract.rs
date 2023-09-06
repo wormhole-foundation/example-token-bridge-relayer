@@ -27,7 +27,7 @@ pub struct RegisterForeignContract<'info> {
         payer = owner,
         seeds = [
             ForeignContract::SEED_PREFIX,
-            &chain.to_le_bytes()[..]
+            &chain.to_be_bytes()[..]
         ],
         bump,
         space = 8 + ForeignContract::INIT_SPACE
@@ -67,7 +67,7 @@ pub fn register_foreign_contract(
     // Foreign emitter cannot share the same Wormhole Chain ID as the
     // Solana Wormhole program's. And cannot register a zero address.
     require!(
-        chain > wormhole::CHAIN_ID_SOLANA && !address.iter().all(|&x| x == 0),
+        chain != 0 && chain != wormhole::CHAIN_ID_SOLANA && !address.iter().all(|&x| x == 0),
         TokenBridgeRelayerError::InvalidForeignContract,
     );
 
