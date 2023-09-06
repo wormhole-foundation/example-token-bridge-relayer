@@ -13,12 +13,14 @@ pub struct ForeignContract {
     pub address: [u8; 32],
     /// Token Bridge program's foreign endpoint account key.
     pub token_bridge_foreign_endpoint: Pubkey,
-    /// Relayer fee in USD terms.
+    /// The fee that is paid to the `fee_recipient` upon redeeming a transfer.
+    /// This value is set in terms of USD and scaled by the `relayer_fee_precision`. 
+    /// For example, if the `relayer_fee_precision` is `100000000` and the intended
+    /// fee is $5, then the `fee` value should be `500000000`.
     pub fee: u64,
 }
 
 impl ForeignContract {
-    /// AKA `b"foreign_contract"`.
     pub const SEED_PREFIX: &'static [u8; 16] = b"foreign_contract";
 
     /// Convenience method to check whether an address equals the one saved in

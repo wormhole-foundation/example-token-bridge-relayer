@@ -12,7 +12,6 @@ pub struct RegisteredToken {
 }
 
 impl RegisteredToken {
-    /// AKA `b"mint"`.
     pub const SEED_PREFIX: &'static [u8] = b"mint";
     pub const NATIVE_DECIMALS: u8 = 9;
 
