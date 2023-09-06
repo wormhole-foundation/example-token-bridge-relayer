@@ -58,26 +58,25 @@ pub struct RegisterForeignContract<'info> {
     pub system_program: Program<'info, System>,
 }
 
+fn valid_foreign_address(chain: u16, address: &[u8; 32]) -> bool {
+    chain != 0 && chain != wormhole::CHAIN_ID_SOLANA && *address != [0; 32]
+}
+
 pub fn register_foreign_contract(
     ctx: Context<RegisterForeignContract>,
     chain: u16,
     address: [u8; 32],
     fee: u64,
 ) -> Result<()> {
-    // Foreign emitter cannot share the same Wormhole Chain ID as the
-    // Solana Wormhole program's. And cannot register a zero address.
     require!(
-        chain != 0 && chain != wormhole::CHAIN_ID_SOLANA && !address.iter().all(|&x| x == 0),
-        TokenBridgeRelayerError::InvalidForeignContract,
+        valid_foreign_address(chain, &address),
+        TokenBridgeRelayerError::InvalidForeignContract
     );
-
-    // Save the emitter info into the ForeignEmitter account.
     let emitter = &mut ctx.accounts.foreign_contract;
     emitter.chain = chain;
     emitter.address = address;
     emitter.token_bridge_foreign_endpoint = ctx.accounts.token_bridge_foreign_endpoint.key();
     emitter.fee = fee;
 
-    // Done.
     Ok(())
 }
