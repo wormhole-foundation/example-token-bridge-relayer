@@ -18,14 +18,7 @@ clean:
 	rm -rf node_modules .anchor
 	anchor clean
 
-#phony targets above, non-phony targets below
-
-ifneq ($(NETWORK), $(shell cat target/network_changed 2>/dev/null))
-#force update of target/network_changed if value of NETWORK changed from last time
-.PHONY: target/network_changed
-endif
-target/network_changed:
-	echo $(NETWORK) > target/network_changed
+# phony targets above, non-phony targets below
 
 node_modules: package.json yarn.lock
 	@echo "> Updating node modules"

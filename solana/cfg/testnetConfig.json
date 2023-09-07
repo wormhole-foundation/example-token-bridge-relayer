@@ -31,6 +31,10 @@
     "21": {
       "relayer": "5b15004fca4fa94c9396a92bbdb19ab00fc067906447eb6c35029ebb7e5f7a32",
       "tokenBridge": "40440411a170b4842ae7dee4f4a7b7a58bc0a98566e998850a7bb87bf5dc05b9"
+    },
+    "30": {
+      "relayer": "000000000000000000000000aE8dc4a7438801Ec4edC0B035EcCCcF3807F4CC1",
+      "tokenBridge": "000000000000000000000000A31aa3FDb7aF7Db93d18DDA4e19F811342EDF780"
     }
   },
   "acceptedTokensList": [
@@ -61,19 +65,19 @@
     {
       "symbol": "WBNB",
       "mint": "BaGfF51MQ3a61papTRDYaNefBgTQ9ywnVne5fCff4bxT",
-      "swapRate": "30000000000",
+      "swapRate": "23000000000",
       "maxNativeSwapAmount": "100000000"
     },
     {
       "symbol": "WMATIC",
       "mint": "ACbmcQxbbhiXWM1GmapUSMmBYKMvnFLfAAXKqdo8xKwo",
-      "swapRate": "110000000",
+      "swapRate": "100000000",
       "maxNativeSwapAmount": "100000000"
     },
     {
       "symbol": "WETH",
       "mint": "7VPWjBhCXrpYYBiRKZh1ubh9tLZZNkZGp2ReRphEV4Mc",
-      "swapRate": "180000000000",
+      "swapRate": "160000000000",
       "maxNativeSwapAmount": "100000000"
     },
     {
@@ -109,6 +113,7 @@
     "10": "2500000",
     "14": "5000000",
     "16": "5000000",
-    "21": "5000000"
+    "21": "5000000",
+    "30": "5000000"
   }
 }
