@@ -1,0 +1,40 @@
+[features]
+seeds = false
+skip-lint = false
+
+[workspace]
+members = [
+    "programs/token_bridge_relayer",
+]
+
+
+[programs.localnet]
+token_bridge_relayer = "Examp1eTokenBridgeRe1ayer1111111111111111111"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 ts/tests/*.ts"
+
+[test]
+startup_wait = 10000
+
+[test.validator]
+url = "https://api.mainnet-beta.solana.com"
+
+### MPL Token Metadata
+[[test.validator.clone]]
+address = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+
+### Wormhole Core Bridge
+[[test.validator.clone]]
+address = "worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth"
+
+### Wormhole Token Bridge
+[[test.validator.clone]]
+address = "wormDTUJ6AWPNvk59vGQbDvGJmqbDTdgWgAqcLBCgUb"

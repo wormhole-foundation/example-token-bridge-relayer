@@ -10,7 +10,15 @@ This repository was generated from the [wormhole-scaffolding](https://github.com
 
 Install [Foundry tools](https://book.getfoundry.sh/getting-started/installation), which include `forge`, `anvil` and `cast` CLI tools.
 
-### SUI
+### Solana
+
+> **Warning**
+> Known to cause problems with Solana version 1.15 - downgrade to Solana 1.14.14
+
+Install `cargo` and `anchor` CLI tools. If you need these tools,
+please visit the [Anchor book] for more details.
+
+### Sui
 
 Install the `Sui` CLI. This tool is used to compile the contracts and run the tests.
 
@@ -40,3 +48,6 @@ See the relayer [README.md](./relayer/README.md) file.
 ## Design
 
 ![alt text](./docs/design.png)
+
+[anchor book]: https://book.anchor-lang.com/getting_started/installation.html
+[wormhole repo]: https://github.com/wormhole-foundation/wormhole/tree/dev.v2/solana

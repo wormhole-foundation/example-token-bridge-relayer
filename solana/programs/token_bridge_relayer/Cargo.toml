@@ -1,0 +1,25 @@
+[package]
+name = "token-bridge-relayer"
+version = "0.1.0"
+description = "Token Bridge Relayer"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "token_bridge_relayer"
+
+[features]
+default = ["devnet"]
+mainnet = ["wormhole-anchor-sdk/mainnet"]
+testnet = ["wormhole-anchor-sdk/solana-devnet"]
+devnet = ["wormhole-anchor-sdk/mainnet"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+
+[dependencies]
+anchor-lang = { version = "0.27.0", features = ["init-if-needed"]}
+anchor-spl = "0.27.0"
+wormhole-anchor-sdk = { git = "https://github.com/wormhole-foundation/wormhole-scaffolding", rev = "2917c61198ab4172680aabc821953020492eec6c", features = ["token-bridge"]}
+solana-program = "=1.14.16"
