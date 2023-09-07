@@ -37,7 +37,7 @@ pub mod token_bridge_relayer {
     ///
     /// * `ctx`           - `Initialize` context
     /// * `fee_recipient` - Recipient of all relayer fees and swap proceeds
-    /// * `assistant`     - Priviledged key to manage certain accounts
+    /// * `assistant`     - Privileged key to manage certain accounts
     pub fn initialize(
         ctx: Context<Initialize>,
         fee_recipient: Pubkey,
@@ -76,7 +76,7 @@ pub mod token_bridge_relayer {
     ///
     /// * `ctx` - `RegisterToken` context
     /// * `swap_rate`:
-    ///    - USD converion rate scaled by the `swap_rate_precision`. For example,
+    ///    - USD conversion rate scaled by the `swap_rate_precision`. For example,
     ///    - if the conversion rate is $15 and the `swap_rate_precision` is
     ///    - 1000000, the `swap_rate` should be set to 15000000.
     /// * `max_native_swap_amount`:
@@ -245,7 +245,7 @@ pub mod token_bridge_relayer {
     /// `to_native_token_amount` to swap some of the tokens for the native
     /// asset on the target chain. For a fee, an off-chain relayer will redeem
     /// the transfer on the target chain. If the user is transferring native
-    /// SOL, the contract will autormatically wrap the lamports into a WSOL.
+    /// SOL, the contract will automatically wrap the lamports into a WSOL.
     ///
     /// # Arguments
     ///

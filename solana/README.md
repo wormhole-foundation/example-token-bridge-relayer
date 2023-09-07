@@ -20,16 +20,6 @@ This will also install this subdirectory's dependencies, such as
 `target/deploy/`. This keypair can be used for devnet, testnet and mainnet. Do not delete this
 key after deploying to the network of your choice.
 
-You will need to add the program's public key to a few different files. To fetch the public key, run the following command:
-
-- `solana-keygen pubkey target/deploy/token_bridge_relayer-keypair.json`
-
-Then add the public key to the following files:
-
-- `Anchor.toml`
-- `run_integration_test.sh`
-- `programs/src/lib.rs`
-
 ## Tests
 
 To run both unit and integration tests, run `make test`. If you want to isolate
@@ -41,7 +31,15 @@ your testing, use either of these commands:
 
 ## Deployment
 
-First, build based on the target network. The deployment options are `devnet`, `testnet` and `mainnet`. We will use `testnet` as an example for this README.
+First, generate a program public key by running the following command:
+
+- `solana-keygen pubkey target/deploy/token_bridge_relayer-keypair.json`
+
+Add your program's public key to the following file:
+
+- `programs/src/lib.rs`
+
+Then, build based on the target network. The deployment options are `devnet`, `testnet` and `mainnet`. We will use `testnet` as an example for this README.
 
 - `NETWORK=testnet make build`
 
