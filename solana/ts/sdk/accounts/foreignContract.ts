@@ -10,7 +10,7 @@ export function deriveForeignContractKey(programId: PublicKeyInitData, chain: Ch
       Buffer.from("foreign_contract"),
       (() => {
         const buf = Buffer.alloc(2);
-        buf.writeUInt16LE(chain);
+        buf.writeUInt16BE(chain);
         return buf;
       })(),
     ],

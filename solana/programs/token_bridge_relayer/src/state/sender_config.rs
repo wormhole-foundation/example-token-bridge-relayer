@@ -3,7 +3,7 @@ use wormhole_anchor_sdk::token_bridge;
 
 #[derive(Default, AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq, InitSpace)]
 pub struct OutboundTokenBridgeAddresses {
-    // program pdas
+    // Program pdas.
     pub sequence: Pubkey,
 }
 
@@ -25,6 +25,5 @@ pub struct SenderConfig {
 }
 
 impl SenderConfig {
-    /// AKA `b"sender"`.
     pub const SEED_PREFIX: &'static [u8] = token_bridge::SEED_PREFIX_SENDER;
 }

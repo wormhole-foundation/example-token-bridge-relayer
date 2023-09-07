@@ -14,7 +14,7 @@ impl SignerSequence {
 
         self.value += 1;
 
-        seq.to_le_bytes()
+        seq.to_be_bytes()
     }
 }
 

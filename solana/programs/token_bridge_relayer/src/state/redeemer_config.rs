@@ -17,6 +17,5 @@ pub struct RedeemerConfig {
 }
 
 impl RedeemerConfig {
-    /// AKA `b"redeemer"`.
     pub const SEED_PREFIX: &'static [u8; 8] = token_bridge::SEED_PREFIX_REDEEMER;
 }

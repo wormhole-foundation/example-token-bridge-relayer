@@ -39,7 +39,7 @@ pub struct CompleteWrappedWithRelay<'info> {
     #[account(
         seeds = [
             ForeignContract::SEED_PREFIX,
-            &vaa.emitter_chain().to_le_bytes()[..]
+            &vaa.emitter_chain().to_be_bytes()[..]
         ],
         bump,
         constraint = foreign_contract.verify(&vaa) @ TokenBridgeRelayerError::InvalidForeignContract

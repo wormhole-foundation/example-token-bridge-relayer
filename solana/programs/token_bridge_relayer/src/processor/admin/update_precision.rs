@@ -5,8 +5,9 @@ use crate::{
 use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
-// This context is used to update both the swap_rate_precision and
-// relayer_fee_precision.
+// This context is used to update the relayer_fee_precision. This value
+// is used to scale the `relayer_fee` that is paid to the `fee_recipient`
+// upon redeeming a token transfer. 
 pub struct UpdatePrecision<'info> {
     /// Owner of the program set in the [`RedeemerConfig`] and [`SenderConfig`] account.
     pub owner: Signer<'info>,
@@ -43,13 +44,9 @@ pub fn update_relayer_fee_precision(
         relayer_fee_precision > 0,
         TokenBridgeRelayerError::InvalidPrecision,
     );
-
-    // Update redeemer config.
     let redeemer_config = &mut ctx.accounts.redeemer_config;
-    redeemer_config.relayer_fee_precision = relayer_fee_precision;
-
-    // Update sender config.
     let sender_config = &mut ctx.accounts.sender_config;
+    redeemer_config.relayer_fee_precision = relayer_fee_precision;
     sender_config.relayer_fee_precision = relayer_fee_precision;
 
     // Done.

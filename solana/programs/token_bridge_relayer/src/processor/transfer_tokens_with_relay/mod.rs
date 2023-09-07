@@ -7,11 +7,12 @@ pub use wrapped::*;
 use crate::{
     error::TokenBridgeRelayerError,
     message::TokenBridgeRelayerMessage,
+    utils::valid_foreign_address,
     state::{RegisteredToken, SenderConfig, ForeignContract},
 };
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use wormhole_anchor_sdk::{token_bridge, wormhole};
+use wormhole_anchor_sdk::token_bridge;
 
 struct PrepareTransfer<'ctx, 'info> {
     pub config: &'ctx Account<'info, SenderConfig>,
@@ -39,11 +40,8 @@ fn prepare_transfer(
         token_bridge_authority_signer,
         token_program,
     } = prepare_transfer;
-
-    // Confirm that the user passed a valid target wallet on a registered
-    // chain.
     require!(
-        recipient_chain > wormhole::CHAIN_ID_SOLANA && recipient != [0; 32],
+        valid_foreign_address(recipient_chain, &recipient),
         TokenBridgeRelayerError::InvalidRecipient,
     );
 

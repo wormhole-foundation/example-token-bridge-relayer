@@ -1,9 +1,10 @@
 use crate::{
     error::TokenBridgeRelayerError,
-    state::{SenderConfig, ForeignContract},
+    utils::valid_foreign_address,
+    state::{SenderConfig, ForeignContract}
 };
 use anchor_lang::prelude::*;
-use wormhole_anchor_sdk::{token_bridge, wormhole};
+use wormhole_anchor_sdk::token_bridge;
 
 #[derive(Accounts)]
 #[instruction(chain: u16)]
@@ -27,7 +28,7 @@ pub struct RegisterForeignContract<'info> {
         payer = owner,
         seeds = [
             ForeignContract::SEED_PREFIX,
-            &chain.to_le_bytes()[..]
+            &chain.to_be_bytes()[..]
         ],
         bump,
         space = 8 + ForeignContract::INIT_SPACE
@@ -64,20 +65,15 @@ pub fn register_foreign_contract(
     address: [u8; 32],
     fee: u64,
 ) -> Result<()> {
-    // Foreign emitter cannot share the same Wormhole Chain ID as the
-    // Solana Wormhole program's. And cannot register a zero address.
     require!(
-        chain > wormhole::CHAIN_ID_SOLANA && !address.iter().all(|&x| x == 0),
-        TokenBridgeRelayerError::InvalidForeignContract,
+        valid_foreign_address(chain, &address),
+        TokenBridgeRelayerError::InvalidForeignContract
     );
-
-    // Save the emitter info into the ForeignEmitter account.
     let emitter = &mut ctx.accounts.foreign_contract;
     emitter.chain = chain;
     emitter.address = address;
     emitter.token_bridge_foreign_endpoint = ctx.accounts.token_bridge_foreign_endpoint.key();
     emitter.fee = fee;
 
-    // Done.
     Ok(())
 }
