@@ -13,7 +13,7 @@ Install [Foundry tools](https://book.getfoundry.sh/getting-started/installation)
 ### Solana
 
 > **Warning**
-> Known to cause problems with Solana version 1.15 - downgrade to Solana 1.14.14
+> Only Solana versions >= 1.14.14 and < 1.15 are supported.
 
 Install `cargo` and `anchor` CLI tools. If you need these tools,
 please visit the [Anchor book] for more details.
@@ -40,10 +40,6 @@ supported chains, and generating signed messages (VAAs) for testing.
 ## Build, Test and Deploy Smart Contracts
 
 Each directory represents Wormhole integrations for specific blockchain networks. Please navigate to a network subdirectory to see more details (see the relevant README.md) on building, testing and deploying the smart contracts.
-
-## Off-Chain Relayers
-
-See the relayer [README.md](./relayer/README.md) file.
 
 ## Design
 
