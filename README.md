@@ -45,5 +45,8 @@ Each directory represents Wormhole integrations for specific blockchain networks
 
 ![alt text](./docs/design.png)
 
+Also see the [design doc].
+
 [anchor book]: https://book.anchor-lang.com/getting_started/installation.html
 [wormhole repo]: https://github.com/wormhole-foundation/wormhole/tree/dev.v2/solana
+[design doc]: https://github.com/wormhole-foundation/example-token-bridge-relayer/blob/cleanup/DESIGN.md
