@@ -58,10 +58,10 @@ Once the contracts have been deployed, the deployment configuration file needs t
 
 ```
 # copy the testnet sample config
-cp testnetDeploymentConfig.json.sample deploymentConfig.json
+cp testnetDeploymentConfig.json.sample testnetDeploymentConfig.json
 
 # or copy the mainnet sample config
-cp mainnetDeploymentConfig.json.sample deploymentConfig.json
+cp mainnetDeploymentConfig.json.sample mainnetDeploymentConfig.json
 ```
 
 Replace the sample `deployedContracts` with your deployed contract addresses (32-byte format) keyed by Wormhole Chain ID.
