@@ -47,7 +47,7 @@ export RELEASE_UNWRAP_WETH=
 Then deploy the contracts by executing the following command:
 
 ```
-. env/network_subdirectory/your_environment_file.env && PRIVATE_KEY=your_private_key_here bash shell-scripts/deploy_token_bridge_relayer.sh
+. env/network_subdirectory/your_environment_file.env && shell-scripts/deploy_token_bridge_relayer.sh --private-key your_private_key_here
 ```
 
 ## Initial Contract Setup
