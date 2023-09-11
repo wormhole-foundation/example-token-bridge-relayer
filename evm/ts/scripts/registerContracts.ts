@@ -14,7 +14,7 @@ async function registerContract(
 ): Promise<TxResult> {
   // query the contract and see if the contract is already registered
   const beforeRegistrationEmitter = await relayer.getRegisteredContract(chainId);
-  if (beforeRegistrationEmitter === contract) {
+  if (beforeRegistrationEmitter.toLowerCase() === contract.toLowerCase()) {
     console.log(`Contract already registered for chainId=${chainId}`);
     return TxResult.Success("");
   } else if (beforeRegistrationEmitter !== ZERO_BYTES32) {
