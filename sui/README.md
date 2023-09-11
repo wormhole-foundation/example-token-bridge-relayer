@@ -105,7 +105,7 @@ source env/your_file.env && yarn set-relayer-fees
 To register the tokens defined in the `acceptedTokensList` section of your `deploymentConfig.json`, run the following command. This command will also set the `swapRate`, `maxNativeSwapAmount` and `swapEnabled` values for each token.
 
 ```
-source env/your_file.env && yarn register-tokens.
+source env/your_file.env && yarn register-tokens
 ```
 
 ## Send Outbound Test Transfer
