@@ -130,7 +130,7 @@ contract ContractScript is Script {
         uint256 amount = vm.envUint("TEST_AMOUNT");
         uint256 toNativeTokenAmount = vm.envUint("TEST_TO_NATIVE_AMOUNT");
         uint16 targetChain = uint16(vm.envUint("TEST_TARGET_CHAIN_ID"));
-        bytes32 targetRecipient = bytes32(uint256(uint160(msg.sender)));
+        bytes32 targetRecipient = bytes32(vm.envBytes32("TEST_TARGET_RECIPIENT"));
 
         // transfer tokens
         if (isNative) {
