@@ -94,6 +94,6 @@ export async function createATAForRecipient(
   try {
     await getOrCreateAssociatedTokenAccount(connection, payer, mint, recipient);
   } catch (error: any) {
-    throw new Error("Failed to create ATA: " + error);
+    throw new Error("Failed to create ATA: " + (error?.stack || error));
   }
 }
