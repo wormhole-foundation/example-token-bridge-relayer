@@ -264,7 +264,7 @@ export async function getTokenInfo(
   );
 
   if (targetDynamicField.length != 1) {
-    throw new Error("Token info not found");
+    throw new Error(`Token info not found for coinType=${coinType}`);
   }
 
   // Fetch the `TokenInfo` dynamic field.
