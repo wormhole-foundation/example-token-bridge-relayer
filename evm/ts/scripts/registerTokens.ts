@@ -56,21 +56,27 @@ async function parseArgs(): Promise<Arguments> {
 async function registerToken(
   relayer: ITokenBridgeRelayer,
   chainId: SupportedChainId,
-  contract: string
+  token: string
 ): Promise<TxResult> {
+  const isAccepted = await relayer.isAcceptedToken(token);
+  if (isAccepted) {
+    console.log(`Token already registered chainId=${chainId}, token=${token}`);
+    return TxResult.Success("");
+  }
+
   const overrides = await buildOverrides(
-    () => relayer.estimateGas.registerToken(RELEASE_CHAIN_ID, contract),
+    () => relayer.estimateGas.registerToken(RELEASE_CHAIN_ID, token),
     RELEASE_CHAIN_ID
   );
 
-  const tx = await relayer.registerToken(RELEASE_CHAIN_ID, contract, overrides);
-  console.log(`Token register tx sent, chainId=${chainId}, token=${contract}, txHash=${tx.hash}`);
+  const tx = await relayer.registerToken(RELEASE_CHAIN_ID, token, overrides);
+  console.log(`Token register tx sent, chainId=${chainId}, token=${token}, txHash=${tx.hash}`);
   const receipt = await tx.wait();
 
-  const successMessage = `Success: token registered, chainId=${chainId}, token=${contract}, txHash=${receipt.transactionHash}`;
+  const successMessage = `Success: token registered, chainId=${chainId}, token=${token}, txHash=${receipt.transactionHash}`;
   const failureMessage = `Failed: could not register token, chainId=${chainId}`;
   return TxResult.create(receipt, successMessage, failureMessage, () =>
-    relayer.isAcceptedToken(contract)
+    relayer.isAcceptedToken(token)
   );
 }
 
@@ -98,33 +104,39 @@ async function updateSwapRate(
 async function updateMaxNativeSwapAmount(
   relayer: ITokenBridgeRelayer,
   chainId: SupportedChainId,
-  contract: string,
+  token: string,
   originalTokenAddress: string,
   maxNativeSwapAmount: string
 ): Promise<TxResult> {
+  const currentMaxNativeSwap = await relayer.maxNativeSwapAmount(token);
+  if (currentMaxNativeSwap.eq(maxNativeSwapAmount)) {
+    console.log(`Max swap amount already set for chainId=${chainId}, token=${token}`);
+    return TxResult.Success("");
+  }
+
   const maxNativeToUpdate = ethers.BigNumber.from(maxNativeSwapAmount);
 
   const overrides = await buildOverrides(
     () =>
-      relayer.estimateGas.updateMaxNativeSwapAmount(RELEASE_CHAIN_ID, contract, maxNativeToUpdate),
+      relayer.estimateGas.updateMaxNativeSwapAmount(RELEASE_CHAIN_ID, token, maxNativeToUpdate),
     RELEASE_CHAIN_ID
   );
 
   const tx = await relayer.updateMaxNativeSwapAmount(
     RELEASE_CHAIN_ID,
-    contract,
+    token,
     maxNativeToUpdate,
     overrides
   );
   console.log(
-    `Max swap amount update tx sent, chainId=${chainId}, token=${contract}, max=${maxNativeSwapAmount}, txHash=${tx.hash}`
+    `Max swap amount update tx sent, chainId=${chainId}, token=${token}, max=${maxNativeSwapAmount}, txHash=${tx.hash}`
   );
   const receipt = await tx.wait();
-  const successMessage = `Success: max swap amount updated, chainId=${chainId}, token=${contract}, max=${maxNativeSwapAmount}, txHash=${receipt.transactionHash}`;
+  const successMessage = `Success: max swap amount updated, chainId=${chainId}, token=${token}, max=${maxNativeSwapAmount}, txHash=${receipt.transactionHash}`;
   const failureMessage = `Failed: could not update max native swap amount, chainId=${chainId}, token=${originalTokenAddress}`;
 
   return TxResult.create(receipt, successMessage, failureMessage, async () => {
-    const maxNativeInContract = await relayer.maxNativeSwapAmount(contract);
+    const maxNativeInContract = await relayer.maxNativeSwapAmount(token);
     return maxNativeInContract.eq(maxNativeToUpdate);
   });
 }
