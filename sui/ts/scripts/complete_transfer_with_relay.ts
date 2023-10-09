@@ -22,6 +22,7 @@ import {
   CHAIN_ID_SUI,
   getIsTransferCompletedSui,
 } from "@certusone/wormhole-sdk";
+import { uint8ArrayToBCS } from "@certusone/wormhole-sdk/lib/cjs/sui";
 import {ethers} from "ethers";
 import {
   getObjectFields,
@@ -50,17 +51,6 @@ export function getArgs() {
     throw Error("Invalid arguments");
   }
 }
-
-// Foreign relayer contracts. (Lazy list).
-const REGISTERED_RELAYER_CONTRACTS = [
-  "000000000000000000000000e32b14c48e4b7c6825b855f231786fe5ba9ce014",
-  "0000000000000000000000008369839932222c1ca3bc7d16f970c56f61993a44",
-  "00000000000000000000000049a401f7fa594bc618a7a39b316b78e329620103",
-  "0000000000000000000000005122298f68341a088c5370d7678e13912e4ed378",
-  "0000000000000000000000005c9da01cbf5088ee660b9701dc526c6e5df1c239",
-  "000000000000000000000000953a2342496b15d69dec25c8e62274995e82d243",
-  "000000000000000000000000a098368aaadc0fdf3e309cda710d7a5f8bdeecd9",
-];
 
 const SUI_TYPE =
   "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI";
@@ -118,7 +108,7 @@ export async function getSwapQuote(
 async function relay(
   provider: JsonRpcProvider,
   wallet: RawSigner,
-  vaa: string
+  vaa: Uint8Array
 ) {
   // Fetch relayer state.
   const state = await getObjectFields(provider, RELAYER_STATE_ID);
@@ -127,7 +117,7 @@ async function relay(
   const isRedeemed = await getIsTransferCompletedSui(
     provider,
     TOKEN_BRIDGE_STATE_ID,
-    Uint8Array.from(Buffer.from(vaa, "hex"))
+    vaa
   );
 
   if (isRedeemed) {
@@ -136,7 +126,7 @@ async function relay(
   }
 
   // Parse the VAA.
-  const parsedVaa = parseVaa(Buffer.from(vaa, "hex"));
+  const parsedVaa = parseVaa(vaa);
 
   // Make sure it's a payload 3.
   const payloadType = parsedVaa.payload.readUint8(0);
@@ -157,19 +147,11 @@ async function relay(
     return;
   }
 
-  // Confirm that the sender is a registered contract. This lazily checks an
-  // array of addresses. The relayer should have a mapping or check the
-  // contract state.
-  if (!REGISTERED_RELAYER_CONTRACTS.includes(transferPayload.fromAddress!)) {
-    console.log("Sender is not a registered relayer contract");
-    return;
-  }
-
   // Fetch the coinType.
   const coinType = await getTokenCoinType(
     provider,
     TOKEN_BRIDGE_STATE_ID,
-    Uint8Array.from(Buffer.from(transferPayload.originAddress, "hex")),
+    Buffer.from(transferPayload.originAddress, "hex"),
     transferPayload.originChain
   );
 
@@ -223,7 +205,7 @@ async function relay(
     target: `${WORMHOLE_ID}::vaa::parse_and_verify`,
     arguments: [
       tx.object(WORMHOLE_STATE_ID),
-      tx.pure(Array.from(Buffer.from(vaa, "hex"))),
+      tx.pure(uint8ArrayToBCS(vaa)),
       tx.object(SUI_CLOCK_OBJECT_ID),
     ],
   });
@@ -267,7 +249,7 @@ async function relay(
     const isRedeemed = await getIsTransferCompletedSui(
       provider,
       TOKEN_BRIDGE_STATE_ID,
-      Uint8Array.from(Buffer.from(vaa, "hex"))
+      vaa
     );
 
     if (isRedeemed) {
@@ -292,7 +274,8 @@ async function main() {
   const wallet = new RawSigner(key, provider);
 
   // Complete the transfer.
-  await relay(provider, wallet, args.vaa);
+  const vaaBuf = Buffer.from(args.vaa, "hex");
+  await relay(provider, wallet, vaaBuf);
 }
 
 main();

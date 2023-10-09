@@ -14,7 +14,7 @@ export async function getWormholeFee(provider: JsonRpcProvider) {
   const fields = await getObjectFields(provider, WORMHOLE_STATE_ID);
 
   if (fields === null) {
-    Promise.reject("State object not found.");
+    throw new Error("State object not found.");
   }
 
   // Cache wormhole fee.
@@ -57,7 +57,7 @@ export function createTransferWithRelayPayload(
     .substring(2);
 
   if (recipient.substring(0, 2) != "0x" || recipient.length != 66) {
-    throw Error("Invalid recipient parameter");
+    throw new Error("Invalid recipient parameter");
   }
 
   return (
@@ -156,7 +156,7 @@ export async function getDynamicObjectFields(
     });
 
   if (dynamicObjectFieldInfo === null) {
-    return Promise.reject("invalid dynamic object field");
+    throw new Error("Invalid dynamic object field");
   }
 
   return dynamicObjectFieldInfo;
@@ -174,12 +174,11 @@ export async function getTableFromDynamicObjectField(
   );
 
   // Fetch the table's keys
-  const keys = await provider
-    .getDynamicFields({parentId: dynamicObjectInfo!.fields.id.id})
-    .then((result) => result.data);
+  const dynamicFields = await provider.getDynamicFields({parentId: dynamicObjectInfo!.fields.id.id});
+  const keys = dynamicFields.data;
 
   if (keys.length == 0) {
-    return Promise.reject("dynamic field not found");
+    return [];
   }
 
   // Create array of key value pairs
@@ -207,7 +206,7 @@ export async function getCoinWithHighestBalance(
     .then((result) => result.data);
 
   if (coins.length == 0) {
-    return Promise.reject("no coins with balance found");
+    throw new Error("No coins with balance found");
   }
 
   let balanceMax = 0;
@@ -240,7 +239,7 @@ export async function getTableByName(
     );
 
   if (dynamicField.length === null) {
-    return Promise.reject("table not found");
+    throw new Error("Table not found");
   }
 
   // Fetch the `relayer_fee` dynamic field.
@@ -265,7 +264,7 @@ export async function getTokenInfo(
   );
 
   if (targetDynamicField.length != 1) {
-    return Promise.reject("Token info not found");
+    throw new Error(`Token info not found for coinType=${coinType}`);
   }
 
   // Fetch the `TokenInfo` dynamic field.

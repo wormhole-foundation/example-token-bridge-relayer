@@ -30,12 +30,28 @@ async function register_foreign_contracts(
   wallet: RawSigner,
   config: Config[]
 ) {
-  // Register the foreign contract.
-  const tx = new TransactionBlock();
+  // Fetch the current registered contracts table.
+  const currentRegisteredContracts = await getTableByName(
+    provider,
+    RELAYER_STATE_ID,
+    "foreign_contracts"
+  );
+  const registrationsDictionary: Record<string, string | undefined> = {};
+  for (const [chain, value] of currentRegisteredContracts) {
+    const contract = Buffer.from(value.fields.value.fields.data).toString("hex");
+    registrationsDictionary[chain] = contract;
+  }
 
+  const tx = new TransactionBlock();
   // Register each contract address.
   for (const contractMap of config) {
     validateContractAddress(contractMap.address);
+
+    const currentRegistration = registrationsDictionary[contractMap.chain];
+    if (currentRegistration?.toLowerCase() === contractMap.address.toLowerCase()) {
+      console.log(`Contract already registered for chainId=${contractMap.chain}`);
+      continue;
+    }
 
     // Do the registration.
     tx.moveCall({
@@ -48,6 +64,11 @@ async function register_foreign_contracts(
       ],
     });
   }
+
+  if (tx.blockData.transactions.length === 0) {
+    return;
+  }
+
   const {digest} = await executeTransactionBlock(wallet, tx);
   await pollTransactionForEffectsCert(wallet, digest);
 

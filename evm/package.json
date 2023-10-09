@@ -9,13 +9,14 @@
     "ethers": "^5.7.1"
   },
   "dependencies": {
-    "@certusone/wormhole-sdk": "0.9",
+    "@certusone/wormhole-sdk": "^0.9.16",
     "@openzeppelin/contracts": "^4.8.0",
     "@typechain/ethers-v5": "^10.1.1",
     "@types/chai": "^4.3.3",
     "@types/mocha": "^9.1.1",
     "@types/yargs": "^17.0.19",
     "elliptic": "^6.5.4",
+    "@xlabs-xyz/ledger-signer": "0.0.3",
     "mocha": "^10.0.0",
     "ts-mocha": "^10.0.0",
     "typechain": "^8.1.1",

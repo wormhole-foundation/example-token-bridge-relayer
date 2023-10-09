@@ -47,7 +47,7 @@ export RELEASE_UNWRAP_WETH=
 Then deploy the contracts by executing the following command:
 
 ```
-. env/network_subdirectory/your_environment_file.env && PRIVATE_KEY=your_private_key_here bash shell-scripts/deploy_token_bridge_relayer.sh
+. env/network_subdirectory/your_environment_file.env && shell-scripts/deploy_token_bridge_relayer.sh --private-key your_private_key_here
 ```
 
 ## Initial Contract Setup
@@ -58,10 +58,10 @@ Once the contracts have been deployed, the deployment configuration file needs t
 
 ```
 # copy the testnet sample config
-cp testnetDeploymentConfig.json.sample deploymentConfig.json
+cp testnetDeploymentConfig.json.sample testnetDeploymentConfig.json
 
 # or copy the mainnet sample config
-cp mainnetDeploymentConfig.json.sample deploymentConfig.json
+cp mainnetDeploymentConfig.json.sample mainnetDeploymentConfig.json
 ```
 
 Replace the sample `deployedContracts` with your deployed contract addresses (32-byte format) keyed by Wormhole Chain ID.

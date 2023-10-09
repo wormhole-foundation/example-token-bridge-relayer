@@ -1,36 +1,38 @@
-import {ethers} from "ethers";
+import { ethers } from "ethers";
+import { RELEASE_CHAIN_ID, RELEASE_RPC, RELEASE_BRIDGE_ADDRESS, ZERO_ADDRESS } from "./consts";
+import { tryHexToNativeString, tryUint8ArrayToNative } from "@certusone/wormhole-sdk";
 import {
-  RELEASE_CHAIN_ID,
-  RELEASE_RPC,
-  WALLET_PRIVATE_KEY,
-  RELEASE_BRIDGE_ADDRESS,
-  ZERO_ADDRESS,
-} from "./consts";
-import {
-  tryHexToNativeString,
-  ChainId,
-  tryUint8ArrayToNative,
-} from "@certusone/wormhole-sdk";
-import {
+  ITokenBridge,
+  ITokenBridgeRelayer,
   ITokenBridgeRelayer__factory,
   ITokenBridge__factory,
 } from "../src/ethers-contracts";
-import {SwapRateUpdate} from "../helpers/interfaces";
+import { SwapRateUpdate } from "../helpers/interfaces";
 import * as fs from "fs";
-import yargs from "yargs";
+import {
+  Config,
+  ConfigArguments,
+  SupportedChainId,
+  isChain,
+  isOperatingChain,
+  configArgsParser,
+} from "./config";
+import { SignerArguments, addSignerArgsParser, getSigner } from "./signer";
+import { Check, TxResult, buildOverrides, executeChecks, handleFailure } from "./tx";
 
-interface Arguments {
+interface CustomArguments {
   setSwapRates: boolean;
   setMaxNativeAmounts: boolean;
 }
 
-// parsed command-line arguments
-function parseArgs(): Arguments {
-  const parsed: any = yargs(process.argv.slice(1))
+type Arguments = CustomArguments & SignerArguments & ConfigArguments;
+
+async function parseArgs(): Promise<Arguments> {
+  const parsed = await addSignerArgsParser(configArgsParser())
     .option("setSwapRates", {
       string: false,
       boolean: true,
-      description: "sets swaps rates if true",
+      description: "sets swap rates if true",
       required: true,
     })
     .option("setMaxNativeAmount", {
@@ -38,11 +40,12 @@ function parseArgs(): Arguments {
       boolean: true,
       description: "sets max native swap amounts if true",
       required: true,
-    })
-    .help("h")
-    .alias("h", "help").argv;
+    }).argv;
 
   const args: Arguments = {
+    useLedger: parsed.ledger,
+    derivationPath: parsed.derivationPath,
+    config: parsed.config,
     setSwapRates: parsed.setSwapRates,
     setMaxNativeAmounts: parsed.setMaxNativeAmount,
   };
@@ -51,159 +54,111 @@ function parseArgs(): Arguments {
 }
 
 async function registerToken(
-  relayer: ethers.Contract,
-  chainId: Number,
-  contract: ethers.BytesLike
-): Promise<boolean> {
-  let result: boolean = false;
-
-  const overrides: Record<string, unknown> = {};
-  if (RELEASE_CHAIN_ID === 5) {
-    // Polygon
-    overrides.type = 0;
-    overrides.gasLimit = 96_000;
-  } else if (RELEASE_CHAIN_ID === 10) {
-    // Fantom
-    overrides.type = 0;
+  relayer: ITokenBridgeRelayer,
+  chainId: SupportedChainId,
+  token: string
+): Promise<TxResult> {
+  const isAccepted = await relayer.isAcceptedToken(token);
+  if (isAccepted) {
+    console.log(`Token already registered chainId=${chainId}, token=${token}`);
+    return TxResult.Success("");
   }
 
-  // register the token
-  let receipt: ethers.ContractReceipt;
-  try {
-    receipt = await relayer
-      .registerToken(RELEASE_CHAIN_ID, contract, overrides)
-      .then((tx: ethers.ContractTransaction) => tx.wait())
-      .catch((msg: any) => {
-        // should not happen
-        console.log(msg);
-        return null;
-      });
-    console.log(
-      `Success: token registered, chainId=${chainId}, token=${contract}, txHash=${receipt.transactionHash}`
-    );
-  } catch (e: any) {
-    console.log(e);
-  }
-
-  // query the contract and see if the token was registered successfully
-  const isAcceptedToken: ethers.BytesLike = await relayer.isAcceptedToken(
-    contract
+  const overrides = await buildOverrides(
+    () => relayer.estimateGas.registerToken(RELEASE_CHAIN_ID, token),
+    RELEASE_CHAIN_ID
   );
-  if (isAcceptedToken) {
-    result = true;
-  }
 
-  return result;
+  const tx = await relayer.registerToken(RELEASE_CHAIN_ID, token, overrides);
+  console.log(`Token register tx sent, chainId=${chainId}, token=${token}, txHash=${tx.hash}`);
+  const receipt = await tx.wait();
+
+  const successMessage = `Success: token registered, chainId=${chainId}, token=${token}, txHash=${receipt.transactionHash}`;
+  const failureMessage = `Failed: could not register token, chainId=${chainId}`;
+  return TxResult.create(receipt, successMessage, failureMessage, () =>
+    relayer.isAcceptedToken(token)
+  );
 }
 
 async function updateSwapRate(
-  relayer: ethers.Contract,
+  relayer: ITokenBridgeRelayer,
   batch: SwapRateUpdate[]
-): Promise<boolean> {
-  const overrides: Record<string, unknown> = {};
-  if (RELEASE_CHAIN_ID === 5) {
-    // Polygon
-    overrides.type = 0;
-    overrides.gasLimit = 64_000 + 23_000 * batch.length;
-  } else if (RELEASE_CHAIN_ID === 10) {
-    // Fantom
-    overrides.type = 0;
-  }
+): Promise<TxResult> {
+  const overrides = await buildOverrides(
+    () => relayer.estimateGas.updateSwapRate(RELEASE_CHAIN_ID, batch),
+    RELEASE_CHAIN_ID
+  );
 
-  // register the emitter
-  let receipt: ethers.ContractReceipt;
-  try {
-    receipt = await relayer
-      .updateSwapRate(RELEASE_CHAIN_ID, batch, overrides)
-      .then((tx: ethers.ContractTransaction) => tx.wait())
-      .catch((msg: any) => {
-        // should not happen
-        console.log(msg);
-        return null;
-      });
-    console.log(
-      `Success: swap rates updated, txHash=${receipt.transactionHash}`
-    );
-    for (const update of batch) {
-      console.log(
-        `token: ${update.token}, swap rate: ${update.value.toString()}`
-      );
-    }
-
-    return true;
-  } catch (e: any) {
-    console.log(e);
-    return false;
+  const tx = await relayer.updateSwapRate(RELEASE_CHAIN_ID, batch, overrides);
+  console.log(`Swap rates update tx sent, txHash=${tx.hash}`);
+  const receipt = await tx.wait();
+  let successMessage = `Success: swap rates updated, txHash=${receipt.transactionHash}`;
+  for (const update of batch) {
+    successMessage += `  token: ${update.token}, swap rate: ${update.value.toString()}`;
   }
+  const failureMessage = `Failed: could not update swap rates, txHash=${receipt.transactionHash}`;
+
+  return TxResult.create(receipt, successMessage, failureMessage, async () => true);
 }
 
 async function updateMaxNativeSwapAmount(
-  relayer: ethers.Contract,
-  chainId: number,
-  contract: ethers.BytesLike,
+  relayer: ITokenBridgeRelayer,
+  chainId: SupportedChainId,
+  token: string,
+  originalTokenAddress: string,
   maxNativeSwapAmount: string
-): Promise<boolean> {
-  let result: boolean = false;
+): Promise<TxResult> {
+  const currentMaxNativeSwap = await relayer.maxNativeSwapAmount(token);
+  if (currentMaxNativeSwap.eq(maxNativeSwapAmount)) {
+    console.log(`Max swap amount already set for chainId=${chainId}, token=${token}`);
+    return TxResult.Success("");
+  }
 
-  // convert max native into BigNumber
   const maxNativeToUpdate = ethers.BigNumber.from(maxNativeSwapAmount);
 
-  const overrides: Record<string, unknown> = {};
-  if (RELEASE_CHAIN_ID === 5) {
-    // Polygon
-    overrides.type = 0;
-    overrides.gasLimit = 60_000;
-  } else if (RELEASE_CHAIN_ID === 10) {
-    // Fantom
-    overrides.type = 0;
-  }
+  const overrides = await buildOverrides(
+    () =>
+      relayer.estimateGas.updateMaxNativeSwapAmount(RELEASE_CHAIN_ID, token, maxNativeToUpdate),
+    RELEASE_CHAIN_ID
+  );
 
-  // set the max native swap amount
-  let receipt: ethers.ContractReceipt;
-  try {
-    receipt = await relayer
-      .updateMaxNativeSwapAmount(RELEASE_CHAIN_ID, contract, maxNativeToUpdate, overrides)
-      .then((tx: ethers.ContractTransaction) => tx.wait())
-      .catch((msg: any) => {
-        // should not happen
-        console.log(msg);
-        return null;
-      });
-    console.log(
-      `Success: max swap amount updated, chainId=${chainId}, token=${contract}, max=${maxNativeSwapAmount}, txHash=${receipt.transactionHash}`
-    );
-  } catch (e: any) {
-    console.log(e);
-  }
+  const tx = await relayer.updateMaxNativeSwapAmount(
+    RELEASE_CHAIN_ID,
+    token,
+    maxNativeToUpdate,
+    overrides
+  );
+  console.log(
+    `Max swap amount update tx sent, chainId=${chainId}, token=${token}, max=${maxNativeSwapAmount}, txHash=${tx.hash}`
+  );
+  const receipt = await tx.wait();
+  const successMessage = `Success: max swap amount updated, chainId=${chainId}, token=${token}, max=${maxNativeSwapAmount}, txHash=${receipt.transactionHash}`;
+  const failureMessage = `Failed: could not update max native swap amount, chainId=${chainId}, token=${originalTokenAddress}`;
 
-  // query the contract and see if the max native swap amount was set correctly
-  const maxNativeInContract: ethers.BigNumber =
-    await relayer.maxNativeSwapAmount(contract);
-
-  if (maxNativeInContract.eq(maxNativeToUpdate)) {
-    result = true;
-  }
-
-  return result;
+  return TxResult.create(receipt, successMessage, failureMessage, async () => {
+    const maxNativeInContract = await relayer.maxNativeSwapAmount(token);
+    return maxNativeInContract.eq(maxNativeToUpdate);
+  });
 }
 
 async function getLocalTokenAddress(
-  tokenBridge: ethers.Contract,
+  tokenBridge: ITokenBridge,
   chainId: number,
-  address: Uint8Array
+  tokenAddress: string
 ) {
+  const buffer = ethers.utils.arrayify(tokenAddress);
   // fetch the wrapped of native address
   let localTokenAddress: string;
   if (chainId == RELEASE_CHAIN_ID) {
-    localTokenAddress = tryUint8ArrayToNative(address, chainId as ChainId);
+    localTokenAddress = tryUint8ArrayToNative(buffer, chainId);
   } else {
     // fetch the wrapped address
-    localTokenAddress = await tokenBridge.wrappedAsset(chainId, address);
-    if (localTokenAddress == ZERO_ADDRESS) {
+    localTokenAddress = await tokenBridge.wrappedAsset(chainId, buffer);
+    if (localTokenAddress === ZERO_ADDRESS) {
       console.log(
-        `Failed: token not attested, chainId=${chainId}, token=${Buffer.from(
-          address
-        ).toString("hex")}`
+        `Failed: token not attested, chainId=${chainId}, token=${Buffer.from(buffer).toString(
+          "hex"
+        )}`
       );
     }
   }
@@ -212,120 +167,95 @@ async function getLocalTokenAddress(
 }
 
 async function main() {
-  const args = parseArgs();
+  const args = await parseArgs();
 
   // read config
-  const configPath = `${__dirname}/../../../cfg/deploymentConfig.json`;
-  const relayerConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
-  const contracts = relayerConfig["deployedContracts"];
-  const tokenConfig = relayerConfig["acceptedTokensList"];
-  const maxNativeSwapAmounts = relayerConfig["maxNativeSwapAmount"];
+  const {
+    deployedContracts: contracts,
+    acceptedTokensList: tokenConfig,
+    maxNativeSwapAmount: maxNativeSwapAmounts,
+  } = JSON.parse(fs.readFileSync(args.config, "utf8")) as Config;
+
+  if (!isOperatingChain(RELEASE_CHAIN_ID)) {
+    throw new Error(`Transaction signing unsupported for wormhole chain id ${RELEASE_CHAIN_ID}`);
+  }
 
   // set up ethers wallet
   const provider = new ethers.providers.StaticJsonRpcProvider(RELEASE_RPC);
-  const wallet = new ethers.Wallet(WALLET_PRIVATE_KEY, provider);
+  const wallet = await getSigner(args, provider);
 
   // fetch relayer address from config
-  const relayerAddress = tryHexToNativeString(
-    contracts[RELEASE_CHAIN_ID.toString()],
-    RELEASE_CHAIN_ID as ChainId
-  );
+  const relayerAddress = tryHexToNativeString(contracts[RELEASE_CHAIN_ID], RELEASE_CHAIN_ID);
 
   // set up relayer contract
-  const relayer: ethers.Contract = ITokenBridgeRelayer__factory.connect(
-    relayerAddress,
-    wallet
-  );
+  const relayer = ITokenBridgeRelayer__factory.connect(relayerAddress, wallet);
 
   // set up token bridge contract
-  const tokenBridge: ethers.Contract = ITokenBridge__factory.connect(
-    RELEASE_BRIDGE_ADDRESS,
-    wallet
-  );
+  const tokenBridge = ITokenBridge__factory.connect(RELEASE_BRIDGE_ADDRESS, wallet);
 
   // placeholder for swap rate batch
   const swapRateUpdates: SwapRateUpdate[] = [];
 
-  // loop through configured contracts and register tokens
-  for (const chainIdString of Object.keys(tokenConfig)) {
-    // chainId as a number
+  const checks: Check[] = [];
+  for (const [chainIdString, tokens] of Object.entries(tokenConfig)) {
     const chainIdToRegister = Number(chainIdString);
+    if (!isChain(chainIdToRegister)) {
+      throw new Error(`Unknown wormhole chain id ${chainIdToRegister}`);
+    }
     console.log("\n");
     console.log(`ChainId ${chainIdToRegister}`);
 
-    // array of tokens to register
-    const tokens = tokenConfig[chainIdString];
-
     // loop through tokens and register them
-    for (const tokenConfig of tokens) {
-      const tokenContract = tokenConfig["contract"];
-
-      // format the token address
-      const formattedAddress = ethers.utils.arrayify("0x" + tokenContract);
+    for (const { contract: tokenContract, swapRate } of tokens) {
+      const tokenAddress = "0x" + tokenContract;
 
       // fetch the address on the target chain
       const localTokenAddress = await getLocalTokenAddress(
         tokenBridge,
         chainIdToRegister,
-        formattedAddress
+        tokenAddress
       );
 
       // Query the contract and see if the token has been registered. If it hasn't,
       // register the token.
-      const isTokenRegistered: ethers.BytesLike = await relayer.isAcceptedToken(
-        localTokenAddress
-      );
+      const isTokenRegistered = await relayer.isAcceptedToken(localTokenAddress);
       if (!isTokenRegistered) {
-        // register the token
-        const result: boolean = await registerToken(
-          relayer,
-          chainIdToRegister,
-          localTokenAddress
-        );
+        const result = await registerToken(relayer, chainIdToRegister, localTokenAddress);
 
-        if (result === false) {
-          console.log(
-            `Failed: could not register token, chainId=${chainIdToRegister}`
-          );
-        }
+        handleFailure(checks, result);
       } else {
-        console.log("Token already registered.");
+        console.log(`Token already registered. token=${tokenAddress}`);
       }
 
-      // set max native swap amount for each token
       if (args.setMaxNativeAmounts) {
-        const result: boolean = await updateMaxNativeSwapAmount(
+        const result = await updateMaxNativeSwapAmount(
           relayer,
           chainIdToRegister,
           localTokenAddress,
+          tokenAddress,
           maxNativeSwapAmounts[RELEASE_CHAIN_ID]
         );
 
-        if (result === false) {
-          console.log(
-            `Failed: could not update max native swap amount, chainId=${chainIdToRegister}, token=${tokenContract}`
-          );
-        }
+        handleFailure(checks, result);
       }
 
-      // create SwapRateUpdate structs for each token
       if (args.setSwapRates) {
         swapRateUpdates.push({
           token: localTokenAddress,
-          value: ethers.BigNumber.from(tokenConfig.swapRate),
+          value: ethers.BigNumber.from(swapRate),
         });
       }
     }
   }
 
-  // create token config array and register all of the tokens at once
   if (args.setSwapRates) {
     console.log("\n");
-    const result: boolean = await updateSwapRate(relayer, swapRateUpdates);
-    if (result === false) {
-      console.log("Failed to update swap rates.");
-    }
+    const result = await updateSwapRate(relayer, swapRateUpdates);
+    handleFailure(checks, result);
   }
+
+  const messages = await executeChecks(checks);
+  console.log(messages);
 
   console.log("\n");
   console.log("Accepted tokens list:");
