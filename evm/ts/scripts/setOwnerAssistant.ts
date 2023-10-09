@@ -8,13 +8,13 @@ import { SignerArguments, addSignerArgsParser, getSigner } from "./signer";
 import { Check, TxResult, buildOverrides, executeChecks, handleFailure } from "./tx";
 
 interface CustomArguments {
-  newFeeRecipient: string;
+  newOwnerAssistant: string;
 }
 
 type Arguments = CustomArguments & SignerArguments & ConfigArguments;
 
 async function parseArgs(): Promise<Arguments> {
-  const parsed = await addSignerArgsParser(configArgsParser()).option("newFeeRecipient", {
+  const parsed = await addSignerArgsParser(configArgsParser()).option("newOwnerAssistant", {
     string: true,
     boolean: false,
     description: "fees will be received by this address",
@@ -22,7 +22,7 @@ async function parseArgs(): Promise<Arguments> {
   }).argv;
 
   const args: Arguments = {
-    newFeeRecipient: parsed.newFeeRecipient,
+    newOwnerAssistant: parsed.newOwnerAssistant,
     useLedger: parsed.ledger,
     derivationPath: parsed.derivationPath,
     config: parsed.config,
@@ -31,29 +31,29 @@ async function parseArgs(): Promise<Arguments> {
   return args;
 }
 
-async function setFeeRecipient(
+async function setOwnerAssistant(
   relayer: ITokenBridgeRelayer,
-  newFeeRecipient: string
+  newOwnerAssistant: string
 ): Promise<TxResult> {
-  const currentFeeRecipient = await relayer.feeRecipient();
-  if (currentFeeRecipient.toLowerCase() === newFeeRecipient.toLowerCase()) {
-    return TxResult.Success(`Fee recipient already set to ${newFeeRecipient}`);
+  const currentOwnerAssistant = await relayer.ownerAssistant();
+  if (currentOwnerAssistant.toLowerCase() === newOwnerAssistant.toLowerCase()) {
+    return TxResult.Success(`Owner assistant already set to ${newOwnerAssistant}`);
   }
 
   const overrides = await buildOverrides(
-    () => relayer.estimateGas.updateFeeRecipient(RELEASE_CHAIN_ID, newFeeRecipient),
+    () => relayer.estimateGas.updateOwnerAssistant(RELEASE_CHAIN_ID, newOwnerAssistant),
     RELEASE_CHAIN_ID
   );
 
-  const tx = await relayer.updateFeeRecipient(RELEASE_CHAIN_ID, newFeeRecipient, overrides);
-  console.log(`Fee recipient update tx sent txHash=${tx.hash}`);
+  const tx = await relayer.updateOwnerAssistant(RELEASE_CHAIN_ID, newOwnerAssistant, overrides);
+  console.log(`Owner assistant update tx sent txHash=${tx.hash}`);
   const receipt = await tx.wait();
 
-  const successMessage = `Updated fee recipient txHash=${receipt.transactionHash}`;
-  const failureMessage = `Failed to update fee recipient`;
+  const successMessage = `Updated owner assistant in blockHash=${receipt.blockHash}`;
+  const failureMessage = `Failed to update owner assistant`;
   return TxResult.create(receipt, successMessage, failureMessage, async () => {
-    const feeRecipient = await relayer.feeRecipient();
-    return feeRecipient === newFeeRecipient;
+    const ownerAssistant = await relayer.ownerAssistant();
+    return ownerAssistant === newOwnerAssistant;
   });
 }
 
@@ -66,8 +66,8 @@ async function main() {
   if (!isOperatingChain(RELEASE_CHAIN_ID)) {
     throw new Error(`Transaction signing unsupported for wormhole chain id ${RELEASE_CHAIN_ID}`);
   }
-  if (!ethers.utils.isAddress(args.newFeeRecipient)) {
-    throw new Error(`Invalid EVM address for fee recipient: ${args.newFeeRecipient}`);
+  if (!ethers.utils.isAddress(args.newOwnerAssistant)) {
+    throw new Error(`Invalid EVM address for owner assitant: ${args.newOwnerAssistant}`);
   }
 
   const provider = new ethers.providers.StaticJsonRpcProvider(RELEASE_RPC);
@@ -77,7 +77,7 @@ async function main() {
   const relayer = ITokenBridgeRelayer__factory.connect(relayerAddress, wallet);
 
   const checks: Check[] = [];
-  const result = await setFeeRecipient(relayer, args.newFeeRecipient);
+  const result = await setOwnerAssistant(relayer, args.newOwnerAssistant);
   handleFailure(checks, result);
 
   const messages = await executeChecks(checks);
