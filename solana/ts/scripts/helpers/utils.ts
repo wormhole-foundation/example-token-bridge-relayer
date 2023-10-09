@@ -48,6 +48,11 @@ export const sendAndConfirmIx = async (
     return [Array.isArray(signer) ? signer : [signer], computeUnits];
   })();
 
+  if (options === undefined) {
+    options = {};
+  }
+  options.maxRetries = 10;
+
   const tx = new Transaction().add(await ix);
   if (units) tx.add(ComputeBudgetProgram.setComputeUnitLimit({units}));
   try {

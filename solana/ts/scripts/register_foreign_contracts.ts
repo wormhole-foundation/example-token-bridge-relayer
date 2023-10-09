@@ -53,6 +53,8 @@ async function register_foreign_contract(
     validateContractAddress(contract.relayerAddress);
     validateContractAddress(contract.tokenBridgeAddress);
 
+    // TODO: check current registration before creating instruction.
+
     // Create registration transaction.
     const registerForeignContractIx =
       await tokenBridgeRelayer.createRegisterForeignContractInstruction(
