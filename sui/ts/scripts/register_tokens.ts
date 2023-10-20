@@ -91,13 +91,13 @@ async function main() {
 
   // Owner wallet.
   const key = Ed25519Keypair.fromSecretKey(
-    Buffer.from(KEY, "base64").subarray(1)
+    Buffer.from(KEY, "base64")
   );
   const wallet = new RawSigner(key, provider);
 
   // Read in config file.
   const deploymentConfig = JSON.parse(
-    fs.readFileSync(`${__dirname}/../../cfg/deploymentConfig.json`, "utf8")
+    fs.readFileSync(`${__dirname}/../../cfg/deploymentConfig.json`, "utf8") // TODO: should receive this as a parameter
   );
 
   // Convert to Config type.
