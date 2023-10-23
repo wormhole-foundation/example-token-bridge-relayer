@@ -78,6 +78,13 @@
       "swapRate": "50000000",
       "maxNativeSwapAmount": "1000000000",
       "enableSwaps": true
+    },
+    {
+      "symbol": "WSOL",
+      "coinType": "0xbc03aaab4c11eb84df8bf39fdc714fa5d5b65b16eb7d155e22c74a68c8d4e17f::coin::COIN",
+      "swapRate": "2922000000",
+      "maxNativeSwapAmount": "1000000000",
+      "enableSwaps": true
     }
   ],
   "relayerFeesInUsd": {
