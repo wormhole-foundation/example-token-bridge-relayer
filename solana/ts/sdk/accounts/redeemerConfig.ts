@@ -9,7 +9,6 @@ export function deriveRedeemerConfigKey(programId: PublicKeyInitData) {
 export interface RedeemerConfigData {
   owner: PublicKey;
   bump: number;
-  tokenBridge: any;
   relayerFeePrecision: number;
   feeRecipient: PublicKey;
 }
