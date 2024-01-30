@@ -23,7 +23,7 @@
     "ethers": "^5.7.2",
     "ts-node": "^10.9.1",
     "yaml": "^2.2.1",
-    "yargs": "^17.6.2"
+    "yargs": "^17.7.2"
   },
   "devDependencies": {
     "@types/chai": "^4.3.4",

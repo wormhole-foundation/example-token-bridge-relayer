@@ -20,6 +20,13 @@ export function getArgs() {
       require: true,
       string: true,
     },
+    config: {
+      alias: "c",
+      string: true,
+      boolean: false,
+      description: "Configuration filepath.",
+      required: true,
+    }
   }).argv;
 
   if ("keyPair" in argv && "network" in argv) {
@@ -30,6 +37,7 @@ export function getArgs() {
     return {
       keyPair: JSON.parse(fs.readFileSync(argv.keyPair, "utf8")),
       network: network,
+      configPath: argv.config ?? `${__dirname}/../../cfg/${network}Config.json`,
     };
   } else {
     throw Error("Invalid arguments");
@@ -94,12 +102,12 @@ async function main() {
   const connection = new Connection(RPC, "confirmed");
 
   // Owner wallet.
-  const {keyPair, network} = getArgs();
+  const {keyPair, network, configPath} = getArgs();
   const payer = Keypair.fromSecretKey(Uint8Array.from(keyPair));
 
   // Read in config file.
   const deploymentConfig = JSON.parse(
-    fs.readFileSync(`${__dirname}/../../cfg/${network}Config.json`, "utf8")
+    fs.readFileSync(configPath, "utf8")
   );
 
   // Convert to Config type.

@@ -15,6 +15,7 @@ import {
 import {getTokenInfo, getObjectFields} from "../src";
 import {executeTransactionBlock, pollTransactionForEffectsCert} from "./poll";
 import * as fs from "fs";
+import yargs from "yargs";
 
 /**
  * Register token.
@@ -84,7 +85,24 @@ function createConfig(object: any) {
   return config;
 }
 
+export function getArgs() {
+  const argv = yargs.options({
+    config: {
+      alias: "c",
+      string: true,
+      boolean: false,
+      description: "Configuration filepath.",
+      required: true,
+    }
+  }).argv;
+
+  return {
+    configPath: "config" in argv ? argv["config"] : `${__dirname}/../../cfg/deploymentConfig.json`,
+  };
+}
+
 async function main() {
+  const {configPath} = getArgs();
   // Set up provider.
   const connection = new Connection({fullnode: RPC});
   const provider = new JsonRpcProvider(connection);
@@ -97,7 +115,7 @@ async function main() {
 
   // Read in config file.
   const deploymentConfig = JSON.parse(
-    fs.readFileSync(`${__dirname}/../../cfg/deploymentConfig.json`, "utf8") // TODO: should receive this as a parameter
+    fs.readFileSync(configPath, "utf8")
   );
 
   // Convert to Config type.
