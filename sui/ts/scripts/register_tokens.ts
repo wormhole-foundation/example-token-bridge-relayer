@@ -8,18 +8,19 @@ import {
 import {
   TransactionBlock,
 } from "@mysten/sui.js/transactions";
+import * as fs from "fs";
+import { hideBin } from "yargs/helpers";
+
+import { getTokenInfo, getRelayerState } from "../src";
+
 import {
   RELAYER_ID,
   RELAYER_STATE_ID,
   RELAYER_OWNER_CAP_ID,
   KEY,
 } from "./consts";
-import {getTokenInfo, getRelayerState} from "../src/utils2";
-import {executeTransactionBlock, pollTransactionForEffectsCert} from "./poll";
-import * as fs from "fs";
-import { hideBin } from "yargs/helpers";
-
 import { createParser } from "./cli_args";
+import { executeTransactionBlock, pollTransactionForEffectsCert } from "./poll";
 
 export async function getArgs() {
   const argv = await createParser().parse(hideBin(process.argv));
@@ -34,7 +35,7 @@ export async function getArgs() {
  * Register token.
  */
 async function register_tokens(
-  provider: SuiClient,
+  client: SuiClient,
   wallet: Ed25519Keypair,
   config: TokenConfig[]
 ) {
@@ -54,15 +55,15 @@ async function register_tokens(
       typeArguments: [tokenConfig.coinType],
     });
   }
-  const {digest} = await executeTransactionBlock(wallet, tx);
-  await pollTransactionForEffectsCert(wallet, digest);
+  const {digest} = await executeTransactionBlock(client, wallet, tx);
+  await pollTransactionForEffectsCert(client, digest);
 
   // Fetch state.
-  const state = await getRelayerState(provider, RELAYER_STATE_ID);
+  const state = await getRelayerState(client, RELAYER_STATE_ID);
 
   for (const tokenConfig of config) {
     // Verify state.
-    const tokenInfo = await getTokenInfo(provider, state, tokenConfig.coinType);
+    const tokenInfo = await getTokenInfo(client, state, tokenConfig.coinType);
 
     console.log(`${tokenConfig.symbol} has been registered.`);
     console.log(`swapRate: ${tokenInfo.value.fields.swap_rate}`);
@@ -100,30 +101,25 @@ function createConfig(object: any) {
 
 async function main() {
   const {configPath, network} = await getArgs();
-  // Set up provider.
-  const provider = new SuiClient({
+  const client = new SuiClient({
     url: getFullnodeUrl(network),
   });
 
-  // Owner wallet.
   const wallet = Ed25519Keypair.fromSecretKey(
     Buffer.from(KEY, "base64")
   );
 
-  // Read in config file.
   const deploymentConfig = JSON.parse(
     fs.readFileSync(configPath, "utf8")
   );
-
-  // Convert to Config type.
   const config = createConfig(deploymentConfig.acceptedTokensList);
 
+  // TODO: parse and ensure config is correct
   if (config.length == undefined) {
     throw Error("Deployed contracts not found");
   }
 
-  // Create state.
-  await register_tokens(provider, wallet, config);
+  await register_tokens(client, wallet, config);
 }
 
 main();

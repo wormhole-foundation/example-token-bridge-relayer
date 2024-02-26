@@ -1,23 +1,26 @@
 import {
+  SuiClient, getFullnodeUrl,
+} from "@mysten/sui.js/client";
+import {
   Ed25519Keypair,
-  JsonRpcProvider,
-  RawSigner,
-  Connection,
+} from "@mysten/sui.js/keypairs/ed25519";
+import {
   TransactionBlock,
-} from "@mysten/sui.js";
+} from "@mysten/sui.js/transactions";
+
+import { getRelayerState, getDynamicFieldsByType } from "../src";
+
 import {
   RELAYER_ID,
   RELAYER_STATE_ID,
   RELAYER_OWNER_CAP_ID,
-  RPC,
   KEY,
 } from "./consts";
-import {getDynamicFieldsByType, getObjectFields} from "../src";
 import {executeTransactionBlock, pollTransactionForEffectsCert} from "./poll";
-import yargs from "yargs";
+import { createParser } from "./cli_args";
 
-export function getArgs() {
-  const argv = yargs.options({
+export async function getArgs() {
+  const argv = await createParser().options({
     coinType: {
       alias: "c",
       describe: "Coin type to deregister",
@@ -29,6 +32,7 @@ export function getArgs() {
   if ("coinType" in argv) {
     return {
       coinType: argv.coinType,
+      network: argv.network as "mainnet" | "testnet",
     };
   } else {
     throw Error("Invalid arguments");
@@ -39,8 +43,8 @@ export function getArgs() {
  * Deregister token.
  */
 async function deregister_token(
-  provider: JsonRpcProvider,
-  wallet: RawSigner,
+  client: SuiClient,
+  wallet: Ed25519Keypair,
   coinType: string
 ) {
   // Deregister the token.
@@ -50,17 +54,17 @@ async function deregister_token(
     arguments: [tx.object(RELAYER_OWNER_CAP_ID), tx.object(RELAYER_STATE_ID)],
     typeArguments: [coinType],
   });
-  const {digest} = await executeTransactionBlock(wallet, tx);
-  await pollTransactionForEffectsCert(wallet, digest);
+  const {digest} = await executeTransactionBlock(client, wallet, tx);
+  await pollTransactionForEffectsCert(client, digest);
 
   // Fetch state.
-  const state = await getObjectFields(provider, RELAYER_STATE_ID);
+  const state = await getRelayerState(client, RELAYER_STATE_ID);
 
   // Check to see if the coin type is deregistered by checking if
   // the dynamic field still exists.
   const registeredCoinField = await getDynamicFieldsByType(
-    provider,
-    state!.registered_tokens.fields.id.id,
+    client,
+    state.registered_tokens.fields.id.id,
     coinType
   );
 
@@ -72,21 +76,17 @@ async function deregister_token(
 }
 
 async function main() {
-  // Fetch args.
-  const args = getArgs();
+  const args = await getArgs();
 
-  // Set up provider.
-  const connection = new Connection({fullnode: RPC});
-  const provider = new JsonRpcProvider(connection);
+  const client = new SuiClient({
+    url: getFullnodeUrl(args.network)
+  });
 
-  // Owner wallet.
-  const key = Ed25519Keypair.fromSecretKey(
-    Buffer.from(KEY, "base64").subarray(1)
+  const wallet = Ed25519Keypair.fromSecretKey(
+    Buffer.from(KEY, "base64")
   );
-  const wallet = new RawSigner(key, provider);
 
-  // Create state.
-  await deregister_token(provider, wallet, args.coinType);
+  await deregister_token(client, wallet, args.coinType);
 }
 
 main();

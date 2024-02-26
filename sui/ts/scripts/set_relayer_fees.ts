@@ -1,57 +1,82 @@
 import {
+  SuiClient,
+  getFullnodeUrl,
+} from "@mysten/sui.js/client";
+import {
   Ed25519Keypair,
-  JsonRpcProvider,
-  RawSigner,
-  Connection,
+} from "@mysten/sui.js/keypairs/ed25519";
+import {
   TransactionBlock,
-} from "@mysten/sui.js";
+} from "@mysten/sui.js/transactions";
+import { ChainId } from "@certusone/wormhole-sdk";
+import * as fs from "fs";
+import { hideBin } from "yargs/helpers";
+
+import { getRelayerFees } from "../src";
+
 import {
   RELAYER_ID,
   RELAYER_STATE_ID,
   RELAYER_OWNER_CAP_ID,
-  RPC,
   KEY,
 } from "./consts";
-import {getTableByName} from "../src";
-import {executeTransactionBlock, pollTransactionForEffectsCert} from "./poll";
-import * as fs from "fs";
+import { createParser } from "./cli_args";
+import { executeTransactionBlock, pollTransactionForEffectsCert } from "./poll";
+
+export async function getArgs() {
+  const argv = await createParser().parse(hideBin(process.argv));
+
+  return {
+    network: argv.network as "mainnet" | "testnet",
+    configPath: argv.config,
+  };
+}
 
 /**
  * Sets the relayer fee for a target foreign contract.
  */
 async function set_relayer_fees(
-  provider: JsonRpcProvider,
-  wallet: RawSigner,
+  client: SuiClient,
+  wallet: Ed25519Keypair,
   config: Config[]
 ) {
+  const relayerFees = await getRelayerFees(
+    client,
+    RELAYER_STATE_ID
+  );
+
   const tx = new TransactionBlock();
 
   // Set the relayer fee for each registered foreign contract.
   for (const feeMap of config) {
+    const chainId = Number(feeMap.chain) as ChainId;
+    if (chainId in relayerFees && BigInt(feeMap.fee) === relayerFees[chainId]) {
+      continue;
+    }
+
     tx.moveCall({
       target: `${RELAYER_ID}::owner::update_relayer_fee`,
       arguments: [
         tx.object(RELAYER_OWNER_CAP_ID),
         tx.object(RELAYER_STATE_ID),
-        tx.pure(feeMap.chain),
+        tx.pure(chainId),
         tx.pure(feeMap.fee),
       ],
     });
   }
-  const {digest} = await executeTransactionBlock(wallet, tx);
-  await pollTransactionForEffectsCert(wallet, digest);
+  const {digest} = await executeTransactionBlock(client, wallet, tx);
+  await pollTransactionForEffectsCert(client, digest);
 
   // Fetch the relayer fees table from state.
-  const relayerFees = await getTableByName(
-    provider,
-    RELAYER_STATE_ID,
-    "relayer_fees"
+  const relayerFeesPostUpdate = await getRelayerFees(
+    client,
+    RELAYER_STATE_ID
   );
 
   // Loop through and console log relayer fees.
   console.log("Target relayer fees:");
-  for (const mapping of relayerFees) {
-    console.log(`ChainId=${mapping[0]}, fee=${mapping[1]}`);
+  for (const [chainId, fee] of Object.entries(relayerFeesPostUpdate)) {
+    console.log(`ChainId=${chainId}, fee=${fee}`);
   }
 }
 
@@ -72,30 +97,27 @@ function createConfig(object: any) {
 }
 
 async function main() {
-  // Set up provider.
-  const connection = new Connection({fullnode: RPC});
-  const provider = new JsonRpcProvider(connection);
+  const args = await getArgs();
 
-  // Owner wallet.
-  const key = Ed25519Keypair.fromSecretKey(
-    Buffer.from(KEY, "base64").subarray(1)
+  const client = new SuiClient({
+    url: getFullnodeUrl(args.network),
+  });
+
+  const wallet = Ed25519Keypair.fromSecretKey(
+    Buffer.from(KEY, "base64")
   );
-  const wallet = new RawSigner(key, provider);
 
-  // Read in config file.
   const deploymentConfig = JSON.parse(
-    fs.readFileSync(`${__dirname}/../../cfg/deploymentConfig.json`, "utf8")
+    fs.readFileSync(args.configPath, "utf8")
   );
 
-  // Convert to Config type.
   const config = createConfig(deploymentConfig["relayerFeesInUsd"]);
 
   if (config.length == undefined) {
     throw Error("Deployed contracts not found");
   }
 
-  // Create state.
-  await set_relayer_fees(provider, wallet, config);
+  await set_relayer_fees(client, wallet, config);
 }
 
 main();

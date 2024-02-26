@@ -5,9 +5,9 @@ export function createParser() {
     .env("CONFIGURE_TBR")
     .options({
       network: {
-        alias: "v",
+        alias: "n",
         string: true,
-        describe: "Redemption VAA",
+        describe: "Network context where the script will execute.",
         choices: ["mainnet", "testnet"],
         require: true,
         type: "string",
