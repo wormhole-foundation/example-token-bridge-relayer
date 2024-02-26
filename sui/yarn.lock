@@ -58,10 +58,10 @@
     "@types/long" "^4.0.2"
     "@types/node" "^18.0.3"
 
-"@certusone/wormhole-sdk@^0.10.10":
-  version "0.10.10"
-  resolved "https://registry.yarnpkg.com/@certusone/wormhole-sdk/-/wormhole-sdk-0.10.10.tgz#20565d4d48df0abf1ce34e08c1757341b514294f"
-  integrity sha512-2pYQ2/+cSfh/LVtOTXQDrTeZdXHgzq/hjkTevzW5+rEqITE54qUlnMhcVtSJQe+Yvgg3awrP2mIfDW3nvwPIPA==
+"@certusone/wormhole-sdk@^0.10.11":
+  version "0.10.11"
+  resolved "https://registry.yarnpkg.com/@certusone/wormhole-sdk/-/wormhole-sdk-0.10.11.tgz#297af92330f74e446ab071a94a160d9d3c091464"
+  integrity sha512-WG2gmVqc5t5T6WeSkh6aDPMToN0whTJ1WQv9Kke3/bk4ssR6Gn6gv2OXHL0ZzYcUS8hft5EQBTNr1HGNQT2gMQ==
   dependencies:
     "@certusone/wormhole-sdk-proto-web" "0.0.7"
     "@certusone/wormhole-sdk-wasm" "^0.0.1"

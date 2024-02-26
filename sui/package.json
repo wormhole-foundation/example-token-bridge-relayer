@@ -18,7 +18,7 @@
     "register-token-bridge": "npx ts-node ts/scripts/register_token_bridge.ts"
   },
   "dependencies": {
-    "@certusone/wormhole-sdk": "^0.10.10",
+    "@certusone/wormhole-sdk": "^0.10.11",
     "@mysten/sui.js": "^0.49.1",
     "ethers": "^5.7.2",
     "yaml": "^2.2.1",
