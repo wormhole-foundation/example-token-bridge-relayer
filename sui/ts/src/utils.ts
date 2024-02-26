@@ -235,7 +235,7 @@ export async function getRelayerRegistrations(client: SuiClient, relayerAddress:
     throw new Error(`Unexpected type found when parsing relayer fee keys for object ${relayerRegistrationsRef.objectId}`);
   }
 
-  const registeredEmitters: Partial<Partial<Record<ChainId, string>>> = {};
+  const registeredEmitters: Partial<Record<ChainId, string>> = {};
   for (const { name, objectId } of relayerRegistrations) {
     const chainId = name.value as number;
     if (!isChain(chainId) || chainId === CHAIN_ID_SUI) {
@@ -277,7 +277,7 @@ export async function getRelayerFees(
     throw new Error(`Unexpected type found when parsing relayer fee keys for object ${relayerFeesRef.objectId}`);
   }
 
-  const fees: Partial<Partial<Record<ChainId, bigint>>> = {};
+  const fees: Partial<Record<ChainId, bigint>> = {};
   for (const { name, objectId } of relayerFees) {
     const chainId = name.value as number;
     if (!isChain(chainId) || chainId === CHAIN_ID_SUI) {
