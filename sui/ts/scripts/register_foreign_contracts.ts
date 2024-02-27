@@ -22,7 +22,7 @@ import { createParser } from "./cli_args";
 import { ChainId } from "@certusone/wormhole-sdk";
 
 function validateContractAddress(address: string) {
-  if (address.length != 64 || address.substring(0, 2) == "0x") {
+  if (address.length !== 64 || address.substring(0, 2) === "0x") {
     throw Error("Invalid contract address");
   }
 }
@@ -56,8 +56,9 @@ async function register_foreign_contracts(
     validateContractAddress(contractMap.address);
     const chainId = Number(contractMap.chain) as ChainId;
 
-    const currentRegistration = currentRegisteredContracts[chainId];
-    if (currentRegistration?.toLowerCase() === contractMap.address.toLowerCase()) {
+    const normalizedAddress = "0x" + contractMap.address.toLowerCase();
+    const currentRegistration = currentRegisteredContracts[chainId]?.toLowerCase();
+    if (currentRegistration === normalizedAddress) {
       console.log(`Contract already registered for chainId=${contractMap.chain}`);
       continue;
     }
@@ -69,7 +70,7 @@ async function register_foreign_contracts(
         tx.object(RELAYER_OWNER_CAP_ID),
         tx.object(RELAYER_STATE_ID),
         tx.pure(contractMap.chain),
-        tx.pure("0x" + contractMap.address),
+        tx.pure(normalizedAddress),
       ],
     });
   }
@@ -90,7 +91,7 @@ async function register_foreign_contracts(
   // Loop through and console log registered contracts.
   console.log("Registered contracts list:");
   for (const [chainId, contract] of Object.entries(registeredContracts)) {
-    console.log(`ChainId=${chainId}, contract=0x${contract}`);
+    console.log(`  ChainId=${chainId}, contract=0x${contract}`);
   }
 }
 interface Config {
