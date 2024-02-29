@@ -1,23 +1,26 @@
 import {
   Ed25519Keypair,
-  JsonRpcProvider,
-  RawSigner,
-  Connection,
+} from "@mysten/sui.js/keypairs/ed25519";
+import {
+  SuiClient, getFullnodeUrl,
+} from "@mysten/sui.js/client";
+import {
   TransactionBlock,
-} from "@mysten/sui.js";
+} from "@mysten/sui.js/transactions";
+
+import { getTokenInfo, getRelayerState } from "../src";
+
 import {
   RELAYER_ID,
   RELAYER_STATE_ID,
   RELAYER_OWNER_CAP_ID,
-  RPC,
   KEY,
 } from "./consts";
-import {getTokenInfo, getObjectFields} from "../src";
 import {executeTransactionBlock, pollTransactionForEffectsCert} from "./poll";
-import yargs from "yargs";
+import { createParser } from "./cli_args";
 
-export function getArgs() {
-  const argv = yargs.options({
+export async function getArgs() {
+  const argv = await createParser().options({
     coinType: {
       alias: "c",
       describe: "Coin type",
@@ -36,6 +39,7 @@ export function getArgs() {
     return {
       coinType: argv.coinType,
       maxSwapAmount: argv.maxSwapAmount,
+      network: argv.network as "mainnet" | "testnet",
     };
   } else {
     throw Error("Invalid arguments");
@@ -46,8 +50,8 @@ export function getArgs() {
  * Updates the max native swap amount for the specified coin type.
  */
 async function update_max_native_swap_amount(
-  provider: JsonRpcProvider,
-  wallet: RawSigner,
+  client: SuiClient,
+  wallet: Ed25519Keypair,
   coinType: string,
   maxSwapAmount: string
 ) {
@@ -62,38 +66,34 @@ async function update_max_native_swap_amount(
     ],
     typeArguments: [coinType],
   });
-  const {digest} = await executeTransactionBlock(wallet, tx);
-  await pollTransactionForEffectsCert(wallet, digest);
+  const {digest} = await executeTransactionBlock(client, wallet, tx);
+  await pollTransactionForEffectsCert(client, digest);
 
   // Fetch state.
-  const state = await getObjectFields(provider, RELAYER_STATE_ID);
+  const state = await getRelayerState(client, RELAYER_STATE_ID);
 
   // Verify state.
-  const tokenInfo = await getTokenInfo(provider, state, coinType);
+  const tokenInfo = await getTokenInfo(client, state, coinType);
   const coinName = coinType.split("::", 3)[2];
 
   console.log(
-    `Max native swap amount updated to ${tokenInfo.max_native_swap_amount} for ${coinName}.`
+    `Max native swap amount updated to ${tokenInfo.value.fields.max_native_swap_amount} for ${coinName}.`
   );
 }
 
 async function main() {
-  // Fetch args.
-  const args = getArgs();
+  const args = await getArgs();
 
-  // Set up provider.
-  const connection = new Connection({fullnode: RPC});
-  const provider = new JsonRpcProvider(connection);
+  const client = new SuiClient({
+    url: getFullnodeUrl(args.network)
+  });
 
-  // Owner wallet.
-  const key = Ed25519Keypair.fromSecretKey(
-    Buffer.from(KEY, "base64").subarray(1)
+  const wallet = Ed25519Keypair.fromSecretKey(
+    Buffer.from(KEY, "base64")
   );
-  const wallet = new RawSigner(key, provider);
 
-  // Create state.
   await update_max_native_swap_amount(
-    provider,
+    client,
     wallet,
     args.coinType,
     args.maxSwapAmount

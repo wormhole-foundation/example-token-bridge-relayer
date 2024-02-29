@@ -1,16 +1,19 @@
 import {
   Ed25519Keypair,
-  JsonRpcProvider,
-  RawSigner,
-  Connection,
+} from "@mysten/sui.js/keypairs/ed25519";
+import {
   TransactionBlock,
-} from "@mysten/sui.js";
-import {RPC, KEY} from "./consts";
-import {executeTransactionBlock, pollTransactionForEffectsCert} from "./poll";
-import yargs from "yargs";
+} from "@mysten/sui.js/transactions";
+import {
+  SuiClient, getFullnodeUrl,
+} from "@mysten/sui.js/client";
 
-export function getArgs() {
-  const argv = yargs.options({
+import {KEY} from "./consts";
+import {executeTransactionBlock, pollTransactionForEffectsCert} from "./poll";
+import { createParser } from "./cli_args";
+
+export async function getArgs() {
+  const argv = await createParser().options({
     coinType: {
       alias: "c",
       describe: "Coin type to mint",
@@ -36,6 +39,7 @@ export function getArgs() {
       coinType: argv.coinType,
       amount: argv.amount,
       treauryId: argv.treasuryId,
+      network: argv.network as "mainnet" | "testnet",
     };
   } else {
     throw Error("Invalid arguments");
@@ -46,41 +50,36 @@ export function getArgs() {
  * Mint specified token.
  */
 async function mint_token(
-  wallet: RawSigner,
-  walletAddress: string,
+  client: SuiClient,
+  wallet: Ed25519Keypair,
   coinType: string,
   treasuryId: string,
   amount: string
 ) {
-  // Deregister the token.
   const tx = new TransactionBlock();
   tx.moveCall({
     target: "0x2::coin::mint_and_transfer",
-    arguments: [tx.object(treasuryId), tx.pure(amount), tx.pure(walletAddress)],
+    arguments: [tx.object(treasuryId), tx.pure(amount), tx.pure(wallet.toSuiAddress())],
     typeArguments: [coinType],
   });
-  const {digest} = await executeTransactionBlock(wallet, tx);
-  await pollTransactionForEffectsCert(wallet, digest);
+  const {digest} = await executeTransactionBlock(client, wallet, tx);
+  await pollTransactionForEffectsCert(client, digest);
 }
 
 async function main() {
-  // Fetch args.
-  const args = getArgs();
+  const args = await getArgs();
 
-  // Set up provider.
-  const connection = new Connection({fullnode: RPC});
-  const provider = new JsonRpcProvider(connection);
+  const client = new SuiClient({
+    url: getFullnodeUrl(args.network),
+  });
 
-  // Owner wallet.
-  const key = Ed25519Keypair.fromSecretKey(
-    Buffer.from(KEY, "base64").subarray(1)
+  const wallet = Ed25519Keypair.fromSecretKey(
+    Buffer.from(KEY, "base64")
   );
-  const wallet = new RawSigner(key, provider);
 
-  // Create state.
   await mint_token(
+    client,
     wallet,
-    await wallet.getAddress(),
     args.coinType,
     args.treauryId,
     args.amount

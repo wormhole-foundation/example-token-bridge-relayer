@@ -8,7 +8,7 @@
     "set-relayer-fees": "npx ts-node ts/scripts/set_relayer_fees.ts"
   },
   "dependencies": {
-    "@certusone/wormhole-sdk": "^0.9.14",
+    "@certusone/wormhole-sdk": "^0.10.11",
     "@coral-xyz/anchor": "^0.27.0",
     "@metaplex-foundation/js": "^0.18.3",
     "@metaplex-foundation/mpl-token-metadata": "^2.9.0",

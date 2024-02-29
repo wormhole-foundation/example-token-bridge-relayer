@@ -7,13 +7,9 @@ import {
 import {
   TransactionBlock,
 } from "@mysten/sui.js/transactions";
-
-import {getTokenInfo, getObjectFields, getRelayerState} from "../src";
+import { inspect } from "util";
 
 import {
-  RELAYER_ID,
-  RELAYER_STATE_ID,
-  RELAYER_OWNER_CAP_ID,
   KEY,
 } from "./consts";
 import { executeTransactionBlock, pollTransactionForEffectsCert } from "./poll";
@@ -51,55 +47,33 @@ export async function getArgs() {
   }
 }
 
-/**
- * Toggles if swaps are enabled for the specified coin type.
- */
-async function toggle_swaps(
+async function transferOwnership(
   client: SuiClient,
   wallet: Ed25519Keypair,
-  coinType: string,
-  enableSwaps: boolean
 ) {
-  // Update if swaps are enabled.
   const tx = new TransactionBlock();
-  tx.moveCall({
-    target: `${RELAYER_ID}::owner::toggle_swap_enabled`,
-    arguments: [
-      tx.object(RELAYER_OWNER_CAP_ID),
-      tx.object(RELAYER_STATE_ID),
-      tx.pure(enableSwaps),
-    ],
-    typeArguments: [coinType],
-  });
+
+  // TODO: retrieve owner cap id?
+  // const arg = {kind: "Input", type: "0x1bf76666c5e087c5b4b68c7a966e60d22fa3211b27c42c50cf67071930677eb4::owner::OwnerCap", value: "0xd8b410ab2754252cd52524e489476ec4fac7bfe27f315858f0ed15b1b76f1992"};
+  const arg = tx.object("0xd8b410ab2754252cd52524e489476ec4fac7bfe27f315858f0ed15b1b76f1992")
+  tx.transferObjects([arg], tx.pure("0x3b8eb59070bfa7990ddae895975cca224f25173a7bf5d7fc3ebf5b4f664c698b"));
+
   const {digest} = await executeTransactionBlock(client, wallet, tx);
-  await pollTransactionForEffectsCert(client, digest);
-
-  const state = await getRelayerState(client, RELAYER_STATE_ID);
-
-  // Verify state.
-  const tokenInfo = await getTokenInfo(client, state, coinType);
-  const coinName = coinType.split("::", 3)[2];
-
-  console.log(`Swaps are enabled=${tokenInfo.value.fields.swap_enabled} for ${coinName}.`);
+  return pollTransactionForEffectsCert(client, digest);
 }
 
 async function main() {
   const args = await getArgs();
-
   const client = new SuiClient({
-    url: getFullnodeUrl(args.network),
+    url: getFullnodeUrl(args.network)
   });
 
   const wallet = Ed25519Keypair.fromSecretKey(
     Buffer.from(KEY, "base64")
   );
 
-  await toggle_swaps(
-    client,
-    wallet,
-    args.coinType,
-    args.enableSwaps == "true"
-  );
+  const result = await transferOwnership(client, wallet);
+  console.log(inspect(result, {depth: 5}));
 }
 
 main();

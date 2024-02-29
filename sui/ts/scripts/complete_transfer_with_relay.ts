@@ -1,11 +1,25 @@
 import {
+  SuiClient,
+  getFullnodeUrl,
+} from "@mysten/sui.js/client";
+import {
   Ed25519Keypair,
-  JsonRpcProvider,
-  RawSigner,
-  Connection,
-  TransactionBlock,
+} from "@mysten/sui.js/keypairs/ed25519";
+import {
   SUI_CLOCK_OBJECT_ID,
-} from "@mysten/sui.js";
+} from "@mysten/sui.js/utils";
+import {
+  TransactionBlock,
+} from "@mysten/sui.js/transactions";
+import {
+  parseVaa,
+  parseTransferPayload,
+  CHAIN_ID_SUI,
+} from "@certusone/wormhole-sdk";
+import { uint8ArrayToBCS } from "@certusone/wormhole-sdk/lib/cjs/sui";
+import { ethers } from "ethers";
+
+import { createParser } from "./cli_args";
 import {
   RELAYER_ID,
   RELAYER_STATE_ID,
@@ -13,28 +27,20 @@ import {
   WORMHOLE_STATE_ID,
   TOKEN_BRIDGE_ID,
   TOKEN_BRIDGE_STATE_ID,
-  RPC,
   KEY,
 } from "./consts";
+import { executeTransactionBlock, pollTransactionForEffectsCert } from "./poll";
+
 import {
-  parseVaa,
-  parseTransferPayload,
-  CHAIN_ID_SUI,
-  getIsTransferCompletedSui,
-} from "@certusone/wormhole-sdk";
-import { uint8ArrayToBCS } from "@certusone/wormhole-sdk/lib/cjs/sui";
-import {ethers} from "ethers";
-import {
-  getObjectFields,
   getTokenInfo,
   getTokenCoinType,
   tokenBridgeDenormalizeAmount,
+  getIsTransferCompletedSui,
+  getRelayerState,
 } from "../src";
-import {executeTransactionBlock, pollTransactionForEffectsCert} from "./poll";
-import yargs from "yargs";
 
-export function getArgs() {
-  const argv = yargs.options({
+export async function getArgs() {
+  const argv = await createParser().options({
     vaa: {
       alias: "v",
       describe: "Redemption VAA",
@@ -46,6 +52,7 @@ export function getArgs() {
   if ("vaa" in argv) {
     return {
       vaa: argv.vaa,
+      network: argv.network as "mainnet" | "testnet",
     };
   } else {
     throw Error("Invalid arguments");
@@ -56,7 +63,7 @@ const SUI_TYPE =
   "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI";
 
 export async function getSwapQuote(
-  provider: JsonRpcProvider,
+  client: SuiClient,
   wallet: string,
   relayerId: string,
   relayerState: any,
@@ -77,8 +84,7 @@ export async function getSwapQuote(
     typeArguments: [coinType],
   });
 
-  // Fetch the swap quote response.
-  const swapQuoteResponse = await provider.devInspectTransactionBlock({
+  const swapQuoteResponse = await client.devInspectTransactionBlock({
     transactionBlock: tx,
     sender: wallet,
   });
@@ -89,15 +95,14 @@ export async function getSwapQuote(
     throw Error("Invalid swap quote response");
   }
 
-  // Store the swapQuote.
   const swapQuote = Number(Buffer.from(result[0][0]).readBigUInt64LE(0));
 
-  // Fetch the maxNativeSwapAmount.
-  const maxNativeSwapAmount = await getTokenInfo(
-    provider,
+  const tokenInfo = await getTokenInfo(
+    client,
     relayerState,
     coinType
-  ).then((result) => result.max_native_swap_amount);
+  );
+  const maxNativeSwapAmount = tokenInfo.value.fields.max_native_swap_amount;
 
   return Math.min(swapQuote, parseInt(maxNativeSwapAmount));
 }
@@ -106,16 +111,15 @@ export async function getSwapQuote(
  * Relays a VAA to the Sui Relayer contract.
  */
 async function relay(
-  provider: JsonRpcProvider,
-  wallet: RawSigner,
+  client: SuiClient,
+  wallet: Ed25519Keypair,
   vaa: Uint8Array
 ) {
-  // Fetch relayer state.
-  const state = await getObjectFields(provider, RELAYER_STATE_ID);
+  const state = await getRelayerState(client, RELAYER_STATE_ID);
 
   // Check to see if the VAA has been redeemed already.
   const isRedeemed = await getIsTransferCompletedSui(
-    provider,
+    client,
     TOKEN_BRIDGE_STATE_ID,
     vaa
   );
@@ -125,31 +129,27 @@ async function relay(
     return;
   }
 
-  // Parse the VAA.
   const parsedVaa = parseVaa(vaa);
 
-  // Make sure it's a payload 3.
   const payloadType = parsedVaa.payload.readUint8(0);
   if (payloadType != 3) {
-    console.log("Not a payload 3");
+    console.log("Not a token bridge transfer with payload (TB message id 3)");
     return;
   }
 
-  // Parse the transfer payload.
   const transferPayload = parseTransferPayload(parsedVaa.payload);
 
   // Confirm that the destination is the relayer contract.
   if (
-    state!.emitter_cap.fields.id.id != transferPayload.targetAddress &&
+    state.emitter_cap.fields.id.id != transferPayload.targetAddress &&
     transferPayload.targetChain != CHAIN_ID_SUI
   ) {
     console.log("Destination is not a relayer contract");
     return;
   }
 
-  // Fetch the coinType.
   const coinType = await getTokenCoinType(
-    provider,
+    client,
     TOKEN_BRIDGE_STATE_ID,
     Buffer.from(transferPayload.originAddress, "hex"),
     transferPayload.originChain
@@ -159,12 +159,11 @@ async function relay(
     throw Error("Error fetch the coin type. Is the coin registered?");
   }
 
-  // Fetch the token decimals.
   let decimals;
   if (coinType == SUI_TYPE) {
     decimals = 9;
   } else {
-    decimals = await provider
+    decimals = await client
       .getCoinMetadata({
         coinType: coinType,
       })
@@ -181,14 +180,13 @@ async function relay(
     decimals
   );
 
-  // Fetch the swap quote.
   let swapQuote;
   if (coinType == SUI_TYPE) {
     swapQuote = 0;
   } else {
     swapQuote = await getSwapQuote(
-      provider,
-      await wallet.getAddress(),
+      client,
+      wallet.toSuiAddress(),
       RELAYER_ID,
       state,
       denormalizedToNativeAmount.toString(),
@@ -197,7 +195,6 @@ async function relay(
     );
   }
 
-  // Start new transaction.
   const tx = new TransactionBlock();
 
   // Parse and verify the vaa.
@@ -238,8 +235,8 @@ async function relay(
     typeArguments: [coinType],
   });
 
-  const {digest, balanceChanges} = await executeTransactionBlock(wallet, tx);
-  await pollTransactionForEffectsCert(wallet, digest);
+  const {digest, balanceChanges} = await executeTransactionBlock(client, wallet, tx);
+  await pollTransactionForEffectsCert(client, digest);
 
   console.log(`Digest: ${digest}`);
   console.log(balanceChanges);
@@ -247,7 +244,7 @@ async function relay(
   // Check to see if the VAA has been redeemed already.
   {
     const isRedeemed = await getIsTransferCompletedSui(
-      provider,
+      client,
       TOKEN_BRIDGE_STATE_ID,
       vaa
     );
@@ -260,22 +257,18 @@ async function relay(
 }
 
 async function main() {
-  // Fetch args.
-  const args = getArgs();
+  const args = await getArgs();
 
-  // Set up provider.
-  const connection = new Connection({fullnode: RPC});
-  const provider = new JsonRpcProvider(connection);
+  const client = new SuiClient({
+    url: getFullnodeUrl(args.network)
+  });
 
-  // Owner wallet.
   const key = Ed25519Keypair.fromSecretKey(
-    Buffer.from(KEY, "base64").subarray(1)
+    Buffer.from(KEY, "base64")
   );
-  const wallet = new RawSigner(key, provider);
 
-  // Complete the transfer.
   const vaaBuf = Buffer.from(args.vaa, "hex");
-  await relay(provider, wallet, vaaBuf);
+  await relay(client, key, vaaBuf);
 }
 
 main();

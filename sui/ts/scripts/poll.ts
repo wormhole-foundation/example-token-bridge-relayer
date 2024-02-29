@@ -1,20 +1,22 @@
 import {
-  TransactionDigest,
-  RawSigner,
-  TransactionBlock,
+  SuiClient,
   SuiTransactionBlockResponse,
-} from "@mysten/sui.js";
+} from "@mysten/sui.js/client";
+import {
+  TransactionBlock,
+} from "@mysten/sui.js/transactions";
+import { Ed25519Keypair } from "@mysten/sui.js/dist/cjs/keypairs/ed25519";
 
 export const pollTransactionForEffectsCert = async (
-  signer: RawSigner,
-  digest: TransactionDigest
+  client: SuiClient,
+  digest: string
 ): Promise<SuiTransactionBlockResponse> => {
   return new Promise(async (resolve, reject) => {
     let transactionCompleted = false;
 
     while (!transactionCompleted) {
       try {
-        const transaction = await signer.provider.getTransactionBlock({
+        const transaction = await client.getTransactionBlock({
           digest,
           options: {
             showEffects: true,
@@ -32,11 +34,13 @@ export const pollTransactionForEffectsCert = async (
 };
 
 export const executeTransactionBlock = async (
-  signer: RawSigner,
+  client: SuiClient,
+  signer: Ed25519Keypair,
   transactionBlock: TransactionBlock
 ): Promise<SuiTransactionBlockResponse> => {
   // Let caller handle parsing and logging info
-  return signer.signAndExecuteTransactionBlock({
+  return client.signAndExecuteTransactionBlock({
+    signer,
     transactionBlock,
     requestType: "WaitForLocalExecution",
     options: {
