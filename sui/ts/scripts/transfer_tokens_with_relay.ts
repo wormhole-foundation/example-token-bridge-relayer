@@ -1,11 +1,18 @@
 import {
   Ed25519Keypair,
-  JsonRpcProvider,
-  RawSigner,
-  Connection,
+} from "@mysten/sui.js/keypairs/ed25519";
+import {
+  SuiClient, getFullnodeUrl,
+} from "@mysten/sui.js/client";
+import {
   TransactionBlock,
+} from "@mysten/sui.js/transactions";
+import {
   SUI_CLOCK_OBJECT_ID,
-} from "@mysten/sui.js";
+} from "@mysten/sui.js/utils";
+
+import { getCoinWithHighestBalance } from "../src";
+
 import {
   RELAYER_ID,
   RELAYER_STATE_ID,
@@ -13,16 +20,14 @@ import {
   WORMHOLE_STATE_ID,
   TOKEN_BRIDGE_ID,
   TOKEN_BRIDGE_STATE_ID,
-  RPC,
   KEY,
   SUI_TYPE,
 } from "./consts";
-import {getCoinWithHighestBalance} from "../src";
-import {executeTransactionBlock, pollTransactionForEffectsCert} from "./poll";
-import yargs from "yargs";
+import { executeTransactionBlock, pollTransactionForEffectsCert } from "./poll";
+import { createParser } from "./cli_args";
 
-export function getArgs() {
-  const argv = yargs.options({
+export async function getArgs() {
+  const argv = await createParser().options({
     coinType: {
       alias: "c",
       describe: "Coin type to mint",
@@ -60,6 +65,7 @@ export function getArgs() {
       target: argv.target,
       amount: argv.amount,
       recipient: argv.recipient,
+      network: argv.network as "mainnet" | "testnet",
     };
   } else {
     throw Error("Invalid arguments");
@@ -76,7 +82,8 @@ function validateAddress(address: string) {
  * Performs outbound transfer.
  */
 async function transfer_sui_with_relay(
-  wallet: RawSigner,
+  client: SuiClient,
+  wallet: Ed25519Keypair,
   targetChain: string,
   recipient: string,
   amount: string
@@ -132,8 +139,8 @@ async function transfer_sui_with_relay(
     ],
   });
 
-  const {digest, balanceChanges} = await executeTransactionBlock(wallet, tx);
-  await pollTransactionForEffectsCert(wallet, digest);
+  const {digest, balanceChanges} = await executeTransactionBlock(client, wallet, tx);
+  await pollTransactionForEffectsCert(client, digest);
 
   console.log(balanceChanges);
 }
@@ -142,8 +149,8 @@ async function transfer_sui_with_relay(
  * Performs outbound transfer.
  */
 async function transfer_tokens_with_relay(
-  provider: JsonRpcProvider,
-  wallet: RawSigner,
+  client: SuiClient,
+  wallet: Ed25519Keypair,
   coinType: string,
   targetChain: string,
   recipient: string,
@@ -158,8 +165,8 @@ async function transfer_tokens_with_relay(
   const [wormholeFee] = tx.splitCoins(tx.gas, [tx.pure(0)]);
 
   const coin = await getCoinWithHighestBalance(
-    provider,
-    await wallet.getAddress(),
+    client,
+    wallet.toSuiAddress(),
     coinType
   );
 
@@ -208,29 +215,26 @@ async function transfer_tokens_with_relay(
     ],
   });
 
-  const {digest, balanceChanges} = await executeTransactionBlock(wallet, tx);
-  await pollTransactionForEffectsCert(wallet, digest);
+  const {digest, balanceChanges} = await executeTransactionBlock(client, wallet, tx);
+  await pollTransactionForEffectsCert(client, digest);
 
   console.log(balanceChanges);
 }
 
 async function main() {
-  // Fetch args.
-  const args = getArgs();
+  const args = await getArgs();
 
-  // Set up provider.
-  const connection = new Connection({fullnode: RPC});
-  const provider = new JsonRpcProvider(connection);
+  const client = new SuiClient({
+    url: getFullnodeUrl(args.network),
+  });
 
-  // Owner wallet.
-  const key = Ed25519Keypair.fromSecretKey(
-    Buffer.from(KEY, "base64").subarray(1)
+  const wallet = Ed25519Keypair.fromSecretKey(
+    Buffer.from(KEY, "base64")
   );
-  const wallet = new RawSigner(key, provider);
 
-  // Transfer coins.
   if (args.coinType == SUI_TYPE) {
     await transfer_sui_with_relay(
+      client,
       wallet,
       args.target,
       args.recipient!,
@@ -238,7 +242,7 @@ async function main() {
     );
   } else {
     await transfer_tokens_with_relay(
-      provider,
+      client,
       wallet,
       args.coinType,
       args.target,

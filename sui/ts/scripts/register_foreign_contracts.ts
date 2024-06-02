@@ -1,54 +1,64 @@
 import {
   Ed25519Keypair,
-  JsonRpcProvider,
-  RawSigner,
-  Connection,
+} from "@mysten/sui.js/keypairs/ed25519";
+import {
   TransactionBlock,
-} from "@mysten/sui.js";
+} from "@mysten/sui.js/transactions";
+import {
+  SuiClient, getFullnodeUrl,
+} from "@mysten/sui.js/client";
+import * as fs from "fs";
+
+import { getRelayerRegistrations } from "../src";
+
 import {
   RELAYER_ID,
   RELAYER_STATE_ID,
   RELAYER_OWNER_CAP_ID,
-  RPC,
   KEY,
 } from "./consts";
 import {executeTransactionBlock, pollTransactionForEffectsCert} from "./poll";
-import {getTableByName} from "../src";
-import * as fs from "fs";
+import { createParser } from "./cli_args";
+import { ChainId } from "@certusone/wormhole-sdk";
 
 function validateContractAddress(address: string) {
-  if (address.length != 64 || address.substring(0, 2) == "0x") {
+  if (address.length !== 64 || address.substring(0, 2) === "0x") {
     throw Error("Invalid contract address");
   }
+}
+
+export async function getArgs() {
+  const argv = await createParser().argv;
+
+  return {
+    network: argv.network as "mainnet" | "testnet",
+    config: argv.config,
+  };
 }
 
 /**
  * Registers a foreign Token Bridge Relayer contract on the SUI contract.
  */
 async function register_foreign_contracts(
-  provider: JsonRpcProvider,
-  wallet: RawSigner,
+  client: SuiClient,
+  wallet: Ed25519Keypair,
   config: Config[]
 ) {
   // Fetch the current registered contracts table.
-  const currentRegisteredContracts = await getTableByName(
-    provider,
-    RELAYER_STATE_ID,
-    "foreign_contracts"
+  const currentRegisteredContracts = await getRelayerRegistrations(
+    client,
+    RELAYER_STATE_ID
   );
-  const registrationsDictionary: Record<string, string | undefined> = {};
-  for (const [chain, value] of currentRegisteredContracts) {
-    const contract = Buffer.from(value.fields.value.fields.data).toString("hex");
-    registrationsDictionary[chain] = contract;
-  }
 
   const tx = new TransactionBlock();
   // Register each contract address.
   for (const contractMap of config) {
     validateContractAddress(contractMap.address);
+    const chainId = Number(contractMap.chain) as ChainId;
 
-    const currentRegistration = registrationsDictionary[contractMap.chain];
-    if (currentRegistration?.toLowerCase() === contractMap.address.toLowerCase()) {
+    const normalizedAddress = "0x" + contractMap.address.toLowerCase();
+    const currentRegistration = currentRegisteredContracts[chainId]?.toLowerCase();
+    if (currentRegistration === normalizedAddress) {
       console.log(`Contract already registered for chainId=${contractMap.chain}`);
       continue;
     }
@@ -60,7 +70,7 @@ async function register_foreign_contracts(
         tx.object(RELAYER_OWNER_CAP_ID),
         tx.object(RELAYER_STATE_ID),
         tx.pure(contractMap.chain),
-        tx.pure("0x" + contractMap.address),
+        tx.pure(normalizedAddress),
       ],
     });
   }
@@ -69,23 +79,19 @@ async function register_foreign_contracts(
     return;
   }
 
-  const {digest} = await executeTransactionBlock(wallet, tx);
-  await pollTransactionForEffectsCert(wallet, digest);
+  const {digest} = await executeTransactionBlock(client, wallet, tx);
+  await pollTransactionForEffectsCert(client, digest);
 
   // Fetch the registered contracts table.
-  const registeredContracts = await getTableByName(
-    provider,
-    RELAYER_STATE_ID,
-    "foreign_contracts"
+  const registeredContracts = await getRelayerRegistrations(
+    client,
+    RELAYER_STATE_ID
   );
 
   // Loop through and console log registered contracts.
   console.log("Registered contracts list:");
-  for (const mapping of registeredContracts) {
-    const contract = Buffer.from(mapping[1].fields.value.fields.data).toString(
-      "hex"
-    );
-    console.log(`ChainId=${mapping[0]}, contract=0x${contract}`);
+  for (const [chainId, contract] of Object.entries(registeredContracts)) {
+    console.log(`  ChainId=${chainId}, contract=0x${contract}`);
   }
 }
 interface Config {
@@ -94,10 +100,10 @@ interface Config {
 }
 
 function createConfig(object: any) {
-  let config = [] as Config[];
+  const config = [] as Config[];
 
-  for (let key of Object.keys(object)) {
-    let member = {chain: key, address: object[key]};
+  for (const key of Object.keys(object)) {
+    const member = {chain: key, address: object[key]};
     config.push(member);
   }
 
@@ -105,30 +111,30 @@ function createConfig(object: any) {
 }
 
 async function main() {
-  // Set up provider.
-  const connection = new Connection({fullnode: RPC});
-  const provider = new JsonRpcProvider(connection);
+  const args = await getArgs();
 
-  // Owner wallet.
-  const key = Ed25519Keypair.fromSecretKey(
-    Buffer.from(KEY, "base64").subarray(1)
+  const client = new SuiClient({
+    url: getFullnodeUrl(args.network)
+  });
+
+  const wallet = Ed25519Keypair.fromSecretKey(
+    Buffer.from(KEY, "base64")
   );
-  const wallet = new RawSigner(key, provider);
 
   // Read in config file.
   const deploymentConfig = JSON.parse(
-    fs.readFileSync(`${__dirname}/../../cfg/deploymentConfig.json`, "utf8")
+    fs.readFileSync(args.config, "utf8")
   );
 
   // Convert to Config type.
   const config = createConfig(deploymentConfig["deployedContracts"]);
 
-  if (config.length == undefined) {
+  if (config.length === 0) {
     throw Error("Deployed contracts not found");
   }
 
   // Register all contracts.
-  await register_foreign_contracts(provider, wallet, config);
+  await register_foreign_contracts(client, wallet, config);
 }
 
 main();

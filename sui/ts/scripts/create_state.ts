@@ -1,24 +1,34 @@
 import {
-  Ed25519Keypair,
-  JsonRpcProvider,
-  RawSigner,
-  Connection,
+  SuiClient, getFullnodeUrl,
+} from "@mysten/sui.js/client";
+import {
   TransactionBlock,
-} from "@mysten/sui.js";
+} from "@mysten/sui.js/transactions";
+import {
+  Ed25519Keypair,
+} from "@mysten/sui.js/keypairs/ed25519";
 import {
   RELAYER_ID,
   WORMHOLE_STATE_ID,
   RELAYER_OWNER_CAP_ID,
   RELAYER_UPGRADE_CAP_ID,
-  RPC,
   KEY,
 } from "./consts";
 import {executeTransactionBlock, pollTransactionForEffectsCert} from "./poll";
+import { createParser } from "./cli_args";
+
+export async function getArgs() {
+  const argv = await createParser().argv;
+
+  return {
+    network: argv.network as "mainnet" | "testnet",
+  };
+}
 
 /**
  * Creates the state object for the specified Token Bridge Relayer contract.
  */
-async function create_state(wallet: RawSigner) {
+async function create_state(client: SuiClient, wallet: Ed25519Keypair) {
   // Call `owner::create_state` on the Token Bridge Relayer.
   const tx = new TransactionBlock();
 
@@ -30,8 +40,9 @@ async function create_state(wallet: RawSigner) {
       tx.object(RELAYER_UPGRADE_CAP_ID),
     ],
   });
-  const {digest, objectChanges} = await executeTransactionBlock(wallet, tx);
-  await pollTransactionForEffectsCert(wallet, digest); // Log the state ID.
+  const {digest, objectChanges} = await executeTransactionBlock(client, wallet, tx);
+  // Log the state ID.
+  await pollTransactionForEffectsCert(client, digest);
 
   for (const objectEvent of objectChanges!) {
     if (
@@ -44,18 +55,16 @@ async function create_state(wallet: RawSigner) {
 }
 
 async function main() {
-  // Set up provider.
-  const connection = new Connection({fullnode: RPC});
-  const provider = new JsonRpcProvider(connection);
+  const args = await getArgs();
+  const client = new SuiClient({
+    url: getFullnodeUrl(args.network)
+  });
 
-  // Owner wallet.
-  const key = Ed25519Keypair.fromSecretKey(
-    Buffer.from(KEY, "base64").subarray(1)
+  const wallet = Ed25519Keypair.fromSecretKey(
+    Buffer.from(KEY, "base64")
   );
-  const wallet = new RawSigner(key, provider);
 
-  // Create state.
-  await create_state(wallet);
+  await create_state(client, wallet);
 }
 
 main();
